@@ -2,7 +2,7 @@
 
 Repository dokumentasi dan artefak pengembangan integrasi **POS Pizza Hut / RSC → Infor SyteLine (Mongoose)**.
 
-> Status saat ini: **Proof of Concept / tahap perancangan data staging**. Struktur akhir API, jalur posting keuangan, dan format payload resmi masih menunggu flow serta contoh data dari tim POS, Finance, dan SyteLine. Seluruh tabel saat ini merupakan candidate design dan masih dapat disederhanakan atau disesuaikan ketika raw data resmi diterima.
+> Status saat ini: **Proof of Concept / tahap perancangan data staging dan IDO**. Struktur akhir API, jalur posting keuangan, dan format payload resmi masih menunggu flow serta contoh data dari tim POS, Finance, dan SyteLine. Seluruh tabel dan IDO saat ini merupakan candidate design dan masih dapat disederhanakan atau disesuaikan ketika raw data resmi diterima.
 
 ## Tujuan
 
@@ -23,13 +23,13 @@ Menyediakan API di dalam SyteLine yang dapat menerima data transaksi POS untuk p
 POS / Postman / Custom Form SyteLine
                  |
                  v
-       Custom REST API / IDO Method
+       Custom REST API / Service IDO
                  |
                  v
        Inbound Request + Raw Payload
                  |
                  v
-       Custom Staging Tables SyteLine
+       Entity IDO + Custom Staging Tables
                  |
         Validate + Map + Summarize
                  |
@@ -144,6 +144,36 @@ u_m
 
 Transaction summary dapat dibentuk dengan grouping `business_date + trans_num`. Karena profile minimal belum memiliki payment, tax, discount, service charge, atau refund indicator, data yang tidak tersedia tidak boleh diisi menggunakan asumsi tersembunyi.
 
+## IDO Architecture
+
+Desain IDO dibagi menjadi tiga lapisan:
+
+```text
+Entity IDO   → query/form binding untuk custom table
+Monitor IDO  → read-only composite/dashboard
+Service IDO  → receive, validate, retry, generate preview, approve, dan post
+```
+
+Candidate service IDO:
+
+```text
+SMKRSCPosIntegration
+```
+
+Direct insert/update dari REST ke staging entity IDO tidak direkomendasikan. Proses integrasi harus menggunakan service method agar idempotency, transaction boundary, validation, logging, dan rollback dapat dikendalikan.
+
+Dokumentasi arsitektur: [`docs/11-ido-design-overview.md`](docs/11-ido-design-overview.md).
+
+### IDO yang Sudah Dirancang
+
+| No. | IDO | Base Object | Status |
+|---:|---|---|---|
+| 1 | `SMKRSCPosInbounds` | `SMK_RSC_POS_Inbound_mst` | Candidate design tersedia |
+
+`SMKRSCPosInbounds` dirancang sebagai IDO monitoring inbound request. Direct public insert/delete dinonaktifkan; payload access, retry parsing, dan purge dilakukan melalui controlled methods dan authorization.
+
+Dokumentasi: [`ido/01-SMKRSCPosInbounds.md`](ido/01-SMKRSCPosInbounds.md).
+
 ## Status Proses
 
 Status staging utama yang dirancang:
@@ -164,7 +194,7 @@ Alur normal:
 N → R → V → I → P
 ```
 
-Inbound menggunakan status receive/parse tersendiri yang didokumentasikan pada tabel inbound.
+Inbound menggunakan status receive/parse tersendiri yang didokumentasikan pada tabel dan IDO inbound.
 
 ## Jalur Posting Keuangan
 
@@ -193,7 +223,10 @@ Keputusan harus didasarkan pada flow resmi, kebutuhan rekonsiliasi, volume trans
 │   ├── 07-development-roadmap.md
 │   ├── 08-development-history.md
 │   ├── 09-open-questions.md
-│   └── 10-minimum-data-profile-and-change-strategy.md
+│   ├── 10-minimum-data-profile-and-change-strategy.md
+│   └── 11-ido-design-overview.md
+├── ido/
+│   └── 01-SMKRSCPosInbounds.md
 └── database/
     └── tables/
         ├── TABLE_DOCUMENTATION_TEMPLATE.md
@@ -214,18 +247,17 @@ Keputusan harus didasarkan pada flow resmi, kebutuhan rekonsiliasi, volume trans
 
 ## Tahap Berikutnya
 
-Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
-
-1. tentukan profile source yang dipakai: lengkap atau minimal/flat;
-2. tentukan tabel yang benar-benar dibutuhkan berdasarkan raw data resmi;
-3. verifikasi dukungan long text, batas ukuran request, dan kebijakan raw-payload retention pada tenant;
-4. buat IDO untuk tabel staging dan mapping yang disetujui;
-5. buat custom form monitoring, inbound request, raw-line review, dan posting preview;
-6. buat stored procedure validasi, parsing, mapping, grouping, dan generate preview;
-7. buat custom IDO Method penerimaan batch;
-8. expose sebagai REST API;
-9. uji melalui Postman termasuk duplicate/idempotency dan minimal-profile test;
-10. tentukan jalur posting aktual ke modul SyteLine.
+1. lanjut desain entity IDO `SMKRSCPosBatches`;
+2. lanjut IDO transaction, line, payment, raw-line, process-log, mapping, dan posting-preview;
+3. tentukan profile source yang dipakai: lengkap atau minimal/flat;
+4. tentukan tabel dan IDO yang benar-benar dibutuhkan berdasarkan raw data resmi;
+5. verifikasi dukungan long text, batas ukuran request, dan kebijakan raw-payload retention pada tenant;
+6. buat custom form monitoring, inbound request, raw-line review, dan posting preview;
+7. buat stored procedure validasi, parsing, mapping, grouping, dan generate preview;
+8. buat service IDO `SMKRSCPosIntegration` dan custom receive methods;
+9. expose controlled methods sebagai REST API;
+10. uji melalui Postman termasuk duplicate/idempotency dan minimal-profile test;
+11. tentukan jalur posting aktual ke modul SyteLine.
 
 ## Catatan Penting
 
@@ -238,6 +270,7 @@ Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
 - Tax treatment, tax rate, rounding, dan account mapping harus disetujui Finance sebelum posting produksi.
 - Revenue, discount, service charge, dan refund rule harus disetujui Finance.
 - Posting preview harus balance dan bebas error mapping sebelum approval/posting.
+- Direct REST write ke entity IDO tidak digunakan untuk proses integrasi utama.
 - Perubahan requirement masih aman pada tahap PoC; dokumentasi dan implementasi harus versioned dan tidak boleh menghapus data sumber tanpa migration plan.
 
 ## Pemilik Repository
