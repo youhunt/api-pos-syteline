@@ -141,7 +141,7 @@ amount_type    : R
 pos_item_code  : PIZZA-SUPREME-L
 acct           : FOOD-SALES
 
-a Rule 50 — Category fallback
+Rule 50 — Category fallback
 priority       : 50
 amount_type    : R
 pos_category   : PIZZA
@@ -150,7 +150,7 @@ acct           : FOOD-SALES
 Rule 999 — Site default
 priority       : 999
 amount_type    : R
-acct           : POS-SALES-SUSPENSE
+acct           : POS-SUSP
 ```
 
 Contoh discount rule:
@@ -160,8 +160,8 @@ rule_name      : Pizza Discount
 priority       : 50
 amount_type    : D
 pos_category   : PIZZA
-acct           : SALES-DISCOUNT
-_debit_credit  : D
+acct           : SALES-DISC
+debit_credit   : D
 ```
 
 ## Candidate Indexes
