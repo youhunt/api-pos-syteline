@@ -14,34 +14,42 @@ Purpose         : Detail item dan quantity per transaksi
 batch_num + trans_num + line_num
 ```
 
-## Custom Columns
+## Struktur kolom
 
-| Column | Data Type | Null | Default | Description |
-|---|---|---:|---|---|
-| `batch_num` | `nvarchar(30)` | No |  | Parent batch |
-| `trans_num` | `nvarchar(50)` | No |  | Parent transaction |
-| `line_num` | `int` | No |  | Nomor line |
-| `parent_line_num` | `int` | Yes |  | Parent modifier/package line |
-| `pos_item_code` | `nvarchar(50)` | No |  | Kode item asli POS |
-| `item` | `ItemType` | Yes |  | Item hasil mapping SyteLine |
-| `item_desc` | `nvarchar(200)` | Yes |  | Deskripsi item sumber |
-| `line_type` | `nchar(1)` | No | `N'I'` | I=Item, M=Modifier, P=Package, D=Discount, S=Service |
-| `qty` | `QtyUnitType` | No | `0` | Quantity sumber saat ini |
-| `u_m` | `UMType` | Yes |  | U/M hasil mapping |
-| `unit_price` | `CostPrcType` | No | `0` | Harga satuan |
-| `gross_amt` | `AmountType` | No | `0` | Nilai kotor line |
-| `discount_amt` | `AmountType` | No | `0` | Diskon line |
-| `tax_amt` | `AmountType` | No | `0` | Pajak line |
-| `service_amt` | `AmountType` | No | `0` | Service charge line |
-| `net_amt` | `AmountType` | No | `0` | Nilai bersih line |
-| `tax_code` | `nvarchar(20)` | Yes |  | Kode pajak POS |
-| `promo_code` | `nvarchar(30)` | Yes |  | Kode promo |
-| `void_flag` | `FlagNyType` | No | `0` | Penanda line void |
-| `stat` | `nchar(1)` | No | `N'N'` | Status |
-| `validation_msg` | `nvarchar(1000)` | Yes |  | Ringkasan validasi |
-| `error_msg` | `nvarchar(4000)` | Yes |  | Error terakhir |
-| `syteline_ref` | `nvarchar(50)` | Yes |  | Referensi hasil SyteLine |
-| `process_date` | `DateType` | Yes |  | Waktu proses |
+| Column Name | Schema | Table Name | Data Type | System Data Type | Length | Decimal Position | Default Value | Is Nullable | Primary Key | Key Sequence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `batch_num` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 30 |  |  | NO | 1 | 1 |
+| `trans_num` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 50 |  |  | NO | 1 | 2 |
+| `line_num` | dbo | ue_SMK_RSC_POS_TranLine_mst | int | int |  |  |  | NO | 1 | 3 |
+| `parent_line_num` | dbo | ue_SMK_RSC_POS_TranLine_mst | int | int |  |  |  | YES | 0 |  |
+| `pos_item_code` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 50 |  |  | NO | 0 |  |
+| `item` | dbo | ue_SMK_RSC_POS_TranLine_mst | ItemType | nvarchar | 30 |  |  | YES | 0 |  |
+| `item_desc` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 200 |  |  | YES | 0 |  |
+| `line_type` | dbo | ue_SMK_RSC_POS_TranLine_mst | nchar | nchar | 1 |  | `N'I'` | NO | 0 |  |
+| `qty` | dbo | ue_SMK_RSC_POS_TranLine_mst | QtyUnitType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `u_m` | dbo | ue_SMK_RSC_POS_TranLine_mst | UMType | nvarchar | 3 |  |  | YES | 0 |  |
+| `unit_price` | dbo | ue_SMK_RSC_POS_TranLine_mst | CostPrcType | decimal | 20 | 8 | `0` | NO | 0 |  |
+| `gross_amt` | dbo | ue_SMK_RSC_POS_TranLine_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `discount_amt` | dbo | ue_SMK_RSC_POS_TranLine_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `tax_amt` | dbo | ue_SMK_RSC_POS_TranLine_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `service_amt` | dbo | ue_SMK_RSC_POS_TranLine_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `net_amt` | dbo | ue_SMK_RSC_POS_TranLine_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `tax_code` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 20 |  |  | YES | 0 |  |
+| `promo_code` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 30 |  |  | YES | 0 |  |
+| `void_flag` | dbo | ue_SMK_RSC_POS_TranLine_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `stat` | dbo | ue_SMK_RSC_POS_TranLine_mst | nchar | nchar | 1 |  | `N'N'` | NO | 0 |  |
+| `validation_msg` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 1000 |  |  | YES | 0 |  |
+| `error_msg` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 4000 |  |  | YES | 0 |  |
+| `syteline_ref` | dbo | ue_SMK_RSC_POS_TranLine_mst | nvarchar | nvarchar | 50 |  |  | YES | 0 |  |
+| `process_date` | dbo | ue_SMK_RSC_POS_TranLine_mst | DateType | datetime |  |  |  | YES | 0 |  |
+| `CreateDate` | dbo | ue_SMK_RSC_POS_TranLine_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `CreatedBy` | dbo | ue_SMK_RSC_POS_TranLine_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
+| `InWorkflow` | dbo | ue_SMK_RSC_POS_TranLine_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `NoteExistsFlag` | dbo | ue_SMK_RSC_POS_TranLine_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `RecordDate` | dbo | ue_SMK_RSC_POS_TranLine_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `RowPointer` | dbo | ue_SMK_RSC_POS_TranLine_mst | RowPointerType | uniqueidentifier |  |  | `newid()` | NO | 0 |  |
+| `SiteRef` | dbo | ue_SMK_RSC_POS_TranLine_mst | SiteType | nvarchar | 8 |  | `rtrim(CONVERT([nvarchar](8),context_info(),(0)))` | NO | 0 |  |
+| `UpdatedBy` | dbo | ue_SMK_RSC_POS_TranLine_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
 
 ## Important Design Note
 
