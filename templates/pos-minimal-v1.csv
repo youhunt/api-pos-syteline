@@ -1,0 +1,4 @@
+business_date,trans_num,pos_item_code,pos_qty,total_amt
+2026-07-23,TRX001,PIZZA001,2,200000
+2026-07-23,TRX001,DRINK001,1,25000
+2026-07-23,TRX002,PIZZA002,1,125000
