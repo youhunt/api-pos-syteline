@@ -9,16 +9,19 @@ All notable changes to this repository will be documented in this file.
 - `SMK_RSC_POS_PaymentMap_mst` design.
 - Mapping payment code to main account, fee account, unit codes, optional customer, bank, and settlement behavior.
 - Full SyteLine table-format documentation and tab-delimited structure for the payment mapping table.
+- `SMK_RSC_POS_TaxMap_mst` design.
+- Mapping POS tax code to SyteLine tax code/account, tax rate, inclusive flag, rounding mode, and tolerance.
+- Full SyteLine table-format documentation and tab-delimited structure for the tax mapping table.
 
 ### Changed
 
 - Standardized all existing table documentation using the full SyteLine column format: `Column Name`, `Schema`, `Table Name`, `Data Type`, `System Data Type`, `Length`, `Decimal Position`, `Default Value`, `Is Nullable`, `Primary Key`, and `Key Sequence`.
 - Added standard Mongoose columns to every documented table structure.
 - Added `database/tables/TABLE_DOCUMENTATION_TEMPLATE.md` as the required format for subsequent table documentation.
+- Updated README and database design to include payment and tax mappings.
 
 ### Planned
 
-- Tax mapping table.
 - Revenue mapping table.
 - Posting preview design.
 - IDO design.
