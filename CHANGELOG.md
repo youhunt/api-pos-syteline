@@ -16,6 +16,10 @@ All notable changes to this repository will be documented in this file.
 - Flexible priority-based rules for mapping item, category, outlet, channel, order type, line type, and currency to revenue, discount, service, or other accounts.
 - Explicit debit/credit direction and refund reversal control for posting preparation.
 - Full SyteLine table-format documentation and tab-delimited structure for the revenue mapping table.
+- `SMK_RSC_POS_PostingPreview_mst` design.
+- Preview generation/versioning, debit-credit lines, source and mapping traceability, multi-currency amounts, approval status, posting status, and SyteLine result reference.
+- Balance rules for transaction and domestic currency before approval/posting.
+- Full SyteLine table-format documentation and tab-delimited structure for the posting preview table.
 - Minimum-data-profile and requirement-change strategy documentation.
 
 ### Changed
@@ -23,12 +27,12 @@ All notable changes to this repository will be documented in this file.
 - Standardized all existing table documentation using the full SyteLine column format: `Column Name`, `Schema`, `Table Name`, `Data Type`, `System Data Type`, `Length`, `Decimal Position`, `Default Value`, `Is Nullable`, `Primary Key`, and `Key Sequence`.
 - Added standard Mongoose columns to every documented table structure.
 - Added `database/tables/TABLE_DOCUMENTATION_TEMPLATE.md` as the required format for subsequent table documentation.
-- Updated README and database design to include payment, tax, and revenue mappings.
+- Updated README and database design to include payment, tax, revenue, and posting-preview designs.
 - Clarified that current tables are candidate PoC designs and may be simplified or adjusted after the official raw data and accounting flow are received.
 
 ### Planned
 
-- Posting preview design.
+- Inbound/raw-payload storage design if required by the official interface.
 - Final table selection after raw data review.
 - IDO design.
 - Custom form design.
