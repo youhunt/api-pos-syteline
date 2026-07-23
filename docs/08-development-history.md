@@ -68,20 +68,17 @@ Payment code dari POS tidak boleh langsung dipercaya sebagai account SyteLine. D
 
 - Menambahkan `SMK_RSC_POS_PaymentMap_mst`.
 - Primary key: `source_system + target_site + payment_code`.
-- Menambahkan mapping main account dan unit codes.
-- Menambahkan optional fee account dan fee unit codes.
-- Menambahkan optional customer dan bank.
-- Menambahkan `settlement_type` dan `settlement_days`.
+- Menambahkan main account, unit codes, optional fee account, optional customer/bank, `settlement_type`, dan `settlement_days`.
 
 ### Impact
 
-- Stored procedure/IDO validation nanti dapat mengisi account hasil mapping pada payment staging.
+- Validasi dapat mengisi account hasil mapping pada payment staging.
 - Mendukung GL langsung, clearing account, delayed settlement, maupun AR untuk aggregator.
 - Jalur posting final tetap menunggu keputusan Finance dan flow resmi.
 
 ### Test
 
-Dokumentasi dan struktur tabel telah ditambahkan. Pembuatan serta insert test pada SyteLine Cloud belum dilakukan.
+Pembuatan tabel dan insert test pada SyteLine Cloud belum dilakukan.
 
 ## 2026-07-23 — Tax Mapping Designed
 
@@ -93,17 +90,14 @@ Kode pajak, rate, inclusive behavior, rounding, dan account dari POS tidak boleh
 
 - Menambahkan `SMK_RSC_POS_TaxMap_mst`.
 - Primary key: `source_system + target_site + pos_tax_code`.
-- Menambahkan `posting_mode` untuk tax-code processing, direct-account posting, dan no separate posting.
-- Menambahkan target tax code, tax account, unit codes, expected rate, inclusive flag, taxable flag, rounding mode, dan tolerance amount.
-- Menambahkan effective/expiration date dan active flag.
+- Menambahkan `posting_mode`, target tax code, tax account, unit codes, rate, inclusive flag, taxable flag, rounding mode, tolerance, active flag, dan masa berlaku.
 - Target tax code memakai `nvarchar(20)` sementara sampai domain/UDD tenant diverifikasi.
 
 ### Impact
 
-- Validasi transaksi dapat memeriksa kode pajak berdasarkan site dan business date.
-- Posting preview dapat memisahkan revenue dan tax account secara konsisten.
+- Validasi dapat memeriksa pajak berdasarkan site dan business date.
+- Posting preview dapat memisahkan revenue dan tax account.
 - Selisih pajak dapat dievaluasi menggunakan rounding rule dan tolerance.
-- Tax treatment produksi tetap membutuhkan persetujuan Finance.
 
 ### Test
 
@@ -118,10 +112,10 @@ Raw data resmi dari POS belum diterima. Format akhirnya mungkin lengkap, flat, a
 ### Changes
 
 - Menegaskan bahwa seluruh tabel saat ini adalah candidate design.
-- Menambahkan dokumentasi minimum data profile dan strategi perubahan requirement.
-- Menetapkan bahwa source data tidak boleh ditimpa oleh hasil mapping.
-- Menetapkan penambahan kolom secara backward-compatible dan penggunaan versioning/migration plan.
-- `SMK_RSC_POS_RawLine_mst` dicatat sebagai alternatif bila source resmi berbentuk flat/minimal, bukan tabel wajib.
+- Menambahkan dokumentasi minimum-data profile dan strategi perubahan requirement.
+- Menetapkan source data tidak boleh ditimpa oleh hasil mapping.
+- Menetapkan perubahan backward-compatible, versioning, dan migration plan.
+- Mencatat `SMK_RSC_POS_RawLine_mst` sebagai alternatif bila source berbentuk flat/minimal.
 
 ### Impact
 
@@ -143,17 +137,13 @@ Akun pendapatan dapat bergantung pada kategori, outlet, sales channel, order typ
 
 - Menambahkan `SMK_RSC_POS_RevenueMap_mst`.
 - Menggunakan `map_id` sebagai primary key.
-- Menambahkan rule criteria: outlet, item, kategori, sales channel, order type, line type, dan currency.
-- Menambahkan `priority` serta pemilihan berdasarkan priority dan specificity.
-- Menambahkan `amount_type` untuk revenue, discount, service charge, dan other component.
-- Menambahkan account, unit codes, debit/credit direction, refund reversal, dan masa berlaku.
+- Menambahkan rule criteria, priority, specificity, amount type, account, unit codes, debit/credit direction, refund reversal, active flag, dan masa berlaku.
 
 ### Impact
 
 - Validasi dapat memilih akun berdasarkan rule paling sesuai.
 - Posting preview dapat memisahkan revenue, discount, service charge, dan komponen lain.
 - Hasil ambigu menghentikan validasi.
-- Account dan unit code final tetap membutuhkan persetujuan Finance.
 
 ### Test
 
@@ -169,8 +159,7 @@ Hasil mapping tidak boleh langsung diposting tanpa pemeriksaan account, unit cod
 
 - Menambahkan `SMK_RSC_POS_PostingPreview_mst`.
 - Primary key: `preview_num + line_num`.
-- Menambahkan `generation_num` agar rebuild tidak menimpa preview approved/posted.
-- Menambahkan source references, component type, mapping source/reference, currency, exchange rate, account, unit codes, debit-credit, approval, posting status, dan SyteLine reference.
+- Menambahkan generation history, source/mapping reference, currency, exchange rate, account, unit codes, debit-credit, approval, posting status, dan SyteLine reference.
 - Menetapkan balance rule untuk transaction dan domestic currency.
 
 ### Impact
@@ -193,26 +182,58 @@ Request perlu dicatat sebelum parsing agar error awal, duplicate request, retry,
 ### Changes
 
 - Menambahkan `SMK_RSC_POS_Inbound_mst`.
-- Primary key: `inbound_id` menggunakan `RowPointerType`/`uniqueidentifier`.
-- Menambahkan `request_id`, `idempotency_key`, `correlation_id`, source metadata, endpoint, HTTP method, content type, dan payload version/format.
-- Menambahkan storage mode untuk database, approved external storage, atau metadata-only.
-- Menambahkan optional `payload_text`, `payload_location`, `content_length`, dan `payload_sha256`.
-- Menambahkan receive/parse status, parsed date, optional batch reference, row/accepted/rejected counts, response, error, dan retry count.
-- Menambahkan retention date, purge flag, dan purge date.
-- Menetapkan larangan penyimpanan Authorization header, password, token, API secret, PIN, CVV, dan full card number.
-- Menetapkan bahwa inbound dapat tetap ada tanpa batch ketika parsing gagal.
+- Primary key: `inbound_id`.
+- Menambahkan request/correlation/idempotency metadata, endpoint, HTTP/content metadata, payload version/format, storage mode, optional raw payload/location/hash, parsing result, counts, response/error, retry, retention, dan purge control.
+- Menetapkan larangan penyimpanan authorization secret, password, token, API secret, PIN, CVV, dan full card number.
 
 ### Impact
 
 - Duplicate dan idempotent retry dapat dikendalikan sebelum membuat staging baru.
 - Parsing error tetap dapat diaudit walaupun batch belum tercipta.
-- Request dapat ditelusuri dari inbound ke batch, process log, dan hasil berikutnya.
-- Raw payload retention dapat dikelola tanpa menghapus metadata audit.
-- Dukungan `nvarchar(max)`, ukuran request, storage mode, dan retensi masih harus diverifikasi pada tenant.
+- Request dapat ditelusuri dari inbound ke batch dan proses berikutnya.
 
 ### Test
 
-Dokumentasi dan struktur kandidat telah ditambahkan. Long-text test, duplicate test, payload parsing, retry, retention, dan purge test pada SyteLine Cloud belum dilakukan.
+Long-text, duplicate, parsing, retry, retention, dan purge test pada SyteLine Cloud belum dilakukan.
+
+## 2026-07-23 — Minimal Raw-Line Profile Designed
+
+### Reason
+
+Sebelum masuk desain IDO, diperlukan bentuk konkret untuk kemungkinan source minimal yang hanya berisi:
+
+```text
+business_date
+trans_num
+pos_item_code
+pos_qty
+total_amt
+```
+
+Desain harus dapat menerima format flat tersebut tanpa memaksa seluruh struktur header-detail-payment.
+
+### Changes
+
+- Menambahkan `SMK_RSC_POS_RawLine_mst`.
+- Physical table: `dbo.ue_SMK_RSC_POS_RawLine_mst`.
+- Primary key: `batch_num + source_row_num`.
+- Menetapkan source fields: `business_date`, `trans_num`, `pos_item_code`, `pos_qty`, dan `total_amt`.
+- Menambahkan hasil mapping terpisah: `item`, `syteline_qty`, dan `u_m`.
+- Menambahkan status, validation/error message, process date, dan SyteLine reference.
+- Menetapkan transaction summary melalui grouping `business_date + trans_num`.
+- Menetapkan bahwa complete profile (`Tran/TranLine/Payment`) dan minimal profile (`RawLine`) merupakan alternatif sesuai raw data resmi.
+
+### Impact
+
+- Payload flat dapat disimpan tanpa membuat transaction header secara fisik pada tahap awal.
+- Item yang sama dapat muncul beberapa kali karena identity baris menggunakan `source_row_num`.
+- Source quantity dan total tetap utuh setelah mapping.
+- Field payment, tax, discount, service charge, void/refund, outlet, dan currency yang tidak tersedia tidak boleh diisi menggunakan asumsi tersembunyi.
+- Posting preview masih dapat dibentuk setelah mapping/default resmi tersedia.
+
+### Test
+
+Dokumentasi dan struktur kandidat telah ditambahkan. Import, duplicate-row, grouping, item mapping, reconciliation, dan posting-preview test pada SyteLine Cloud belum dilakukan.
 
 ## 2026-07-23 — Initial Status Model
 
