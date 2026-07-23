@@ -8,13 +8,14 @@ Repository dokumentasi dan artefak pengembangan integrasi **POS Pizza Hut / RSC 
 
 Menyediakan API di dalam SyteLine yang dapat menerima data transaksi POS untuk periode bebas—harian, mingguan, atau rentang tanggal lain—kemudian:
 
-1. menyimpan data pada custom staging table SyteLine;
-2. memvalidasi batch, transaksi, item, quantity, nilai, dan pembayaran;
-3. melakukan mapping data POS ke master/struktur SyteLine;
-4. menyiapkan preview hasil pengolahan;
-5. memproses data melalui stored procedure atau server-side IDO logic;
-6. menghasilkan transaksi yang dapat berujung pada laporan keuangan SyteLine;
-7. menyediakan audit trail, error handling, dan retry.
+1. menyimpan identitas request dan raw payload sesuai kebijakan keamanan/retensi;
+2. menyimpan data pada custom staging table SyteLine;
+3. memvalidasi batch, transaksi, item, quantity, nilai, dan pembayaran;
+4. melakukan mapping data POS ke master/struktur SyteLine;
+5. menyiapkan preview hasil pengolahan;
+6. memproses data melalui stored procedure atau server-side IDO logic;
+7. menghasilkan transaksi yang dapat berujung pada laporan keuangan SyteLine;
+8. menyediakan audit trail, duplicate control, error handling, dan retry.
 
 ## Prinsip Arsitektur
 
@@ -23,6 +24,9 @@ POS / Postman / Custom Form SyteLine
                  |
                  v
        Custom REST API / IDO Method
+                 |
+                 v
+       Inbound Request + Raw Payload
                  |
                  v
        Custom Staging Tables SyteLine
@@ -73,18 +77,20 @@ Aturan penggunaan:
 | 9 | `SMK_RSC_POS_TaxMap_mst` | `dbo.ue_SMK_RSC_POS_TaxMap_mst` | Mapping kode pajak POS ke tax code, account, dimensi, dan aturan perhitungan |
 | 10 | `SMK_RSC_POS_RevenueMap_mst` | `dbo.ue_SMK_RSC_POS_RevenueMap_mst` | Rule mapping item/kategori/channel/outlet ke akun revenue, discount, service, dan dimensi |
 | 11 | `SMK_RSC_POS_PostingPreview_mst` | `dbo.ue_SMK_RSC_POS_PostingPreview_mst` | Simulasi line debit-credit, approval, balance check, dan referensi sebelum posting aktual |
+| 12 | `SMK_RSC_POS_Inbound_mst` | `dbo.ue_SMK_RSC_POS_Inbound_mst` | Identitas request, idempotency, payload metadata/raw payload, parsing result, retensi, dan relasi ke batch |
 
 Dokumentasi detail tersedia di folder [`database/tables`](database/tables/).
 
 ## Relasi Utama
 
 ```text
-Batch
-  ├── Transactions
-  │     ├── Transaction Lines
-  │     └── Payments
-  ├── Process Logs
-  └── Posting Preview Lines
+Inbound Request
+   └── 0..1 Batch
+           ├── Transactions
+           │     ├── Transaction Lines
+           │     └── Payments
+           ├── Process Logs
+           └── Posting Preview Lines
 
 Outlet Map  ──> menentukan target site, warehouse, customer, currency,
                 dan unit code
@@ -104,9 +110,11 @@ Posting Preview ──> menggabungkan hasil mapping menjadi line debit-credit
                     yang harus balance sebelum approval/posting
 ```
 
+Inbound dapat tidak memiliki batch ketika payload gagal diparsing atau ditolak sebelum staging dibuat.
+
 ## Status Proses
 
-Status awal yang dirancang:
+Status staging utama yang dirancang:
 
 | Kode | Arti |
 |---|---|
@@ -123,6 +131,8 @@ Alur normal:
 ```text
 N → R → V → I → P
 ```
+
+Inbound menggunakan status receive/parse tersendiri yang didokumentasikan pada tabel inbound.
 
 ## Jalur Posting Keuangan
 
@@ -165,30 +175,32 @@ Keputusan harus didasarkan pada flow resmi, kebutuhan rekonsiliasi, volume trans
         ├── SMK_RSC_POS_PaymentMap_mst.md
         ├── SMK_RSC_POS_TaxMap_mst.md
         ├── SMK_RSC_POS_RevenueMap_mst.md
-        └── SMK_RSC_POS_PostingPreview_mst.md
+        ├── SMK_RSC_POS_PostingPreview_mst.md
+        └── SMK_RSC_POS_Inbound_mst.md
 ```
 
 ## Tahap Berikutnya
 
 Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
 
-1. desain inbound/raw-payload storage bila diperlukan;
-2. tentukan tabel mana yang benar-benar dibutuhkan berdasarkan raw data resmi;
+1. tentukan tabel mana yang benar-benar dibutuhkan berdasarkan raw data resmi;
+2. verifikasi dukungan long text, batas ukuran request, dan kebijakan raw-payload retention pada tenant;
 3. buat IDO untuk tabel staging dan mapping yang disetujui;
-4. buat custom form monitoring dan posting preview;
-5. buat stored procedure validasi dan generate preview;
+4. buat custom form monitoring, inbound request, dan posting preview;
+5. buat stored procedure validasi, parsing, mapping, dan generate preview;
 6. buat custom IDO Method penerimaan batch;
 7. expose sebagai REST API;
-8. uji melalui Postman;
+8. uji melalui Postman termasuk duplicate/idempotency test;
 9. tentukan jalur posting aktual ke modul SyteLine.
 
 ## Catatan Penting
 
 - Staging menggunakan tabel permanen, bukan SQL temporary table berbasis session.
-- Data sumber tidak boleh ditimpa; hasil mapping disimpan pada kolom terpisah.
-- API tidak boleh langsung mengklaim data sudah masuk laporan keuangan. Respons awal hanya menyatakan batch diterima.
-- Duplikasi, retry, audit trail, dan rekonsiliasi merupakan kebutuhan inti.
-- Nomor kartu penuh, PIN, CVV, dan track data tidak boleh disimpan.
+- Data sumber tidak boleh ditimpa; hasil parsing dan mapping disimpan pada kolom/tabel terpisah.
+- API tidak boleh langsung mengklaim data sudah masuk laporan keuangan. Respons awal hanya menyatakan request/batch diterima.
+- Duplikasi, idempotency, retry, audit trail, dan rekonsiliasi merupakan kebutuhan inti.
+- Nomor kartu penuh, PIN, CVV, track data, Authorization header, password, token, dan API secret tidak boleh disimpan.
+- Raw payload harus mengikuti masking, access control, ukuran maksimum, dan kebijakan retensi yang disetujui.
 - Tax treatment, tax rate, rounding, dan account mapping harus disetujui Finance sebelum posting produksi.
 - Revenue, discount, service charge, dan refund rule harus disetujui Finance.
 - Posting preview harus balance dan bebas error mapping sebelum approval/posting.
