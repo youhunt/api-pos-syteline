@@ -1,60 +1,68 @@
-# Implementation 01 — Create `SMKRSCPosInbounds`
+# Implementation 01 — Create First Inbound IDO
 
 ## Scope
 
-Dokumen ini hanya mencakup pembuatan IDO pertama:
+Dokumen ini hanya mencakup pembuatan IDO pertama pada tenant yang menggunakan Access As/object prefix `ue_`.
 
 ```text
-IDO Project        : SMKRSCPos
-IDO Name           : SMKRSCPosInbounds
+IDO Project        : ue_SMKRSCPos
+Logical IDO Name   : SMKRSCPosInbounds
+Final IDO Name     : ue_SMKRSCPosInbounds
 Architectural Role : Entity IDO
-Primary Base Table : SMK_RSC_POS_Inbound_mst
+Logical Table      : SMK_RSC_POS_Inbound_mst
 Physical Table     : dbo.ue_SMK_RSC_POS_Inbound_mst
 Table Alias        : i
 Primary Key        : InboundId -> inbound_id
 ```
 
-Form import CSV, subcollection, custom methods, security detail, dan REST exposure belum dibuat pada langkah ini.
+Form import CSV, subcollection, custom methods, REST API, dan service processing belum dibuat pada langkah ini.
 
-## Correction: IDO Project Name
+## Access As and Prefix Rule
 
-Candidate documentation sebelumnya menggunakan `SMK_RSC_POS` sebagai IDO Project. Nama implementasi diganti menjadi:
-
-```text
-SMKRSCPos
-```
-
-Alasannya: IDO Project harus menggunakan nama alphanumeric tanpa spasi. Nama table/object tetap menggunakan pola `SMK_RSC_POS_...`.
+Environment ini menggunakan prefix custom object:
 
 ```text
-IDO Project : SMKRSCPos
-Table Object: SMK_RSC_POS_Inbound_mst
-IDO Name    : SMKRSCPosInbounds
+Access As / Object Prefix : ue_
+IDO Project               : ue_SMKRSCPos
+Final IDO                  : ue_SMKRSCPosInbounds
 ```
+
+Ketika process default **Enforce prefix from Access As** aktif, Mongoose menambahkan prefix Access As pada IDO dan table yang dibuat.
+
+Aturan penting:
+
+```text
+Jangan sampai menjadi:
+ue_ue_SMKRSCPosInbounds
+```
+
+Pada IDO Wizard:
+
+1. pilih project persis seperti yang tersedia: `ue_SMKRSCPos`;
+2. lihat nilai read-only `Access As`;
+3. lihat isi field `IDO Name` setelah memilih primary base table;
+4. bila wizard sudah menampilkan `ue_SMKRSCPosInbounds`, jangan tambah `ue_` lagi;
+5. bila field hanya meminta nama dasar, isi `SMKRSCPosInbounds`, lalu verifikasi hasil akhirnya menjadi `ue_SMKRSCPosInbounds` setelah Finish.
+
+Nama aktual yang tampil pada tenant menjadi sumber kebenaran.
 
 ## Prerequisite Check
 
-Sebelum menjalankan IDO Wizard, pastikan:
+Sebelum menjalankan wizard, pastikan:
 
 ```text
-[ ] Table metadata SMK_RSC_POS_Inbound_mst tersedia
-[ ] Physical table Cloud dbo.ue_SMK_RSC_POS_Inbound_mst tersedia
+[ ] IDO Project ue_SMKRSCPos tersedia
+[ ] Access As pada project sesuai tenant
+[ ] Enforce prefix behavior sudah dipahami
+[ ] Inbound table tersedia pada Primary Base Table list
 [ ] inbound_id adalah primary key sequence 1
 [ ] RecordDate tersedia
 [ ] RowPointer tersedia dan unik
 [ ] SiteRef tersedia
-[ ] IDO Project SMKRSCPos tersedia
-[ ] User memiliki authorization untuk IDO metadata development
+[ ] User memiliki authorization development metadata
 ```
 
-### Multi-site warning
-
-Periksa pada SQL Tables/Application Schema metadata apakah table dibuat sebagai multi-site table.
-
-- Bila **tidak** menggunakan multi-site view, primary base table candidate adalah `SMK_RSC_POS_Inbound_mst`.
-- Bila table ditandai **Multi-Site**, verifikasi view tanpa suffix `_mst` dan bangun IDO di atas view tersebut sesuai standard tenant. Jangan lanjut menggunakan table langsung sampai view dan key/index `SiteRef` telah diverifikasi.
-
-## Step 1 — Create or Verify IDO Project
+## Step 1 — Verify IDO Project
 
 Buka form:
 
@@ -65,21 +73,22 @@ IDO Projects
 Cari:
 
 ```text
-SMKRSCPos
+ue_SMKRSCPos
 ```
 
-Bila belum ada, buat record baru:
+Gunakan project tersebut. Jangan membuat project baru bernama `SMKRSCPos` karena project aktual tenant sudah memakai prefix `ue_`.
+
+Periksa field:
 
 ```text
-Project Name : SMKRSCPos
+Project Name : ue_SMKRSCPos
+Access As    : nilai aktual tenant, kemungkinan ue_
 Description  : RSC POS Integration Custom IDOs
 ```
 
-Save.
-
 ## Step 2 — Launch New IDO Wizard
 
-Dari form `IDO Projects` atau `IDOs`:
+Dari form `IDO Projects` atau `IDOs`, klik:
 
 ```text
 New IDO
@@ -88,30 +97,69 @@ New IDO
 Isi halaman pertama:
 
 ```text
-Project Name       : SMKRSCPos
-Primary Base Table : SMK_RSC_POS_Inbound_mst
+Project Name       : ue_SMKRSCPos
+Primary Base Table : pilih inbound table yang benar-benar tampil di dropdown
 Table Alias        : i
-IDO Name           : SMKRSCPosInbounds
+IDO Name           : ikuti prefix behavior wizard
 Extends             : kosong
 ```
 
-Catatan:
+### Primary Base Table
 
-- Gunakan nama metadata table, bukan nama physical table `ue_...`.
-- Jangan isi `Extends`, karena IDO ini dibuat langsung dari custom table.
-- Bila primary base table tidak muncul, hentikan wizard dan periksa table metadata/project/access-as.
+Nama yang mungkin tampil bergantung pada metadata tenant:
 
-Klik `Next`.
+```text
+SMK_RSC_POS_Inbound_mst
+```
+
+atau:
+
+```text
+ue_SMK_RSC_POS_Inbound_mst
+```
+
+Pilih object yang memang terhubung ke physical table:
+
+```text
+dbo.ue_SMK_RSC_POS_Inbound_mst
+```
+
+Jangan menebak nama. Gunakan yang tersedia pada dropdown dan cocok dengan Application Schema/SQL Tables metadata.
+
+### IDO Name
+
+Target final:
+
+```text
+ue_SMKRSCPosInbounds
+```
+
+Kemungkinan tampilan wizard:
+
+```text
+Kasus A — wizard sudah memberi prefix
+IDO Name : ue_SMKRSCPosInbounds
+Action   : biarkan
+```
+
+```text
+Kasus B — wizard meminta nama dasar dan menambah prefix saat Finish
+IDO Name : SMKRSCPosInbounds
+Action   : verifikasi hasil final sesudah Finish
+```
+
+Klik `Next` hanya setelah memastikan prefix tidak akan menjadi ganda.
 
 ## Step 3 — Generate Bound Properties
 
-Pada halaman property:
+Pada halaman properties:
 
-1. Biarkan seluruh column yang diperlukan tetap dicentang pada kolom `Inc`.
-2. Gunakan `Massage Property Names` bila tersedia untuk membentuk PascalCase.
-3. Periksa manual setiap property name sebelum `Finish`.
+1. biarkan seluruh column yang dibutuhkan tetap dicentang;
+2. gunakan `Massage Property Names` bila tersedia;
+3. ubah property menjadi PascalCase;
+4. periksa key dan nullable setelah wizard selesai.
 
-Mapping yang harus dihasilkan:
+Mapping utama:
 
 | Column | IDO Property |
 |---|---|
@@ -157,120 +205,109 @@ Mapping yang harus dihasilkan:
 | `SiteRef` | `SiteRef` |
 | `UpdatedBy` | `UpdatedBy` |
 
-`PayloadText` tetap boleh menjadi property IDO, tetapi tidak akan dimasukkan ke default property list/form grid karena ukuran dan security.
+`PayloadText` tetap dibuat sebagai property, tetapi tidak digunakan pada grid/default collection awal.
 
 Klik `Finish`.
 
 ## Step 4 — Review the Created IDO
 
-Setelah wizard selesai, IDO biasanya terbuka dan checked out.
-
-Periksa pada form `IDOs`, `IDO Tables`, `IDO Properties`, atau metadata terkait:
+Target hasil akhir:
 
 ```text
-IDO Name     : SMKRSCPosInbounds
-Project      : SMKRSCPos
-Primary Table: SMK_RSC_POS_Inbound_mst
-Alias        : i
+IDO Name      : ue_SMKRSCPosInbounds
+Project       : ue_SMKRSCPos
+Primary Table : inbound table aktual tenant
+Alias         : i
+Access As     : sesuai tenant
 ```
 
-### Key review
-
-Pastikan:
+### Key Review
 
 ```text
-InboundId
-- Bound Column : inbound_id
-- Key          : Yes
-- Key Sequence : 1
-- Nullable     : No
+Property     : InboundId
+Bound Column : inbound_id
+Key          : Yes
+Key Sequence : 1
+Nullable     : No
 ```
 
-Jangan mengubah `RowPointer` menjadi business primary key.
+`RowPointer` tetap framework identifier dan tidak menggantikan `InboundId` sebagai primary key rancangan.
 
-### Framework property review
+### Framework Properties
 
-Pastikan property ini tersedia:
+Pastikan tersedia:
 
 ```text
+CreateDate
+CreatedBy
+InWorkflow
+NoteExistsFlag
 RecordDate
 RowPointer
 SiteRef
-CreateDate
-CreatedBy
 UpdatedBy
 ```
 
-### Long-text review
-
-Periksa bahwa `PayloadText` berhasil terbentuk dari column `payload_text`. Bila long-text/domain tidak didukung tenant, catat sebagai blocked issue; jangan mengganti tipe diam-diam.
-
 ## Step 5 — Save and Check In
-
-Setelah metadata benar:
 
 ```text
 Save
 Check In
 ```
 
-Gunakan comment/check-in note:
+Candidate check-in comment:
 
 ```text
-Create SMKRSCPosInbounds entity IDO for POS inbound request staging
+Create ue_SMKRSCPosInbounds entity IDO for POS inbound staging
 ```
 
 ## Step 6 — Smoke Test
 
-Gunakan `IDO Data Viewer`, form test, atau tool collection test yang tersedia pada tenant.
-
-Test minimum:
+Gunakan IDO Data Viewer atau collection test tool.
 
 ```text
-IDO          : SMKRSCPosInbounds
-Properties   : InboundId, RequestId, SourceSystem, ReceivedDate, Stat, RowPointer, SiteRef
-Filter       : kosong
-Expected     : LoadCollection berhasil; 0 row tetap dianggap PASS bila table belum berisi data
+IDO        : ue_SMKRSCPosInbounds
+Properties : InboundId, RequestId, SourceSystem, ReceivedDate, Stat, RowPointer, SiteRef
+Filter     : kosong
+Expected   : LoadCollection berhasil
 ```
 
-Test metadata:
+`0 records returned` tetap PASS bila tabel belum memiliki data.
+
+## Stop Point
+
+Langkah pertama selesai ketika:
 
 ```text
-[ ] IDO dapat dipilih
-[ ] LoadCollection tidak error
-[ ] Property names sesuai mapping
-[ ] InboundId dikenali sebagai key
-[ ] RowPointer dan RecordDate tersedia
-[ ] PayloadText tidak diperlukan pada smoke-test query
-[ ] IDO sudah checked in
+[ ] Project ue_SMKRSCPos dipilih
+[ ] Final IDO name ue_SMKRSCPosInbounds
+[ ] Tidak terjadi prefix ganda
+[ ] InboundId key sequence 1
+[ ] Framework properties tersedia
+[ ] Object sudah Check In
+[ ] LoadCollection berhasil
 ```
 
-## Not Yet Implemented
-
-Langkah pertama ini belum mencakup:
+Belum membuat:
 
 ```text
-- direct insert dari API
-- CSV browse/upload
-- CreateManualInbound
-- ValidateAttachedCsv
-- ImportAttachedCsv
-- RetryParse
-- PurgePayload
-- Generated Batch subcollection
-- custom form
+CSV Browse/Upload
+Import Form
+Custom Methods
+Service IDO
+Subcollection Batch
+REST API
 ```
 
-Fitur tersebut ditambahkan setelah entity IDO minimum dapat di-load tanpa error.
+## Evidence
 
-## Completion Evidence
-
-Simpan bukti:
+Simpan:
 
 ```text
-1. Screenshot IDO Wizard page 1
-2. Screenshot property page
-3. Screenshot IDO Properties showing InboundId key
-4. Screenshot successful LoadCollection/IDO Data Viewer
-5. Check-in note or deployment record
+1. Screenshot IDO Wizard halaman pertama
+2. Screenshot field Access As dan IDO Name
+3. Screenshot property generation
+4. Screenshot InboundId sebagai key
+5. Screenshot successful LoadCollection
+6. Check-in record
 ```
