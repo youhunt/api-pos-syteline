@@ -14,38 +14,46 @@ Purpose         : Metode dan nilai pembayaran per transaksi
 batch_num + trans_num + payment_seq
 ```
 
-## Custom Columns
+## Struktur kolom
 
-| Column | Data Type | Null | Default | Description |
-|---|---|---:|---|---|
-| `batch_num` | `nvarchar(30)` | No |  | Parent batch |
-| `trans_num` | `nvarchar(50)` | No |  | Parent transaction |
-| `payment_seq` | `int` | No |  | Urutan payment |
-| `payment_code` | `nvarchar(30)` | No |  | Kode detail dari POS |
-| `payment_desc` | `nvarchar(100)` | Yes |  | Deskripsi payment |
-| `payment_type` | `nchar(1)` | No | `N'O'` | C=Cash, Q=QRIS, D=Debit, K=Credit, T=Transfer, V=Voucher, A=Aggregator, O=Other |
-| `currency_code` | `CurrCodeType` | No | `N'IDR'` | Mata uang |
-| `payment_amt` | `AmountType` | No | `0` | Nilai pembayaran |
-| `fee_amt` | `AmountType` | No | `0` | Fee/MDR/commission |
-| `net_settlement_amt` | `AmountType` | No | `0` | Nilai bersih settlement |
-| `reference_num` | `nvarchar(100)` | Yes |  | Referensi transaksi payment |
-| `bank_code` | `nvarchar(20)` | Yes |  | Bank/provider |
-| `card_type` | `nvarchar(20)` | Yes |  | Card type |
-| `masked_card_num` | `nvarchar(25)` | Yes |  | Nomor kartu tersamarkan |
-| `approval_code` | `nvarchar(30)` | Yes |  | Approval code |
-| `terminal_id` | `nvarchar(30)` | Yes |  | Terminal ID |
-| `merchant_id` | `nvarchar(50)` | Yes |  | Merchant ID |
-| `settlement_date` | `DateType` | Yes |  | Tanggal settlement |
-| `acct` | `AcctType` | Yes |  | Account hasil mapping |
-| `unit_code1` | `UnitCode1Type` | Yes |  | Unit code 1 |
-| `unit_code2` | `UnitCode2Type` | Yes |  | Unit code 2 |
-| `unit_code3` | `UnitCode3Type` | Yes |  | Unit code 3 |
-| `unit_code4` | `UnitCode4Type` | Yes |  | Unit code 4 |
-| `stat` | `nchar(1)` | No | `N'N'` | Status |
-| `validation_msg` | `nvarchar(1000)` | Yes |  | Ringkasan validasi |
-| `error_msg` | `nvarchar(4000)` | Yes |  | Error terakhir |
-| `syteline_ref` | `nvarchar(50)` | Yes |  | Referensi hasil SyteLine |
-| `process_date` | `DateType` | Yes |  | Waktu proses |
+| Column Name | Schema | Table Name | Data Type | System Data Type | Length | Decimal Position | Default Value | Is Nullable | Primary Key | Key Sequence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `batch_num` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 30 |  |  | NO | 1 | 1 |
+| `trans_num` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 50 |  |  | NO | 1 | 2 |
+| `payment_seq` | dbo | ue_SMK_RSC_POS_Payment_mst | int | int |  |  |  | NO | 1 | 3 |
+| `payment_code` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 30 |  |  | NO | 0 |  |
+| `payment_desc` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 100 |  |  | YES | 0 |  |
+| `payment_type` | dbo | ue_SMK_RSC_POS_Payment_mst | nchar | nchar | 1 |  | `N'O'` | NO | 0 |  |
+| `currency_code` | dbo | ue_SMK_RSC_POS_Payment_mst | CurrCodeType | nvarchar | 3 |  | `N'IDR'` | NO | 0 |  |
+| `payment_amt` | dbo | ue_SMK_RSC_POS_Payment_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `fee_amt` | dbo | ue_SMK_RSC_POS_Payment_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `net_settlement_amt` | dbo | ue_SMK_RSC_POS_Payment_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `reference_num` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 100 |  |  | YES | 0 |  |
+| `bank_code` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 20 |  |  | YES | 0 |  |
+| `card_type` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 20 |  |  | YES | 0 |  |
+| `masked_card_num` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 25 |  |  | YES | 0 |  |
+| `approval_code` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 30 |  |  | YES | 0 |  |
+| `terminal_id` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 30 |  |  | YES | 0 |  |
+| `merchant_id` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 50 |  |  | YES | 0 |  |
+| `settlement_date` | dbo | ue_SMK_RSC_POS_Payment_mst | DateType | datetime |  |  |  | YES | 0 |  |
+| `acct` | dbo | ue_SMK_RSC_POS_Payment_mst | AcctType | nvarchar | 12 |  |  | YES | 0 |  |
+| `unit_code1` | dbo | ue_SMK_RSC_POS_Payment_mst | UnitCode1Type | nvarchar | 4 |  |  | YES | 0 |  |
+| `unit_code2` | dbo | ue_SMK_RSC_POS_Payment_mst | UnitCode2Type | nvarchar | 4 |  |  | YES | 0 |  |
+| `unit_code3` | dbo | ue_SMK_RSC_POS_Payment_mst | UnitCode3Type | nvarchar | 4 |  |  | YES | 0 |  |
+| `unit_code4` | dbo | ue_SMK_RSC_POS_Payment_mst | UnitCode4Type | nvarchar | 4 |  |  | YES | 0 |  |
+| `stat` | dbo | ue_SMK_RSC_POS_Payment_mst | nchar | nchar | 1 |  | `N'N'` | NO | 0 |  |
+| `validation_msg` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 1000 |  |  | YES | 0 |  |
+| `error_msg` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 4000 |  |  | YES | 0 |  |
+| `syteline_ref` | dbo | ue_SMK_RSC_POS_Payment_mst | nvarchar | nvarchar | 50 |  |  | YES | 0 |  |
+| `process_date` | dbo | ue_SMK_RSC_POS_Payment_mst | DateType | datetime |  |  |  | YES | 0 |  |
+| `CreateDate` | dbo | ue_SMK_RSC_POS_Payment_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `CreatedBy` | dbo | ue_SMK_RSC_POS_Payment_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
+| `InWorkflow` | dbo | ue_SMK_RSC_POS_Payment_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `NoteExistsFlag` | dbo | ue_SMK_RSC_POS_Payment_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `RecordDate` | dbo | ue_SMK_RSC_POS_Payment_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `RowPointer` | dbo | ue_SMK_RSC_POS_Payment_mst | RowPointerType | uniqueidentifier |  |  | `newid()` | NO | 0 |  |
+| `SiteRef` | dbo | ue_SMK_RSC_POS_Payment_mst | SiteType | nvarchar | 8 |  | `rtrim(CONVERT([nvarchar](8),context_info(),(0)))` | NO | 0 |  |
+| `UpdatedBy` | dbo | ue_SMK_RSC_POS_Payment_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
 
 ## Security Rule
 
@@ -77,7 +85,7 @@ SiteRef, settlement_date, payment_code
 ## Example Split Payment
 
 ```text
-TRX001 / seq 1 / CASH     / 100000
-TRX001 / seq 2 / QRIS_BCA / 125000
-TRX001 / seq 3 / VOUCHER  /  25000
+TRX001 / seq 1 / CASH      / 100000
+TRX001 / seq 2 / QRIS_BCA  / 125000
+TRX001 / seq 3 / VOUCHER   /  25000
 ```
