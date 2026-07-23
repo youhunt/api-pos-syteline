@@ -78,6 +78,7 @@ Aturan penggunaan:
 | 10 | `SMK_RSC_POS_RevenueMap_mst` | `dbo.ue_SMK_RSC_POS_RevenueMap_mst` | Rule mapping item/kategori/channel/outlet ke akun revenue, discount, service, dan dimensi |
 | 11 | `SMK_RSC_POS_PostingPreview_mst` | `dbo.ue_SMK_RSC_POS_PostingPreview_mst` | Simulasi line debit-credit, approval, balance check, dan referensi sebelum posting aktual |
 | 12 | `SMK_RSC_POS_Inbound_mst` | `dbo.ue_SMK_RSC_POS_Inbound_mst` | Identitas request, idempotency, payload metadata/raw payload, parsing result, retensi, dan relasi ke batch |
+| 13 | `SMK_RSC_POS_RawLine_mst` | `dbo.ue_SMK_RSC_POS_RawLine_mst` | Alternatif staging minimal untuk source flat: tanggal, transaction number, item, quantity, dan total |
 
 Dokumentasi detail tersedia di folder [`database/tables`](database/tables/).
 
@@ -89,6 +90,7 @@ Inbound Request
            ├── Transactions
            │     ├── Transaction Lines
            │     └── Payments
+           ├── Raw Lines (alternatif source minimal)
            ├── Process Logs
            └── Posting Preview Lines
 
@@ -111,6 +113,36 @@ Posting Preview ──> menggabungkan hasil mapping menjadi line debit-credit
 ```
 
 Inbound dapat tidak memiliki batch ketika payload gagal diparsing atau ditolak sebelum staging dibuat.
+
+`RawLine` adalah jalur alternatif untuk payload flat/minimal. Tabel ini tidak otomatis dipakai bersamaan dengan `Tran` dan `TranLine`; pilihan akhir mengikuti raw data resmi.
+
+## Minimal Raw-Data Profile
+
+Candidate profile berikut telah didokumentasikan untuk kondisi source hanya mengirim:
+
+```text
+business_date
+trans_num
+pos_item_code
+pos_qty
+total_amt
+```
+
+Data tersebut disimpan pada `SMK_RSC_POS_RawLine_mst` dengan primary key:
+
+```text
+batch_num + source_row_num
+```
+
+Source fields tidak ditimpa. Hasil mapping ditempatkan pada kolom terpisah:
+
+```text
+item
+syteline_qty
+u_m
+```
+
+Transaction summary dapat dibentuk dengan grouping `business_date + trans_num`. Karena profile minimal belum memiliki payment, tax, discount, service charge, atau refund indicator, data yang tidak tersedia tidak boleh diisi menggunakan asumsi tersembunyi.
 
 ## Status Proses
 
@@ -176,22 +208,24 @@ Keputusan harus didasarkan pada flow resmi, kebutuhan rekonsiliasi, volume trans
         ├── SMK_RSC_POS_TaxMap_mst.md
         ├── SMK_RSC_POS_RevenueMap_mst.md
         ├── SMK_RSC_POS_PostingPreview_mst.md
-        └── SMK_RSC_POS_Inbound_mst.md
+        ├── SMK_RSC_POS_Inbound_mst.md
+        └── SMK_RSC_POS_RawLine_mst.md
 ```
 
 ## Tahap Berikutnya
 
 Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
 
-1. tentukan tabel mana yang benar-benar dibutuhkan berdasarkan raw data resmi;
-2. verifikasi dukungan long text, batas ukuran request, dan kebijakan raw-payload retention pada tenant;
-3. buat IDO untuk tabel staging dan mapping yang disetujui;
-4. buat custom form monitoring, inbound request, dan posting preview;
-5. buat stored procedure validasi, parsing, mapping, dan generate preview;
-6. buat custom IDO Method penerimaan batch;
-7. expose sebagai REST API;
-8. uji melalui Postman termasuk duplicate/idempotency test;
-9. tentukan jalur posting aktual ke modul SyteLine.
+1. tentukan profile source yang dipakai: lengkap atau minimal/flat;
+2. tentukan tabel yang benar-benar dibutuhkan berdasarkan raw data resmi;
+3. verifikasi dukungan long text, batas ukuran request, dan kebijakan raw-payload retention pada tenant;
+4. buat IDO untuk tabel staging dan mapping yang disetujui;
+5. buat custom form monitoring, inbound request, raw-line review, dan posting preview;
+6. buat stored procedure validasi, parsing, mapping, grouping, dan generate preview;
+7. buat custom IDO Method penerimaan batch;
+8. expose sebagai REST API;
+9. uji melalui Postman termasuk duplicate/idempotency dan minimal-profile test;
+10. tentukan jalur posting aktual ke modul SyteLine.
 
 ## Catatan Penting
 
