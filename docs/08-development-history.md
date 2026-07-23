@@ -235,6 +235,37 @@ Desain harus dapat menerima format flat tersebut tanpa memaksa seluruh struktur 
 
 Dokumentasi dan struktur kandidat telah ditambahkan. Import, duplicate-row, grouping, item mapping, reconciliation, dan posting-preview test pada SyteLine Cloud belum dilakukan.
 
+## 2026-07-23 — IDO Architecture and Inbound IDO Designed
+
+### Reason
+
+Setelah struktur complete profile dan minimal profile terdokumentasi, diperlukan lapisan IDO yang memisahkan query/form binding dari public integration methods. Direct REST write ke custom table berisiko melewati idempotency, transaction control, validation, logging, dan duplicate-posting protection.
+
+### Changes
+
+- Menambahkan `docs/11-ido-design-overview.md`.
+- Menetapkan tiga lapisan IDO: entity IDO, monitor/composite IDO, dan service IDO.
+- Menetapkan candidate service IDO `SMKRSCPosIntegration`.
+- Menyusun catalog nama entity IDO untuk seluruh staging, mapping, raw-line, dan posting-preview table.
+- Menetapkan general property, source immutability, site isolation, update policy, security class, REST exposure, dan method transaction-boundary rules.
+- Menambahkan `ido/01-SMKRSCPosInbounds.md`.
+- Menetapkan IDO `SMKRSCPosInbounds` dengan primary key `InboundId`, default order `ReceivedDate DESC`, property mapping lengkap, default property list, status transition, optional batch subcollection, authorization matrix, dan test scenarios.
+- Menetapkan `PayloadText` tidak termasuk default collection.
+- Merancang controlled methods `GetInboundPayload`, `RetryParse`, dan `PurgePayload`.
+- Menetapkan direct public insert/update/delete pada entity IDO tidak digunakan untuk proses integrasi utama.
+
+### Impact
+
+- Custom form dapat memonitor inbound request tanpa membuka raw payload secara default.
+- Raw payload access dapat dibatasi pada authorization khusus.
+- Retry dan purge memiliki jalur terkontrol serta dapat dicatat pada process log.
+- Penerimaan API nantinya diarahkan melalui service IDO, bukan direct insert ke entity IDO.
+- IDO dan method tetap candidate sampai naming, long-text support, authorization, dan tenant behavior diverifikasi.
+
+### Test
+
+Metadata IDO belum dibuat pada tenant. LoadCollection, property serialization, long-text behavior, security, retry, purge, subcollection, direct-update rejection, dan site-isolation test belum dilakukan.
+
 ## 2026-07-23 — Initial Status Model
 
 ```text
@@ -247,7 +278,7 @@ E = Error
 C = Cancelled
 ```
 
-Inbound memakai status receive/parse tersendiri sesuai dokumentasi tabel inbound.
+Inbound memakai status receive/parse tersendiri sesuai dokumentasi tabel dan IDO inbound.
 
 ## 2026-07-23 — Documentation Baseline Added
 
@@ -261,7 +292,8 @@ Dokumentasi awal dibuat meliputi:
 - financial posting options;
 - roadmap;
 - open questions;
-- per-table documentation.
+- per-table documentation;
+- IDO architecture and per-IDO documentation.
 
 ## Format Entri Berikutnya
 
