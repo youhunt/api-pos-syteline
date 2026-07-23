@@ -111,6 +111,57 @@ Kode pajak, rate, inclusive behavior, rounding, dan account dari POS tidak boleh
 
 Dokumentasi dan struktur tabel telah ditambahkan ke repository. Pembuatan tabel, lookup test, dan posting test pada SyteLine Cloud belum dilakukan.
 
+## 2026-07-23 — PoC Requirement Flexibility Confirmed
+
+### Reason
+
+Raw data resmi dari POS belum diterima. Format akhirnya mungkin lengkap, flat, atau hanya memiliki sejumlah field minimal. Desain tidak boleh dianggap final terlalu dini.
+
+### Changes
+
+- Menegaskan bahwa seluruh tabel saat ini adalah candidate design.
+- Menambahkan dokumentasi minimum data profile dan strategi perubahan requirement.
+- Menetapkan bahwa source data tidak boleh ditimpa oleh hasil mapping.
+- Menetapkan penambahan kolom secara backward-compatible dan penggunaan versioning/migration plan.
+- `SMK_RSC_POS_RawLine_mst` dicatat sebagai alternatif bila source resmi berbentuk flat/minimal, bukan sebagai tabel wajib.
+
+### Impact
+
+- Tabel yang tidak relevan dapat tidak digunakan setelah raw data resmi diterima.
+- Struktur dapat disederhanakan tanpa menghapus jejak desain awal.
+- API contract dan posting logic tetap menunggu source sample serta keputusan Finance.
+
+### Test
+
+Belum ada raw-data validation test karena contoh payload resmi belum tersedia.
+
+## 2026-07-23 — Revenue Mapping Designed
+
+### Reason
+
+Akun pendapatan tidak selalu dapat ditentukan hanya dari item. Requirement dapat meminta mapping berdasarkan kategori, outlet, sales channel, order type, line type, currency, atau kombinasi. Discount dan service charge juga mungkin membutuhkan akun tersendiri.
+
+### Changes
+
+- Menambahkan `SMK_RSC_POS_RevenueMap_mst`.
+- Menggunakan `map_id` sebagai primary key agar kriteria mapping dapat berubah tanpa composite key yang panjang.
+- Menambahkan rule criteria: outlet, item, kategori, sales channel, order type, line type, dan currency.
+- Menambahkan `priority` serta pemilihan rule berdasarkan priority dan specificity.
+- Menambahkan `amount_type` untuk revenue, discount, service charge, dan other component.
+- Menambahkan account, unit codes, debit/credit direction, dan refund reversal control.
+- Menambahkan active/effective/expiration controls.
+
+### Impact
+
+- Stored procedure/IDO validation nanti dapat memilih akun berdasarkan rule yang paling sesuai.
+- Posting preview dapat memisahkan revenue, discount, service charge, dan komponen lainnya.
+- Hasil ambigu harus menghentikan validasi agar tidak terjadi posting ke account yang salah.
+- Account dan unit code final tetap membutuhkan persetujuan Finance.
+
+### Test
+
+Dokumentasi dan struktur tabel telah ditambahkan ke repository. Pembuatan tabel serta rule-resolution test pada SyteLine Cloud belum dilakukan.
+
 ## 2026-07-23 — Initial Status Model
 
 ```text
