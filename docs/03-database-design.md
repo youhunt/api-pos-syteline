@@ -7,13 +7,22 @@
 | Object pada metadata SyteLine | `SMK_RSC_POS_<Name>_mst` |
 | Physical table Cloud | `dbo.ue_SMK_RSC_POS_<Name>_mst` |
 | Custom IDO (rencana) | `SMKRSCPos<Name>` |
-| Stored procedure (rencana) | `SMKRSCPos<Action>Sp` atau nama yang mengikuti standar environment |
+| Stored procedure (rencana) | `SMKRSCPos<Action>Sp` atau nama sesuai standar environment |
 
 ## Design Status
 
-Seluruh tabel masih merupakan **candidate design / PoC**. Raw data resmi, accounting flow, kebijakan retensi, dan jalur posting belum final. Tabel dapat disederhanakan, dikembangkan, atau tidak digunakan setelah data source diterima. Perubahan dilakukan dengan versioning dan migration plan; source data tidak boleh hilang atau tertimpa.
+Seluruh tabel masih merupakan **candidate design / PoC**. Raw data resmi, accounting flow, kebijakan retensi, dan jalur posting belum final. Tabel dapat disederhanakan, dikembangkan, atau tidak digunakan setelah source sample diterima.
+
+Perubahan harus mengikuti prinsip berikut:
+
+- source data tidak boleh hilang atau ditimpa hasil mapping;
+- perubahan struktur menggunakan versioning dan migration plan;
+- field tambahan sebaiknya backward-compatible;
+- tabel lengkap dan tabel raw minimal merupakan profile alternatif, bukan kewajiban untuk selalu digunakan bersama.
 
 ## Entity Model
+
+### Profile lengkap
 
 ```text
 SMK_RSC_POS_Inbound_mst
@@ -23,12 +32,28 @@ SMK_RSC_POS_Inbound_mst
                               1 ─── n SMK_RSC_POS_Payment_mst
                   1 ─── n SMK_RSC_POS_ProcessLog_mst
                   1 ─── n SMK_RSC_POS_PostingPreview_mst
+```
 
-SMK_RSC_POS_OutletMap_mst  → mapping outlet/site/warehouse/dimensi
-SMK_RSC_POS_ItemMap_mst    → mapping item/U-M/quantity
-SMK_RSC_POS_PaymentMap_mst → mapping payment/account/customer/settlement
-SMK_RSC_POS_TaxMap_mst     → mapping tax code/rate/account/rounding
-SMK_RSC_POS_RevenueMap_mst → rule mapping revenue/discount/service account
+### Profile minimal/flat
+
+```text
+SMK_RSC_POS_Inbound_mst
+   0..1 ─── 1 SMK_RSC_POS_Batch_mst
+                  1 ─── n SMK_RSC_POS_RawLine_mst
+                  1 ─── n SMK_RSC_POS_ProcessLog_mst
+                  1 ─── n SMK_RSC_POS_PostingPreview_mst
+```
+
+Profile minimal digunakan bila source hanya mengirim tanggal, nomor transaksi, item, quantity, dan total. Transaction header dapat dibentuk dengan grouping `business_date + trans_num`.
+
+Mapping tables:
+
+```text
+SMK_RSC_POS_OutletMap_mst  → outlet/site/warehouse/customer/dimensi
+SMK_RSC_POS_ItemMap_mst    → item/U-M/quantity conversion
+SMK_RSC_POS_PaymentMap_mst → payment/account/customer/settlement
+SMK_RSC_POS_TaxMap_mst     → tax code/rate/account/rounding
+SMK_RSC_POS_RevenueMap_mst → revenue/discount/service account rules
 ```
 
 Inbound dapat tidak memiliki batch ketika request ditolak atau payload gagal diparsing.
@@ -55,8 +80,6 @@ Object   : SMK_RSC_POS_Batch_mst
 Physical : dbo.ue_SMK_RSC_POS_Batch_mst
 PK       : batch_num
 ```
-
-Kolom bisnis utama:
 
 ```text
 batch_num, ext_batch_num, request_id, source_system, input_type,
@@ -262,24 +285,52 @@ response_code, response_message, error_msg, retry_count,
 retention_date, purged_flag, purged_date
 ```
 
-Inbound digunakan untuk:
-
-- mencatat request sebelum parsing dimulai;
-- menyediakan idempotency dan exact-payload duplicate detection;
-- mempertahankan raw payload atau referensi penyimpanannya sesuai policy;
-- mencatat hasil parsing, counts, response, dan error;
-- menautkan request ke batch setelah staging berhasil dibuat;
-- mendukung retensi dan purge raw payload tanpa menghapus metadata audit yang diperlukan.
+Inbound digunakan untuk request tracking, idempotency, optional raw-payload retention, parsing result, response/error, retry, dan purge control.
 
 `nvarchar(max)`/long-text support, ukuran maksimum request, storage mode, client metadata, dan kebijakan retensi harus diverifikasi pada tenant serta disetujui Security/Infrastructure.
 
-## Candidate Table Tambahan
+### 13. Minimal Raw Line
 
-| Table | Purpose |
+```text
+Object   : SMK_RSC_POS_RawLine_mst
+Physical : dbo.ue_SMK_RSC_POS_RawLine_mst
+PK       : batch_num + source_row_num
+```
+
+Source minimal:
+
+```text
+business_date, trans_num, pos_item_code, pos_qty, total_amt
+```
+
+Kolom bisnis/proses lengkap:
+
+```text
+batch_num, source_row_num, business_date, trans_num,
+pos_item_code, pos_qty, total_amt, item, syteline_qty,
+u_m, stat, validation_msg, error_msg, process_date, syteline_ref
+```
+
+Aturan penting:
+
+- `source_row_num` menjaga uniqueness walaupun item yang sama muncul dua kali dalam transaksi;
+- `pos_qty` dan `total_amt` adalah source values dan tidak boleh ditimpa;
+- `item`, `syteline_qty`, dan `u_m` adalah hasil mapping;
+- transaction summary dibentuk dengan grouping `business_date + trans_num`;
+- jumlah transaksi menggunakan distinct transaction identity, bukan jumlah raw rows;
+- payment, tax, discount, service charge, void/refund, currency, dan outlet yang tidak tersedia tidak boleh diisi dengan asumsi tersembunyi.
+
+## Profile Selection
+
+| Kondisi Source | Profile yang Dipertimbangkan |
 |---|---|
-| `SMK_RSC_POS_RawLine_mst` | Alternatif landing table bila source resmi berbentuk flat/minimal |
+| Payload lengkap header-detail-payment | `Batch + Tran + TranLine + Payment` |
+| Payload flat/minimal | `Batch + RawLine` |
+| Payload gagal parsing atau perlu idempotency audit | `Inbound` tetap digunakan |
+| Membutuhkan simulasi accounting | `PostingPreview` |
+| Membutuhkan troubleshooting/retry | `ProcessLog` |
 
-Candidate table tidak otomatis wajib dibuat. Keputusan implementasi mengikuti raw data dan flow resmi.
+Keputusan final dibuat setelah contoh raw data, data dictionary, volume, serta accounting flow resmi diterima.
 
 ## Integrity Rules
 
@@ -287,7 +338,9 @@ Candidate table tidak otomatis wajib dibuat. Keputusan implementasi mengikuti ra
 - `batch_num` inbound hanya diisi setelah batch berhasil dibuat;
 - transaksi tidak boleh ada tanpa batch;
 - line/payment tidak boleh ada tanpa transaksi;
+- raw line tidak boleh ada tanpa batch;
 - posting preview tidak boleh ada tanpa batch;
+- `source_row_num > 0` dan unik dalam batch;
 - `period_end >= period_start`;
 - `business_date` harus sesuai aturan periode;
 - `line_num` dan `payment_seq` positif;
@@ -301,22 +354,24 @@ Candidate table tidak otomatis wajib dibuat. Keputusan implementasi mengikuti ra
 - posting preview harus balance dalam transaction dan domestic currency;
 - preview approved/posted tidak boleh ditimpa oleh rebuild;
 - idempotency policy harus mencegah staging/posting ganda;
-- raw payload tidak boleh ditimpa oleh hasil parsing atau mapping;
+- raw payload dan source row values tidak boleh ditimpa oleh hasil parsing/mapping;
 - `RowPointer` harus unik;
 - posting tidak boleh dilakukan dua kali.
 
 ## Reconciliation Rules
 
 ```text
-Batch trans_count = COUNT(transaction)
+Batch trans_count = COUNT(transaction identity)
 Batch totals = SUM(transaction totals)
 Transaction item_count = COUNT(active/non-void lines sesuai aturan)
 Transaction totals = SUM(line totals) + header-only charges sesuai desain
 Transaction payment_amt = SUM(payment.payment_amt)
 Transaction tax_amt = SUM(line tax_amt) atau hasil rule header-level tax
 Inbound row_count = accepted_count + rejected_count, bila partial acceptance didukung
+RawLine transaction total = SUM(total_amt) per business_date + trans_num
+RawLine transaction count = COUNT(DISTINCT business_date + trans_num)
 Posting preview debit total = posting preview credit total
 Posting preview domestic debit total = posting preview domestic credit total
 ```
 
-Toleransi pembulatan, treatment void/refund, pajak, account revenue/discount/service, suspense account, approval flow, exchange-rate direction, target posting module, raw-payload retention, dan partial acceptance belum final dan harus disetujui Finance/SyteLine/Security.
+Toleransi pembulatan, treatment void/refund, pajak, account revenue/discount/service, suspense account, approval flow, exchange-rate direction, target posting module, raw-payload retention, partial acceptance, dan default untuk field source yang tidak tersedia belum final dan harus disetujui Finance/SyteLine/Security.
