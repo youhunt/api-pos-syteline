@@ -72,6 +72,7 @@ Aturan penggunaan:
 | 8 | `SMK_RSC_POS_PaymentMap_mst` | `dbo.ue_SMK_RSC_POS_PaymentMap_mst` | Mapping payment code ke account, dimension, customer, dan settlement |
 | 9 | `SMK_RSC_POS_TaxMap_mst` | `dbo.ue_SMK_RSC_POS_TaxMap_mst` | Mapping kode pajak POS ke tax code, account, dimensi, dan aturan perhitungan |
 | 10 | `SMK_RSC_POS_RevenueMap_mst` | `dbo.ue_SMK_RSC_POS_RevenueMap_mst` | Rule mapping item/kategori/channel/outlet ke akun revenue, discount, service, dan dimensi |
+| 11 | `SMK_RSC_POS_PostingPreview_mst` | `dbo.ue_SMK_RSC_POS_PostingPreview_mst` | Simulasi line debit-credit, approval, balance check, dan referensi sebelum posting aktual |
 
 Dokumentasi detail tersedia di folder [`database/tables`](database/tables/).
 
@@ -82,7 +83,8 @@ Batch
   ├── Transactions
   │     ├── Transaction Lines
   │     └── Payments
-  └── Process Logs
+  ├── Process Logs
+  └── Posting Preview Lines
 
 Outlet Map  ──> menentukan target site, warehouse, customer, currency,
                 dan unit code
@@ -97,6 +99,9 @@ Tax Map     ──> menerjemahkan kode pajak POS ke tax code/account,
 
 Revenue Map ──> memilih account dan unit code berdasarkan item, kategori,
                 outlet, channel, order type, line type, dan priority rule
+
+Posting Preview ──> menggabungkan hasil mapping menjadi line debit-credit
+                    yang harus balance sebelum approval/posting
 ```
 
 ## Status Proses
@@ -159,18 +164,19 @@ Keputusan harus didasarkan pada flow resmi, kebutuhan rekonsiliasi, volume trans
         ├── SMK_RSC_POS_ItemMap_mst.md
         ├── SMK_RSC_POS_PaymentMap_mst.md
         ├── SMK_RSC_POS_TaxMap_mst.md
-        └── SMK_RSC_POS_RevenueMap_mst.md
+        ├── SMK_RSC_POS_RevenueMap_mst.md
+        └── SMK_RSC_POS_PostingPreview_mst.md
 ```
 
 ## Tahap Berikutnya
 
 Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
 
-1. desain posting preview;
+1. desain inbound/raw-payload storage bila diperlukan;
 2. tentukan tabel mana yang benar-benar dibutuhkan berdasarkan raw data resmi;
 3. buat IDO untuk tabel staging dan mapping yang disetujui;
-4. buat custom form monitoring;
-5. buat stored procedure validasi;
+4. buat custom form monitoring dan posting preview;
+5. buat stored procedure validasi dan generate preview;
 6. buat custom IDO Method penerimaan batch;
 7. expose sebagai REST API;
 8. uji melalui Postman;
@@ -185,6 +191,7 @@ Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
 - Nomor kartu penuh, PIN, CVV, dan track data tidak boleh disimpan.
 - Tax treatment, tax rate, rounding, dan account mapping harus disetujui Finance sebelum posting produksi.
 - Revenue, discount, service charge, dan refund rule harus disetujui Finance.
+- Posting preview harus balance dan bebas error mapping sebelum approval/posting.
 - Perubahan requirement masih aman pada tahap PoC; dokumentasi dan implementasi harus versioned dan tidak boleh menghapus data sumber tanpa migration plan.
 
 ## Pemilik Repository
