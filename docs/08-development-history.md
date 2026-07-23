@@ -18,8 +18,6 @@ Keputusan awal:
 
 Dikonfirmasi bahwa environment Cloud menambahkan prefix `ue_` pada custom physical table.
 
-Contoh:
-
 ```text
 Metadata object : SMK_RSC_POS_Batch_mst
 Physical table  : dbo.ue_SMK_RSC_POS_Batch_mst
@@ -78,44 +76,44 @@ Payment code dari POS tidak boleh langsung dipercaya sebagai account SyteLine. D
 ### Impact
 
 - Stored procedure/IDO validation nanti dapat mengisi account hasil mapping pada payment staging.
-- Mendukung rancangan GL langsung, clearing account, delayed settlement, maupun AR untuk aggregator.
+- Mendukung GL langsung, clearing account, delayed settlement, maupun AR untuk aggregator.
 - Jalur posting final tetap menunggu keputusan Finance dan flow resmi.
 
 ### Test
 
-Dokumentasi dan struktur tabel telah ditambahkan ke repository. Pembuatan serta insert test pada SyteLine Cloud belum dilakukan.
+Dokumentasi dan struktur tabel telah ditambahkan. Pembuatan serta insert test pada SyteLine Cloud belum dilakukan.
 
 ## 2026-07-23 — Tax Mapping Designed
 
 ### Reason
 
-Kode pajak, rate, inclusive behavior, rounding, dan account dari POS tidak boleh langsung dianggap sesuai dengan aturan Finance serta konfigurasi SyteLine. Diperlukan mapping internal yang dapat dipakai baik untuk proses tax code maupun direct account posting.
+Kode pajak, rate, inclusive behavior, rounding, dan account dari POS tidak boleh langsung dianggap sesuai dengan aturan Finance serta konfigurasi SyteLine.
 
 ### Changes
 
 - Menambahkan `SMK_RSC_POS_TaxMap_mst`.
 - Primary key: `source_system + target_site + pos_tax_code`.
-- Menambahkan `posting_mode` untuk membedakan tax-code processing, direct-account posting, dan no separate posting.
+- Menambahkan `posting_mode` untuk tax-code processing, direct-account posting, dan no separate posting.
 - Menambahkan target tax code, tax account, unit codes, expected rate, inclusive flag, taxable flag, rounding mode, dan tolerance amount.
 - Menambahkan effective/expiration date dan active flag.
-- Mendokumentasikan target tax code sebagai `nvarchar(20)` sementara sampai domain/UDD tenant diverifikasi.
+- Target tax code memakai `nvarchar(20)` sementara sampai domain/UDD tenant diverifikasi.
 
 ### Impact
 
 - Validasi transaksi dapat memeriksa kode pajak berdasarkan site dan business date.
 - Posting preview dapat memisahkan revenue dan tax account secara konsisten.
-- Selisih perhitungan pajak dapat dievaluasi menggunakan rounding rule dan tolerance.
+- Selisih pajak dapat dievaluasi menggunakan rounding rule dan tolerance.
 - Tax treatment produksi tetap membutuhkan persetujuan Finance.
 
 ### Test
 
-Dokumentasi dan struktur tabel telah ditambahkan ke repository. Pembuatan tabel, lookup test, dan posting test pada SyteLine Cloud belum dilakukan.
+Pembuatan tabel, lookup test, dan posting test pada SyteLine Cloud belum dilakukan.
 
 ## 2026-07-23 — PoC Requirement Flexibility Confirmed
 
 ### Reason
 
-Raw data resmi dari POS belum diterima. Format akhirnya mungkin lengkap, flat, atau hanya memiliki sejumlah field minimal. Desain tidak boleh dianggap final terlalu dini.
+Raw data resmi dari POS belum diterima. Format akhirnya mungkin lengkap, flat, atau hanya memiliki sejumlah field minimal.
 
 ### Changes
 
@@ -123,7 +121,7 @@ Raw data resmi dari POS belum diterima. Format akhirnya mungkin lengkap, flat, a
 - Menambahkan dokumentasi minimum data profile dan strategi perubahan requirement.
 - Menetapkan bahwa source data tidak boleh ditimpa oleh hasil mapping.
 - Menetapkan penambahan kolom secara backward-compatible dan penggunaan versioning/migration plan.
-- `SMK_RSC_POS_RawLine_mst` dicatat sebagai alternatif bila source resmi berbentuk flat/minimal, bukan sebagai tabel wajib.
+- `SMK_RSC_POS_RawLine_mst` dicatat sebagai alternatif bila source resmi berbentuk flat/minimal, bukan tabel wajib.
 
 ### Impact
 
@@ -139,56 +137,82 @@ Belum ada raw-data validation test karena contoh payload resmi belum tersedia.
 
 ### Reason
 
-Akun pendapatan tidak selalu dapat ditentukan hanya dari item. Requirement dapat meminta mapping berdasarkan kategori, outlet, sales channel, order type, line type, currency, atau kombinasi. Discount dan service charge juga mungkin membutuhkan akun tersendiri.
+Akun pendapatan dapat bergantung pada kategori, outlet, sales channel, order type, line type, currency, atau kombinasi, bukan hanya item.
 
 ### Changes
 
 - Menambahkan `SMK_RSC_POS_RevenueMap_mst`.
-- Menggunakan `map_id` sebagai primary key agar kriteria mapping dapat berubah tanpa composite key yang panjang.
+- Menggunakan `map_id` sebagai primary key.
 - Menambahkan rule criteria: outlet, item, kategori, sales channel, order type, line type, dan currency.
-- Menambahkan `priority` serta pemilihan rule berdasarkan priority dan specificity.
+- Menambahkan `priority` serta pemilihan berdasarkan priority dan specificity.
 - Menambahkan `amount_type` untuk revenue, discount, service charge, dan other component.
-- Menambahkan account, unit codes, debit/credit direction, dan refund reversal control.
-- Menambahkan active/effective/expiration controls.
+- Menambahkan account, unit codes, debit/credit direction, refund reversal, dan masa berlaku.
 
 ### Impact
 
-- Stored procedure/IDO validation nanti dapat memilih akun berdasarkan rule yang paling sesuai.
-- Posting preview dapat memisahkan revenue, discount, service charge, dan komponen lainnya.
-- Hasil ambigu harus menghentikan validasi agar tidak terjadi posting ke account yang salah.
+- Validasi dapat memilih akun berdasarkan rule paling sesuai.
+- Posting preview dapat memisahkan revenue, discount, service charge, dan komponen lain.
+- Hasil ambigu menghentikan validasi.
 - Account dan unit code final tetap membutuhkan persetujuan Finance.
 
 ### Test
 
-Dokumentasi dan struktur tabel telah ditambahkan ke repository. Pembuatan tabel serta rule-resolution test pada SyteLine Cloud belum dilakukan.
+Pembuatan tabel serta rule-resolution test pada SyteLine Cloud belum dilakukan.
 
 ## 2026-07-23 — Posting Preview Designed
 
 ### Reason
 
-Hasil mapping tidak boleh langsung diposting ke modul keuangan tanpa pemeriksaan. Diperlukan lapisan preview yang memperlihatkan account, unit code, source reference, debit, credit, currency, balance, approval, dan status posting sebelum transaksi aktual dibuat di SyteLine.
+Hasil mapping tidak boleh langsung diposting tanpa pemeriksaan account, unit code, debit, credit, currency, balance, approval, dan status posting.
 
 ### Changes
 
 - Menambahkan `SMK_RSC_POS_PostingPreview_mst`.
 - Primary key: `preview_num + line_num`.
-- Menambahkan `generation_num` agar rebuild menghasilkan versi baru dan tidak menimpa preview approved/posted.
-- Menambahkan `posting_group`, `target_module`, `source_level`, source transaction/line/payment reference, component type, mapping source, dan mapping reference.
-- Menambahkan currency, exchange rate, account, unit codes, source amount, debit-credit transaction currency, dan debit-credit domestic currency.
-- Menambahkan approval status, approver, posting status, posted date, dan SyteLine reference.
-- Menetapkan balance rule untuk transaction serta domestic currency.
+- Menambahkan `generation_num` agar rebuild tidak menimpa preview approved/posted.
+- Menambahkan source references, component type, mapping source/reference, currency, exchange rate, account, unit codes, debit-credit, approval, posting status, dan SyteLine reference.
+- Menetapkan balance rule untuk transaction dan domestic currency.
 
 ### Impact
 
 - Tim dapat memeriksa simulasi jurnal sebelum posting aktual.
-- Mapping error dan unbalanced entries dapat dihentikan lebih awal.
+- Mapping error dan unbalanced entries dihentikan lebih awal.
 - Approval dapat diterapkan tanpa mengubah source staging.
-- Preview history dapat dipertahankan untuk audit dan troubleshooting.
-- Tabel tetap bersifat candidate sampai target module, grouping, dan approval flow resmi disepakati.
+- Preview history dipertahankan untuk audit.
 
 ### Test
 
-Dokumentasi dan struktur tabel telah ditambahkan ke repository. Generate-preview test, balancing test, approval test, dan posting test pada SyteLine Cloud belum dilakukan.
+Generate-preview, balancing, approval, dan posting test pada SyteLine Cloud belum dilakukan.
+
+## 2026-07-23 — Inbound Request and Raw Payload Designed
+
+### Reason
+
+Request perlu dicatat sebelum parsing agar error awal, duplicate request, retry, payload version, dan audit tetap dapat ditelusuri. Raw payload mungkin perlu dipertahankan sesuai kebijakan keamanan dan retensi.
+
+### Changes
+
+- Menambahkan `SMK_RSC_POS_Inbound_mst`.
+- Primary key: `inbound_id` menggunakan `RowPointerType`/`uniqueidentifier`.
+- Menambahkan `request_id`, `idempotency_key`, `correlation_id`, source metadata, endpoint, HTTP method, content type, dan payload version/format.
+- Menambahkan storage mode untuk database, approved external storage, atau metadata-only.
+- Menambahkan optional `payload_text`, `payload_location`, `content_length`, dan `payload_sha256`.
+- Menambahkan receive/parse status, parsed date, optional batch reference, row/accepted/rejected counts, response, error, dan retry count.
+- Menambahkan retention date, purge flag, dan purge date.
+- Menetapkan larangan penyimpanan Authorization header, password, token, API secret, PIN, CVV, dan full card number.
+- Menetapkan bahwa inbound dapat tetap ada tanpa batch ketika parsing gagal.
+
+### Impact
+
+- Duplicate dan idempotent retry dapat dikendalikan sebelum membuat staging baru.
+- Parsing error tetap dapat diaudit walaupun batch belum tercipta.
+- Request dapat ditelusuri dari inbound ke batch, process log, dan hasil berikutnya.
+- Raw payload retention dapat dikelola tanpa menghapus metadata audit.
+- Dukungan `nvarchar(max)`, ukuran request, storage mode, dan retensi masih harus diverifikasi pada tenant.
+
+### Test
+
+Dokumentasi dan struktur kandidat telah ditambahkan. Long-text test, duplicate test, payload parsing, retry, retention, dan purge test pada SyteLine Cloud belum dilakukan.
 
 ## 2026-07-23 — Initial Status Model
 
@@ -201,6 +225,8 @@ P = Processed
 E = Error
 C = Cancelled
 ```
+
+Inbound memakai status receive/parse tersendiri sesuai dokumentasi tabel inbound.
 
 ## 2026-07-23 — Documentation Baseline Added
 
@@ -217,8 +243,6 @@ Dokumentasi awal dibuat meliputi:
 - per-table documentation.
 
 ## Format Entri Berikutnya
-
-Gunakan format berikut untuk setiap perubahan:
 
 ```markdown
 ## YYYY-MM-DD — Judul Perubahan
