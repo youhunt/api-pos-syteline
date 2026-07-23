@@ -22,7 +22,12 @@ SMK_RSC_POS_OutletMap_mst  → mapping outlet/site/warehouse/dimensi
 SMK_RSC_POS_ItemMap_mst    → mapping item/U-M/quantity
 SMK_RSC_POS_PaymentMap_mst → mapping payment/account/customer/settlement
 SMK_RSC_POS_TaxMap_mst     → mapping tax code/rate/account/rounding
+SMK_RSC_POS_RevenueMap_mst → rule mapping revenue/discount/service account
 ```
+
+## Design Status
+
+Seluruh tabel pada dokumen ini masih merupakan **candidate design / PoC**. Raw data resmi, accounting flow, dan jalur posting belum final. Tabel dapat disederhanakan, dikembangkan, atau tidak digunakan setelah data source diterima. Perubahan dilakukan dengan versioning dan migration plan; source data tidak boleh hilang atau tertimpa.
 
 ## Common Framework Columns
 
@@ -241,13 +246,47 @@ Tax mapping digunakan untuk:
 
 Nama domain/UDD untuk target tax code harus diverifikasi pada tenant. Sementara itu `syteline_tax_code` dirancang sebagai `nvarchar(20)`.
 
+### 10. Revenue Mapping
+
+Physical table: `dbo.ue_SMK_RSC_POS_RevenueMap_mst`
+
+Primary key:
+
+```text
+map_id
+```
+
+Kolom bisnis utama:
+
+```text
+map_id, source_system, target_site, rule_name, priority,
+amount_type, outlet_code, pos_item_code, pos_category,
+sales_channel, order_type, line_type, currency_code, acct,
+unit_code1, unit_code2, unit_code3, unit_code4,
+debit_credit, reverse_on_refund, active_flag,
+effective_date, expiration_date, notes
+```
+
+Revenue mapping menggunakan rule fleksibel:
+
+- kriteria yang `NULL` dianggap wildcard;
+- rule dapat ditentukan per item, kategori, outlet, channel, order type, line type, currency, atau kombinasi;
+- priority paling kecil dievaluasi lebih dahulu;
+- bila priority sama, rule dengan kriteria paling spesifik dipilih;
+- hasil ambigu menyebabkan validasi gagal;
+- `amount_type` membedakan revenue, discount, service charge, dan komponen lain;
+- debit/credit ditentukan eksplisit;
+- refund dapat membalik sisi posting melalui `reverse_on_refund`.
+
 ## Candidate Tables Berikutnya
 
 | Table | Purpose |
 |---|---|
-| `SMK_RSC_POS_RevenueMap_mst` | Mapping category/item/channel ke revenue account |
 | `SMK_RSC_POS_PostingPreview_mst` | Preview debit-credit sebelum posting |
 | `SMK_RSC_POS_Inbound_mst` | Raw payload dan receive metadata bila diperlukan |
+| `SMK_RSC_POS_RawLine_mst` | Alternatif landing table bila source resmi berbentuk flat/minimal |
+
+Candidate table tidak otomatis wajib dibuat. Keputusan implementasi mengikuti raw data dan flow resmi.
 
 ## Integrity Rules
 
@@ -266,6 +305,8 @@ Aturan minimum:
 - fee account wajib bila fee akan diposting secara terpisah;
 - tax mapping harus menghasilkan tax code atau account sesuai `posting_mode`;
 - tax rate, rounding, dan tolerance harus mengikuti rule yang disetujui Finance;
+- revenue mapping harus menghasilkan tepat satu rule pemenang untuk setiap komponen yang akan diposting;
+- account dan unit code harus valid pada target site;
 - `RowPointer` harus unik;
 - posting tidak boleh dilakukan dua kali.
 
@@ -278,6 +319,7 @@ Transaction item_count = COUNT(active/non-void lines sesuai aturan)
 Transaction totals = SUM(line totals) + header-only charges sesuai desain
 Transaction payment_amt = SUM(payment.payment_amt)
 Transaction tax_amt = SUM(line tax_amt) atau hasil rule header-level tax
+Posting preview debit total = posting preview credit total
 ```
 
-Toleransi pembulatan, treatment void/refund, serta treatment pajak belum final dan harus disetujui Finance.
+Toleransi pembulatan, treatment void/refund, treatment pajak, account revenue/discount/service, serta penggunaan suspense account belum final dan harus disetujui Finance.
