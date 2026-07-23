@@ -8,10 +8,23 @@ Menambahkan method pertama pada service IDO:
 IDO    : ue_SMKRSCPosIntegration
 Method : CreateManualInbound
 Type   : Stored Procedure, no result set
-SP     : dbo.ue_SMKRSCPosCreateManualInboundSp
+SP     : dbo.SMKRSCPosCreateManualInboundSp
 ```
 
 Method ini hanya membuat satu record inbound untuk memulai proses upload CSV manual. Method belum membaca file, belum membuat batch, dan belum membuat raw lines.
+
+## Naming Correction
+
+Environment tenant memakai enforced prefix `ue_` untuk custom IDO dan custom table. Prefix tersebut tidak otomatis diwajibkan untuk stored procedure pada application database.
+
+```text
+IDO            : ue_SMKRSCPosIntegration
+Custom table   : dbo.ue_SMK_RSC_POS_Inbound_mst
+Stored procedure: dbo.SMKRSCPosCreateManualInboundSp
+Public method  : CreateManualInbound
+```
+
+Stored procedure dipanggil berdasarkan nama object SQL Server yang benar-benar tersedia pada application database. Tabel yang diakses dari procedure tetap memakai nama fisik `dbo.ue_SMK_RSC_POS_Inbound_mst`.
 
 ## Stored Procedure Parameters
 
@@ -52,6 +65,26 @@ RequestId    : NULL
 Infobar      : error detail
 ```
 
+## Verify the Stored Procedure
+
+Jalankan pada application database:
+
+```sql
+SELECT
+    DB_NAME() AS CurrentDatabase,
+    OBJECT_ID(N'dbo.SMKRSCPosCreateManualInboundSp', N'P') AS ProcedureObjectId;
+```
+
+`ProcedureObjectId` harus berisi angka, bukan `NULL`.
+
+Kemudian:
+
+```sql
+EXEC sys.sp_help N'dbo.SMKRSCPosCreateManualInboundSp';
+```
+
+Pastikan tujuh parameter dikenali sesuai urutan di atas.
+
 ## Add Method Through IDO Method Wizard
 
 1. Open `IDOs`.
@@ -62,10 +95,12 @@ Infobar      : error detail
 
 ```text
 Method Type      : Stored Procedure — no result set
-Stored Procedure : ue_SMKRSCPosCreateManualInboundSp
+Stored Procedure : SMKRSCPosCreateManualInboundSp
 Method Name      : CreateManualInbound
 Transactional    : checked
 ```
+
+Nama stored procedure harus dipilih dari dropdown berdasarkan object SQL Server yang benar-benar tersedia. `Method Name` boleh berbeda dari nama stored procedure selama unik pada IDO.
 
 6. Click `OK`.
 7. Refresh the IDOs form.
@@ -122,7 +157,7 @@ BatchNum        = NULL
 This step is complete when:
 
 ```text
-[ ] Stored procedure exists in the application database
+[ ] Stored procedure dbo.SMKRSCPosCreateManualInboundSp exists in the application database
 [ ] CreateManualInbound appears on the Methods tab
 [ ] Transactional is checked
 [ ] Parameter order and output flags are correct
