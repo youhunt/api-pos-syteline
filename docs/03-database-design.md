@@ -17,6 +17,7 @@ SMK_RSC_POS_Batch_mst
               1 ─── n SMK_RSC_POS_TranLine_mst
               1 ─── n SMK_RSC_POS_Payment_mst
   1 ─── n SMK_RSC_POS_ProcessLog_mst
+  1 ─── n SMK_RSC_POS_PostingPreview_mst
 
 SMK_RSC_POS_OutletMap_mst  → mapping outlet/site/warehouse/dimensi
 SMK_RSC_POS_ItemMap_mst    → mapping item/U-M/quantity
@@ -278,11 +279,53 @@ Revenue mapping menggunakan rule fleksibel:
 - debit/credit ditentukan eksplisit;
 - refund dapat membalik sisi posting melalui `reverse_on_refund`.
 
+### 11. Posting Preview
+
+Physical table: `dbo.ue_SMK_RSC_POS_PostingPreview_mst`
+
+Primary key:
+
+```text
+preview_num + line_num
+```
+
+Kolom bisnis utama:
+
+```text
+preview_num, line_num, batch_num, generation_num, posting_group,
+target_module, source_level, trans_num, source_line_num, payment_seq,
+component_type, mapping_source, mapping_ref, posting_date,
+currency_code, exch_rate, acct, unit_code1, unit_code2,
+unit_code3, unit_code4, description, reference_num, source_amt,
+debit_amt, credit_amt, dom_debit_amt, dom_credit_amt,
+approval_stat, approved_by, approved_date, posting_stat,
+posted_date, syteline_ref, validation_msg, error_msg
+```
+
+Posting preview digunakan untuk:
+
+- menggabungkan hasil outlet, item, payment, tax, dan revenue mapping;
+- menghasilkan line debit-credit sebelum posting aktual;
+- menyimpan source reference dan mapping reference untuk audit;
+- memvalidasi account, unit code, currency, exchange rate, dan accounting period;
+- memastikan total debit dan credit balance;
+- mendukung approval sebelum posting;
+- mempertahankan generation history saat preview dibangun ulang;
+- menyimpan referensi hasil SyteLine setelah posting berhasil.
+
+Aturan pokok:
+
+```text
+SUM(debit_amt) = SUM(credit_amt)
+SUM(dom_debit_amt) = SUM(dom_credit_amt)
+```
+
+Satu line hanya boleh mengisi debit atau credit, tidak keduanya. Preview yang error, tidak balance, belum approved saat approval diwajibkan, atau sudah posted tidak boleh diposting ulang.
+
 ## Candidate Tables Berikutnya
 
 | Table | Purpose |
 |---|---|
-| `SMK_RSC_POS_PostingPreview_mst` | Preview debit-credit sebelum posting |
 | `SMK_RSC_POS_Inbound_mst` | Raw payload dan receive metadata bila diperlukan |
 | `SMK_RSC_POS_RawLine_mst` | Alternatif landing table bila source resmi berbentuk flat/minimal |
 
@@ -296,6 +339,7 @@ Aturan minimum:
 
 - transaksi tidak boleh ada tanpa batch;
 - line/payment tidak boleh ada tanpa transaksi;
+- posting preview tidak boleh ada tanpa batch;
 - `period_end >= period_start`;
 - `business_date` harus sesuai aturan periode;
 - `line_num` dan `payment_seq` positif;
@@ -307,6 +351,8 @@ Aturan minimum:
 - tax rate, rounding, dan tolerance harus mengikuti rule yang disetujui Finance;
 - revenue mapping harus menghasilkan tepat satu rule pemenang untuk setiap komponen yang akan diposting;
 - account dan unit code harus valid pada target site;
+- posting preview harus balance dalam transaction dan domestic currency;
+- preview approved/posted tidak boleh ditimpa oleh rebuild;
 - `RowPointer` harus unik;
 - posting tidak boleh dilakukan dua kali.
 
@@ -320,6 +366,7 @@ Transaction totals = SUM(line totals) + header-only charges sesuai desain
 Transaction payment_amt = SUM(payment.payment_amt)
 Transaction tax_amt = SUM(line tax_amt) atau hasil rule header-level tax
 Posting preview debit total = posting preview credit total
+Posting preview domestic debit total = posting preview domestic credit total
 ```
 
-Toleransi pembulatan, treatment void/refund, treatment pajak, account revenue/discount/service, serta penggunaan suspense account belum final dan harus disetujui Finance.
+Toleransi pembulatan, treatment void/refund, treatment pajak, account revenue/discount/service, penggunaan suspense account, approval flow, exchange-rate direction, dan target posting module belum final dan harus disetujui Finance/SyteLine.
