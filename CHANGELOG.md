@@ -33,6 +33,10 @@ All notable changes to this repository will be documented in this file.
 - IDO architecture overview covering entity IDO, monitor/composite IDO, and service IDO responsibilities.
 - Candidate entity IDO catalog and service IDO name `SMKRSCPosIntegration`.
 - `SMKRSCPosInbounds` IDO design with full property mapping, default property list, status transition, subcollection, authorization matrix, restricted payload access, retry, purge, form usage, and test scenarios.
+- Layered testing strategy from metadata smoke test through controlled actual-posting test.
+- Initial 30-case PoC test matrix covering valid receive, mapping, reconciliation, idempotency, retry, security, preview, and concurrency.
+- Synthetic minimal-profile payloads for valid, unmapped-item, and negative-quantity scenarios.
+- Test workspace and evidence-recording guidance under `tests/`.
 
 ### Changed
 
@@ -43,6 +47,7 @@ All notable changes to this repository will be documented in this file.
 - Clarified that the complete transaction model and minimal flat model are alternatives selected after reviewing the official source data.
 - Clarified that current tables and IDOs are candidate PoC designs and may be simplified or adjusted after the official raw data, retention policy, accounting flow, and tenant standard are received.
 - Updated the architecture so public REST receive operations use controlled service IDO methods rather than direct entity-IDO writes.
+- Established posting preview as the safe PoC boundary before actual financial posting is enabled.
 
 ### Planned
 
@@ -56,7 +61,7 @@ All notable changes to this repository will be documented in this file.
 - Stored procedure specification.
 - REST API implementation notes.
 - Postman collection.
-- Test scenarios and deployment runbook.
+- Automated test execution and deployment runbook.
 
 ## [0.1.0] — 2026-07-23
 
