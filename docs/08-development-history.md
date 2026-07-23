@@ -162,6 +162,34 @@ Akun pendapatan tidak selalu dapat ditentukan hanya dari item. Requirement dapat
 
 Dokumentasi dan struktur tabel telah ditambahkan ke repository. Pembuatan tabel serta rule-resolution test pada SyteLine Cloud belum dilakukan.
 
+## 2026-07-23 — Posting Preview Designed
+
+### Reason
+
+Hasil mapping tidak boleh langsung diposting ke modul keuangan tanpa pemeriksaan. Diperlukan lapisan preview yang memperlihatkan account, unit code, source reference, debit, credit, currency, balance, approval, dan status posting sebelum transaksi aktual dibuat di SyteLine.
+
+### Changes
+
+- Menambahkan `SMK_RSC_POS_PostingPreview_mst`.
+- Primary key: `preview_num + line_num`.
+- Menambahkan `generation_num` agar rebuild menghasilkan versi baru dan tidak menimpa preview approved/posted.
+- Menambahkan `posting_group`, `target_module`, `source_level`, source transaction/line/payment reference, component type, mapping source, dan mapping reference.
+- Menambahkan currency, exchange rate, account, unit codes, source amount, debit-credit transaction currency, dan debit-credit domestic currency.
+- Menambahkan approval status, approver, posting status, posted date, dan SyteLine reference.
+- Menetapkan balance rule untuk transaction serta domestic currency.
+
+### Impact
+
+- Tim dapat memeriksa simulasi jurnal sebelum posting aktual.
+- Mapping error dan unbalanced entries dapat dihentikan lebih awal.
+- Approval dapat diterapkan tanpa mengubah source staging.
+- Preview history dapat dipertahankan untuk audit dan troubleshooting.
+- Tabel tetap bersifat candidate sampai target module, grouping, dan approval flow resmi disepakati.
+
+### Test
+
+Dokumentasi dan struktur tabel telah ditambahkan ke repository. Generate-preview test, balancing test, approval test, dan posting test pada SyteLine Cloud belum dilakukan.
+
 ## 2026-07-23 — Initial Status Model
 
 ```text
