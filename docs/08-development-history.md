@@ -85,6 +85,32 @@ Payment code dari POS tidak boleh langsung dipercaya sebagai account SyteLine. D
 
 Dokumentasi dan struktur tabel telah ditambahkan ke repository. Pembuatan serta insert test pada SyteLine Cloud belum dilakukan.
 
+## 2026-07-23 — Tax Mapping Designed
+
+### Reason
+
+Kode pajak, rate, inclusive behavior, rounding, dan account dari POS tidak boleh langsung dianggap sesuai dengan aturan Finance serta konfigurasi SyteLine. Diperlukan mapping internal yang dapat dipakai baik untuk proses tax code maupun direct account posting.
+
+### Changes
+
+- Menambahkan `SMK_RSC_POS_TaxMap_mst`.
+- Primary key: `source_system + target_site + pos_tax_code`.
+- Menambahkan `posting_mode` untuk membedakan tax-code processing, direct-account posting, dan no separate posting.
+- Menambahkan target tax code, tax account, unit codes, expected rate, inclusive flag, taxable flag, rounding mode, dan tolerance amount.
+- Menambahkan effective/expiration date dan active flag.
+- Mendokumentasikan target tax code sebagai `nvarchar(20)` sementara sampai domain/UDD tenant diverifikasi.
+
+### Impact
+
+- Validasi transaksi dapat memeriksa kode pajak berdasarkan site dan business date.
+- Posting preview dapat memisahkan revenue dan tax account secara konsisten.
+- Selisih perhitungan pajak dapat dievaluasi menggunakan rounding rule dan tolerance.
+- Tax treatment produksi tetap membutuhkan persetujuan Finance.
+
+### Test
+
+Dokumentasi dan struktur tabel telah ditambahkan ke repository. Pembuatan tabel, lookup test, dan posting test pada SyteLine Cloud belum dilakukan.
+
 ## 2026-07-23 — Initial Status Model
 
 ```text
