@@ -14,25 +14,33 @@ Purpose         : Mapping outlet POS ke site, warehouse, customer, currency, dan
 source_system + outlet_code
 ```
 
-## Custom Columns
+## Struktur kolom
 
-| Column | Data Type | Null | Default | Description |
-|---|---|---:|---|---|
-| `source_system` | `nvarchar(30)` | No | `N'POS'` | Sistem sumber |
-| `outlet_code` | `nvarchar(20)` | No |  | Kode outlet POS |
-| `outlet_name` | `nvarchar(100)` | Yes |  | Nama outlet |
-| `target_site` | `SiteType` | No |  | Site tujuan hasil mapping |
-| `whse` | `WhseType` | Yes |  | Warehouse default |
-| `cust_num` | `CustNumType` | Yes |  | Customer/walk-in customer default |
-| `currency_code` | `CurrCodeType` | No | `N'IDR'` | Currency default |
-| `unit_code1` | `UnitCode1Type` | Yes |  | Unit code 1 |
-| `unit_code2` | `UnitCode2Type` | Yes |  | Unit code 2 |
-| `unit_code3` | `UnitCode3Type` | Yes |  | Unit code 3 |
-| `unit_code4` | `UnitCode4Type` | Yes |  | Unit code 4 |
-| `active_flag` | `FlagNyType` | No | `1` | Mapping aktif |
-| `effective_date` | `DateType` | No | `getdate()` | Mulai berlaku |
-| `expiration_date` | `DateType` | Yes |  | Akhir berlaku |
-| `notes` | `nvarchar(1000)` | Yes |  | Catatan |
+| Column Name | Schema | Table Name | Data Type | System Data Type | Length | Decimal Position | Default Value | Is Nullable | Primary Key | Key Sequence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `source_system` | dbo | ue_SMK_RSC_POS_OutletMap_mst | nvarchar | nvarchar | 30 |  | `N'POS'` | NO | 1 | 1 |
+| `outlet_code` | dbo | ue_SMK_RSC_POS_OutletMap_mst | nvarchar | nvarchar | 20 |  |  | NO | 1 | 2 |
+| `outlet_name` | dbo | ue_SMK_RSC_POS_OutletMap_mst | nvarchar | nvarchar | 100 |  |  | YES | 0 |  |
+| `target_site` | dbo | ue_SMK_RSC_POS_OutletMap_mst | SiteType | nvarchar | 8 |  |  | NO | 0 |  |
+| `whse` | dbo | ue_SMK_RSC_POS_OutletMap_mst | WhseType | nvarchar | 4 |  |  | YES | 0 |  |
+| `cust_num` | dbo | ue_SMK_RSC_POS_OutletMap_mst | CustNumType | nvarchar | 7 |  |  | YES | 0 |  |
+| `currency_code` | dbo | ue_SMK_RSC_POS_OutletMap_mst | CurrCodeType | nvarchar | 3 |  | `N'IDR'` | NO | 0 |  |
+| `unit_code1` | dbo | ue_SMK_RSC_POS_OutletMap_mst | UnitCode1Type | nvarchar | 4 |  |  | YES | 0 |  |
+| `unit_code2` | dbo | ue_SMK_RSC_POS_OutletMap_mst | UnitCode2Type | nvarchar | 4 |  |  | YES | 0 |  |
+| `unit_code3` | dbo | ue_SMK_RSC_POS_OutletMap_mst | UnitCode3Type | nvarchar | 4 |  |  | YES | 0 |  |
+| `unit_code4` | dbo | ue_SMK_RSC_POS_OutletMap_mst | UnitCode4Type | nvarchar | 4 |  |  | YES | 0 |  |
+| `active_flag` | dbo | ue_SMK_RSC_POS_OutletMap_mst | FlagNyType | tinyint |  |  | `1` | NO | 0 |  |
+| `effective_date` | dbo | ue_SMK_RSC_POS_OutletMap_mst | DateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `expiration_date` | dbo | ue_SMK_RSC_POS_OutletMap_mst | DateType | datetime |  |  |  | YES | 0 |  |
+| `notes` | dbo | ue_SMK_RSC_POS_OutletMap_mst | nvarchar | nvarchar | 1000 |  |  | YES | 0 |  |
+| `CreateDate` | dbo | ue_SMK_RSC_POS_OutletMap_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `CreatedBy` | dbo | ue_SMK_RSC_POS_OutletMap_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
+| `InWorkflow` | dbo | ue_SMK_RSC_POS_OutletMap_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `NoteExistsFlag` | dbo | ue_SMK_RSC_POS_OutletMap_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `RecordDate` | dbo | ue_SMK_RSC_POS_OutletMap_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `RowPointer` | dbo | ue_SMK_RSC_POS_OutletMap_mst | RowPointerType | uniqueidentifier |  |  | `newid()` | NO | 0 |  |
+| `SiteRef` | dbo | ue_SMK_RSC_POS_OutletMap_mst | SiteType | nvarchar | 8 |  | `rtrim(CONVERT([nvarchar](8),context_info(),(0)))` | NO | 0 |  |
+| `UpdatedBy` | dbo | ue_SMK_RSC_POS_OutletMap_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
 
 ## SiteRef vs target_site
 
