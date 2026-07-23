@@ -36,6 +36,10 @@ All notable changes to this repository will be documented in this file.
 - IDO Wizard clarification explaining that entity, monitor/composite, and service are architectural roles rather than separate Mongoose object types.
 - Wizard implementation patterns for table-backed entity IDOs, read-only monitor IDOs, and method-focused service IDOs.
 - `SMKRSCPosBatches` entity IDO design with wizard values, full property mapping, update policy, profile-dependent subcollections, security, form design, review checklist, and tests.
+- Manual CSV import flow for PoC, UAT, and operational fallback.
+- `SMKRSCPosImportCenter` form design with browse/attachment, validation, transactional staging import, raw-line review, and error-log review.
+- Candidate service methods `CreateManualInbound`, `ValidateAttachedCsv`, and `ImportAttachedCsv`.
+- Versioned minimal CSV template `templates/pos-minimal-v1.csv`.
 - Layered testing strategy from metadata smoke test through controlled actual-posting test.
 - Initial 30-case PoC test matrix covering valid receive, mapping, reconciliation, idempotency, retry, security, preview, and concurrency.
 - Synthetic minimal-profile payloads for valid, unmapped-item, and negative-quantity scenarios.
@@ -52,16 +56,16 @@ All notable changes to this repository will be documented in this file.
 - Updated the architecture so public REST receive operations use controlled service IDO methods rather than direct entity-IDO writes.
 - Clarified that an entity, monitor, or service role is implemented with standard Mongoose IDO metadata; service behavior is supplied through IDO methods.
 - Established posting preview as the safe PoC boundary before actual financial posting is enabled.
+- Established manual CSV upload as an implementation step before the remaining complete-profile IDOs, using the same service processing core planned for REST API input.
 
 ### Planned
 
-- Remaining transaction, raw-line, process-log, mapping, and posting-preview entity IDOs.
+- Minimum entity IDOs required by manual import: raw-line, process-log, and item-map IDOs.
+- `SMKRSCPosIntegration` service-method implementation for manual CSV import.
+- Remaining transaction, payment, mapping, and posting-preview entity IDOs.
 - Monitor/composite IDO design.
-- `SMKRSCPosIntegration` service-method specification.
 - Final table/profile selection after raw data review.
-- Verify long-text support, maximum request size, and payload retention policy in the tenant.
-- Custom form design.
-- Stored procedure specification.
+- Verify attachment access, CSV parser support, file-size limits, and retention policy in the tenant.
 - REST API implementation notes.
 - Postman collection.
 - Automated test execution and deployment runbook.
