@@ -30,6 +30,9 @@ All notable changes to this repository will be documented in this file.
 - Flat-row transaction grouping and reconciliation rules.
 - Full SyteLine table-format documentation and tab-delimited structure for the raw-line table.
 - Minimum-data-profile and requirement-change strategy documentation.
+- IDO architecture overview covering entity IDO, monitor/composite IDO, and service IDO responsibilities.
+- Candidate entity IDO catalog and service IDO name `SMKRSCPosIntegration`.
+- `SMKRSCPosInbounds` IDO design with full property mapping, default property list, status transition, subcollection, authorization matrix, restricted payload access, retry, purge, form usage, and test scenarios.
 
 ### Changed
 
@@ -38,13 +41,17 @@ All notable changes to this repository will be documented in this file.
 - Added `database/tables/TABLE_DOCUMENTATION_TEMPLATE.md` as the required format for subsequent table documentation.
 - Updated README and database design to include payment, tax, revenue, posting-preview, inbound-request, and minimal raw-line designs.
 - Clarified that the complete transaction model and minimal flat model are alternatives selected after reviewing the official source data.
-- Clarified that current tables are candidate PoC designs and may be simplified or adjusted after the official raw data, retention policy, and accounting flow are received.
+- Clarified that current tables and IDOs are candidate PoC designs and may be simplified or adjusted after the official raw data, retention policy, accounting flow, and tenant standard are received.
+- Updated the architecture so public REST receive operations use controlled service IDO methods rather than direct entity-IDO writes.
 
 ### Planned
 
+- `SMKRSCPosBatches` entity IDO design.
+- Remaining transaction, raw-line, process-log, mapping, and posting-preview entity IDOs.
+- Monitor/composite IDO design.
+- `SMKRSCPosIntegration` service-method specification.
 - Final table/profile selection after raw data review.
 - Verify long-text support, maximum request size, and payload retention policy in the tenant.
-- IDO design.
 - Custom form design.
 - Stored procedure specification.
 - REST API implementation notes.
