@@ -4,6 +4,12 @@ All notable changes to this repository will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `SMK_RSC_POS_PaymentMap_mst` design.
+- Mapping payment code to main account, fee account, unit codes, optional customer, bank, and settlement behavior.
+- Full SyteLine table-format documentation and tab-delimited structure for the payment mapping table.
+
 ### Changed
 
 - Standardized all existing table documentation using the full SyteLine column format: `Column Name`, `Schema`, `Table Name`, `Data Type`, `System Data Type`, `Length`, `Decimal Position`, `Default Value`, `Is Nullable`, `Primary Key`, and `Key Sequence`.
@@ -12,7 +18,6 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
-- Payment mapping table.
 - Tax mapping table.
 - Revenue mapping table.
 - Posting preview design.
