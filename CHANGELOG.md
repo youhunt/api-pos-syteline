@@ -24,6 +24,11 @@ All notable changes to this repository will be documented in this file.
 - Request identity, correlation, idempotency, payload version/format, optional raw-payload storage, SHA-256 duplicate support, parsing result, counts, response metadata, retry, retention, and purge controls.
 - Security rules preventing storage of secrets and prohibited payment data in raw payload/logging.
 - Full SyteLine table-format documentation and tab-delimited structure for the inbound table.
+- `SMK_RSC_POS_RawLine_mst` minimal/flat source design.
+- Minimal source fields for business date, transaction number, POS item, source quantity, and total amount.
+- Separate mapping-result fields for SyteLine item, converted quantity, and U/M so source values are not overwritten.
+- Flat-row transaction grouping and reconciliation rules.
+- Full SyteLine table-format documentation and tab-delimited structure for the raw-line table.
 - Minimum-data-profile and requirement-change strategy documentation.
 
 ### Changed
@@ -31,12 +36,13 @@ All notable changes to this repository will be documented in this file.
 - Standardized all existing table documentation using the full SyteLine column format: `Column Name`, `Schema`, `Table Name`, `Data Type`, `System Data Type`, `Length`, `Decimal Position`, `Default Value`, `Is Nullable`, `Primary Key`, and `Key Sequence`.
 - Added standard Mongoose columns to every documented table structure.
 - Added `database/tables/TABLE_DOCUMENTATION_TEMPLATE.md` as the required format for subsequent table documentation.
-- Updated README and database design to include payment, tax, revenue, posting-preview, and inbound-request designs.
+- Updated README and database design to include payment, tax, revenue, posting-preview, inbound-request, and minimal raw-line designs.
+- Clarified that the complete transaction model and minimal flat model are alternatives selected after reviewing the official source data.
 - Clarified that current tables are candidate PoC designs and may be simplified or adjusted after the official raw data, retention policy, and accounting flow are received.
 
 ### Planned
 
-- Final table selection after raw data review.
+- Final table/profile selection after raw data review.
 - Verify long-text support, maximum request size, and payload retention policy in the tenant.
 - IDO design.
 - Custom form design.
