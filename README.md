@@ -2,7 +2,7 @@
 
 Repository dokumentasi dan artefak pengembangan integrasi **POS Pizza Hut / RSC → Infor SyteLine (Mongoose)**.
 
-> Status saat ini: **Proof of Concept / tahap perancangan data staging**. Struktur akhir API, jalur posting keuangan, dan format payload resmi masih menunggu flow serta contoh data dari tim POS, Finance, dan SyteLine.
+> Status saat ini: **Proof of Concept / tahap perancangan data staging**. Struktur akhir API, jalur posting keuangan, dan format payload resmi masih menunggu flow serta contoh data dari tim POS, Finance, dan SyteLine. Seluruh tabel saat ini merupakan candidate design dan masih dapat disederhanakan atau disesuaikan ketika raw data resmi diterima.
 
 ## Tujuan
 
@@ -71,6 +71,7 @@ Aturan penggunaan:
 | 7 | `SMK_RSC_POS_ItemMap_mst` | `dbo.ue_SMK_RSC_POS_ItemMap_mst` | Mapping item POS ke item dan U/M SyteLine |
 | 8 | `SMK_RSC_POS_PaymentMap_mst` | `dbo.ue_SMK_RSC_POS_PaymentMap_mst` | Mapping payment code ke account, dimension, customer, dan settlement |
 | 9 | `SMK_RSC_POS_TaxMap_mst` | `dbo.ue_SMK_RSC_POS_TaxMap_mst` | Mapping kode pajak POS ke tax code, account, dimensi, dan aturan perhitungan |
+| 10 | `SMK_RSC_POS_RevenueMap_mst` | `dbo.ue_SMK_RSC_POS_RevenueMap_mst` | Rule mapping item/kategori/channel/outlet ke akun revenue, discount, service, dan dimensi |
 
 Dokumentasi detail tersedia di folder [`database/tables`](database/tables/).
 
@@ -93,6 +94,9 @@ Payment Map ──> menerjemahkan payment code ke account, fee account,
 
 Tax Map     ──> menerjemahkan kode pajak POS ke tax code/account,
                 rate, inclusion rule, rounding, dan tolerance
+
+Revenue Map ──> memilih account dan unit code berdasarkan item, kategori,
+                outlet, channel, order type, line type, dan priority rule
 ```
 
 ## Status Proses
@@ -141,7 +145,8 @@ Keputusan harus didasarkan pada flow resmi, kebutuhan rekonsiliasi, volume trans
 │   ├── 06-financial-posting-options.md
 │   ├── 07-development-roadmap.md
 │   ├── 08-development-history.md
-│   └── 09-open-questions.md
+│   ├── 09-open-questions.md
+│   └── 10-minimum-data-profile-and-change-strategy.md
 └── database/
     └── tables/
         ├── TABLE_DOCUMENTATION_TEMPLATE.md
@@ -153,16 +158,17 @@ Keputusan harus didasarkan pada flow resmi, kebutuhan rekonsiliasi, volume trans
         ├── SMK_RSC_POS_OutletMap_mst.md
         ├── SMK_RSC_POS_ItemMap_mst.md
         ├── SMK_RSC_POS_PaymentMap_mst.md
-        └── SMK_RSC_POS_TaxMap_mst.md
+        ├── SMK_RSC_POS_TaxMap_mst.md
+        └── SMK_RSC_POS_RevenueMap_mst.md
 ```
 
 ## Tahap Berikutnya
 
 Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
 
-1. desain `RevenueMap`;
-2. desain posting preview;
-3. buat IDO untuk tabel staging dan mapping;
+1. desain posting preview;
+2. tentukan tabel mana yang benar-benar dibutuhkan berdasarkan raw data resmi;
+3. buat IDO untuk tabel staging dan mapping yang disetujui;
 4. buat custom form monitoring;
 5. buat stored procedure validasi;
 6. buat custom IDO Method penerimaan batch;
@@ -178,6 +184,8 @@ Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
 - Duplikasi, retry, audit trail, dan rekonsiliasi merupakan kebutuhan inti.
 - Nomor kartu penuh, PIN, CVV, dan track data tidak boleh disimpan.
 - Tax treatment, tax rate, rounding, dan account mapping harus disetujui Finance sebelum posting produksi.
+- Revenue, discount, service charge, dan refund rule harus disetujui Finance.
+- Perubahan requirement masih aman pada tahap PoC; dokumentasi dan implementasi harus versioned dan tidak boleh menghapus data sumber tanpa migration plan.
 
 ## Pemilik Repository
 
