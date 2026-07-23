@@ -20,37 +20,43 @@ batch_num
 
 Catatan: kebutuhan memasukkan `SiteRef` ke key harus diverifikasi terhadap standar tenant Cloud sebelum produksi.
 
-## Custom Columns
+## Struktur kolom
 
-| Column | Data Type | Null | Default | Description |
-|---|---|---:|---|---|
-| `batch_num` | `nvarchar(30)` | No |  | Nomor batch internal SyteLine |
-| `ext_batch_num` | `nvarchar(50)` | Yes |  | Nomor batch dari POS |
-| `request_id` | `nvarchar(50)` | Yes |  | ID request untuk tracing |
-| `source_system` | `nvarchar(30)` | No | `N'POS'` | Sistem sumber |
-| `input_type` | `nchar(1)` | No | `N'A'` | A=API, M=Manual, F=File |
-| `outlet_code` | `nvarchar(20)` | No |  | Kode outlet POS |
-| `period_start` | `DateType` | No | `getdate()` | Awal periode batch |
-| `period_end` | `DateType` | No | `getdate()` | Akhir periode batch |
-| `received_date` | `CurrentDateType` | No | `getdate()` | Tanggal diterima |
-| `trans_count` | `int` | No | `0` | Jumlah transaksi |
-| `gross_amt` | `AmountType` | No | `0` | Nilai kotor |
-| `discount_amt` | `AmountType` | No | `0` | Diskon |
-| `tax_amt` | `AmountType` | No | `0` | Pajak |
-| `service_amt` | `AmountType` | No | `0` | Service charge |
-| `rounding_amt` | `AmountType` | No | `0` | Pembulatan |
-| `net_amt` | `AmountType` | No | `0` | Nilai bersih |
-| `payment_amt` | `AmountType` | No | `0` | Total pembayaran |
-| `stat` | `nchar(1)` | No | `N'N'` | Status proses |
-| `validation_msg` | `nvarchar(1000)` | Yes |  | Ringkasan validasi |
-| `error_msg` | `nvarchar(4000)` | Yes |  | Error terakhir |
-| `validate_date` | `DateType` | Yes |  | Waktu validasi |
-| `process_date` | `DateType` | Yes |  | Waktu proses/posting |
-| `processed_by` | `UsernameType` | Yes |  | User/proses yang memproses |
-| `syteline_ref` | `nvarchar(50)` | Yes |  | Referensi hasil SyteLine sementara |
-| `retry_count` | `int` | No | `0` | Jumlah retry |
-
-Kolom standar Mongoose mengikuti [`docs/03-database-design.md`](../../docs/03-database-design.md).
+| Column Name | Schema | Table Name | Data Type | System Data Type | Length | Decimal Position | Default Value | Is Nullable | Primary Key | Key Sequence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `batch_num` | dbo | ue_SMK_RSC_POS_Batch_mst | nvarchar | nvarchar | 30 |  |  | NO | 1 | 1 |
+| `ext_batch_num` | dbo | ue_SMK_RSC_POS_Batch_mst | nvarchar | nvarchar | 50 |  |  | YES | 0 |  |
+| `request_id` | dbo | ue_SMK_RSC_POS_Batch_mst | nvarchar | nvarchar | 50 |  |  | YES | 0 |  |
+| `source_system` | dbo | ue_SMK_RSC_POS_Batch_mst | nvarchar | nvarchar | 30 |  | `N'POS'` | NO | 0 |  |
+| `input_type` | dbo | ue_SMK_RSC_POS_Batch_mst | nchar | nchar | 1 |  | `N'A'` | NO | 0 |  |
+| `outlet_code` | dbo | ue_SMK_RSC_POS_Batch_mst | nvarchar | nvarchar | 20 |  |  | NO | 0 |  |
+| `period_start` | dbo | ue_SMK_RSC_POS_Batch_mst | DateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `period_end` | dbo | ue_SMK_RSC_POS_Batch_mst | DateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `received_date` | dbo | ue_SMK_RSC_POS_Batch_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `trans_count` | dbo | ue_SMK_RSC_POS_Batch_mst | int | int |  |  | `0` | NO | 0 |  |
+| `gross_amt` | dbo | ue_SMK_RSC_POS_Batch_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `discount_amt` | dbo | ue_SMK_RSC_POS_Batch_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `tax_amt` | dbo | ue_SMK_RSC_POS_Batch_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `service_amt` | dbo | ue_SMK_RSC_POS_Batch_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `rounding_amt` | dbo | ue_SMK_RSC_POS_Batch_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `net_amt` | dbo | ue_SMK_RSC_POS_Batch_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `payment_amt` | dbo | ue_SMK_RSC_POS_Batch_mst | AmountType | decimal | 23 | 8 | `0` | NO | 0 |  |
+| `stat` | dbo | ue_SMK_RSC_POS_Batch_mst | nchar | nchar | 1 |  | `N'N'` | NO | 0 |  |
+| `validation_msg` | dbo | ue_SMK_RSC_POS_Batch_mst | nvarchar | nvarchar | 1000 |  |  | YES | 0 |  |
+| `error_msg` | dbo | ue_SMK_RSC_POS_Batch_mst | nvarchar | nvarchar | 4000 |  |  | YES | 0 |  |
+| `validate_date` | dbo | ue_SMK_RSC_POS_Batch_mst | DateType | datetime |  |  |  | YES | 0 |  |
+| `process_date` | dbo | ue_SMK_RSC_POS_Batch_mst | DateType | datetime |  |  |  | YES | 0 |  |
+| `processed_by` | dbo | ue_SMK_RSC_POS_Batch_mst | UsernameType | nvarchar | 128 |  |  | YES | 0 |  |
+| `syteline_ref` | dbo | ue_SMK_RSC_POS_Batch_mst | nvarchar | nvarchar | 50 |  |  | YES | 0 |  |
+| `retry_count` | dbo | ue_SMK_RSC_POS_Batch_mst | int | int |  |  | `0` | NO | 0 |  |
+| `CreateDate` | dbo | ue_SMK_RSC_POS_Batch_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `CreatedBy` | dbo | ue_SMK_RSC_POS_Batch_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
+| `InWorkflow` | dbo | ue_SMK_RSC_POS_Batch_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `NoteExistsFlag` | dbo | ue_SMK_RSC_POS_Batch_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `RecordDate` | dbo | ue_SMK_RSC_POS_Batch_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `RowPointer` | dbo | ue_SMK_RSC_POS_Batch_mst | RowPointerType | uniqueidentifier |  |  | `newid()` | NO | 0 |  |
+| `SiteRef` | dbo | ue_SMK_RSC_POS_Batch_mst | SiteType | nvarchar | 8 |  | `rtrim(CONVERT([nvarchar](8),context_info(),(0)))` | NO | 0 |  |
+| `UpdatedBy` | dbo | ue_SMK_RSC_POS_Batch_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
 
 ## Status
 
