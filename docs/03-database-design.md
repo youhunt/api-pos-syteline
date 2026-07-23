@@ -18,8 +18,9 @@ SMK_RSC_POS_Batch_mst
               1 ─── n SMK_RSC_POS_Payment_mst
   1 ─── n SMK_RSC_POS_ProcessLog_mst
 
-SMK_RSC_POS_OutletMap_mst → mapping outlet/site/warehouse/dimensi
-SMK_RSC_POS_ItemMap_mst   → mapping item/U-M/quantity
+SMK_RSC_POS_OutletMap_mst  → mapping outlet/site/warehouse/dimensi
+SMK_RSC_POS_ItemMap_mst    → mapping item/U-M/quantity
+SMK_RSC_POS_PaymentMap_mst → mapping payment/account/customer/settlement
 ```
 
 ## Common Framework Columns
@@ -180,11 +181,39 @@ pos_category, item, pos_u_m, u_m, qty_conv_factor,
 inventory_flag, active_flag, effective_date, expiration_date, notes
 ```
 
+### 8. Payment Mapping
+
+Physical table: `dbo.ue_SMK_RSC_POS_PaymentMap_mst`
+
+Primary key:
+
+```text
+source_system + target_site + payment_code
+```
+
+Kolom bisnis utama:
+
+```text
+source_system, target_site, payment_code, payment_desc,
+payment_type, currency_code, acct, unit_code1, unit_code2,
+unit_code3, unit_code4, fee_acct, fee_unit_code1,
+fee_unit_code2, fee_unit_code3, fee_unit_code4, cust_num,
+bank_code, settlement_type, settlement_days, active_flag,
+effective_date, expiration_date, notes
+```
+
+Payment mapping digunakan untuk:
+
+- menentukan cash/bank/clearing/receivable/liability account;
+- menentukan account biaya MDR atau komisi;
+- mengisi unit code hasil mapping;
+- mengarahkan channel tertentu ke customer bila flow AR dipakai;
+- menentukan apakah settlement immediate, delayed, AR, atau non-settlement.
+
 ## Candidate Tables Berikutnya
 
 | Table | Purpose |
 |---|---|
-| `SMK_RSC_POS_PaymentMap_mst` | Mapping payment code ke akun/dimensi |
 | `SMK_RSC_POS_TaxMap_mst` | Mapping tax code ke tax system/account |
 | `SMK_RSC_POS_RevenueMap_mst` | Mapping category/item/channel ke revenue account |
 | `SMK_RSC_POS_PostingPreview_mst` | Preview debit-credit sebelum posting |
@@ -203,6 +232,8 @@ Aturan minimum:
 - `line_num` dan `payment_seq` positif;
 - `qty_conv_factor > 0`;
 - mapping hanya boleh dipakai bila aktif dan berlaku pada tanggal bisnis;
+- payment mapping harus menghasilkan account valid;
+- fee account wajib bila fee akan diposting secara terpisah;
 - `RowPointer` harus unik;
 - posting tidak boleh dilakukan dua kali.
 
