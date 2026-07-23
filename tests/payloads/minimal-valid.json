@@ -1,0 +1,36 @@
+{
+  "requestId": "TEST-MIN-VALID-001",
+  "idempotencyKey": "TEST-MIN-VALID-001",
+  "correlationId": "TEST-RUN-001",
+  "sourceSystem": "PIZZAHUT_POS",
+  "outletCode": "TEST01",
+  "payloadVersion": "1.0-minimal",
+  "periodStart": "2026-07-23",
+  "periodEnd": "2026-07-23",
+  "rows": [
+    {
+      "sourceRowNumber": 1,
+      "businessDate": "2026-07-23",
+      "transactionNumber": "TRX001",
+      "itemCode": "PIZZA001",
+      "quantity": 2,
+      "totalAmount": 200000
+    },
+    {
+      "sourceRowNumber": 2,
+      "businessDate": "2026-07-23",
+      "transactionNumber": "TRX001",
+      "itemCode": "DRINK001",
+      "quantity": 1,
+      "totalAmount": 25000
+    },
+    {
+      "sourceRowNumber": 3,
+      "businessDate": "2026-07-23",
+      "transactionNumber": "TRX002",
+      "itemCode": "PIZZA002",
+      "quantity": 1,
+      "totalAmount": 125000
+    }
+  ]
+}
