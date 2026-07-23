@@ -1,0 +1,20 @@
+{
+  "requestId": "TEST-MIN-NEGATIVE-001",
+  "idempotencyKey": "TEST-MIN-NEGATIVE-001",
+  "correlationId": "TEST-RUN-003",
+  "sourceSystem": "PIZZAHUT_POS",
+  "outletCode": "TEST01",
+  "payloadVersion": "1.0-minimal",
+  "periodStart": "2026-07-23",
+  "periodEnd": "2026-07-23",
+  "rows": [
+    {
+      "sourceRowNumber": 1,
+      "businessDate": "2026-07-23",
+      "transactionNumber": "TRX-RETURN-001",
+      "itemCode": "PIZZA001",
+      "quantity": -1,
+      "totalAmount": -100000
+    }
+  ]
+}
