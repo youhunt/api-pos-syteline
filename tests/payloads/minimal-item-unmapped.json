@@ -1,0 +1,20 @@
+{
+  "requestId": "TEST-MIN-UNMAPPED-001",
+  "idempotencyKey": "TEST-MIN-UNMAPPED-001",
+  "correlationId": "TEST-RUN-002",
+  "sourceSystem": "PIZZAHUT_POS",
+  "outletCode": "TEST01",
+  "payloadVersion": "1.0-minimal",
+  "periodStart": "2026-07-23",
+  "periodEnd": "2026-07-23",
+  "rows": [
+    {
+      "sourceRowNumber": 1,
+      "businessDate": "2026-07-23",
+      "transactionNumber": "TRX-UNMAPPED-001",
+      "itemCode": "UNKNOWN999",
+      "quantity": 1,
+      "totalAmount": 99999
+    }
+  ]
+}
