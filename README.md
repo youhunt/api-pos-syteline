@@ -69,6 +69,7 @@ Aturan penggunaan:
 | 5 | `SMK_RSC_POS_ProcessLog_mst` | `dbo.ue_SMK_RSC_POS_ProcessLog_mst` | Audit trail proses, error, dan retry |
 | 6 | `SMK_RSC_POS_OutletMap_mst` | `dbo.ue_SMK_RSC_POS_OutletMap_mst` | Mapping outlet ke site/warehouse/dimensi SyteLine |
 | 7 | `SMK_RSC_POS_ItemMap_mst` | `dbo.ue_SMK_RSC_POS_ItemMap_mst` | Mapping item POS ke item dan U/M SyteLine |
+| 8 | `SMK_RSC_POS_PaymentMap_mst` | `dbo.ue_SMK_RSC_POS_PaymentMap_mst` | Mapping payment code ke account, dimension, customer, dan settlement |
 
 Dokumentasi detail tersedia di folder [`database/tables`](database/tables/).
 
@@ -81,10 +82,13 @@ Batch
   │     └── Payments
   └── Process Logs
 
-Outlet Map ──> menentukan SiteRef/target site, warehouse, customer, currency,
-               dan unit code
+Outlet Map  ──> menentukan target site, warehouse, customer, currency,
+                dan unit code
 
-Item Map   ──> menerjemahkan kode item dan U/M POS ke SyteLine
+Item Map    ──> menerjemahkan kode item dan U/M POS ke SyteLine
+
+Payment Map ──> menerjemahkan payment code ke account, fee account,
+                customer, bank, dimensi, dan aturan settlement
 ```
 
 ## Status Proses
@@ -136,20 +140,22 @@ Keputusan harus didasarkan pada flow resmi, kebutuhan rekonsiliasi, volume trans
 │   └── 09-open-questions.md
 └── database/
     └── tables/
+        ├── TABLE_DOCUMENTATION_TEMPLATE.md
         ├── SMK_RSC_POS_Batch_mst.md
         ├── SMK_RSC_POS_Tran_mst.md
         ├── SMK_RSC_POS_TranLine_mst.md
         ├── SMK_RSC_POS_Payment_mst.md
         ├── SMK_RSC_POS_ProcessLog_mst.md
         ├── SMK_RSC_POS_OutletMap_mst.md
-        └── SMK_RSC_POS_ItemMap_mst.md
+        ├── SMK_RSC_POS_ItemMap_mst.md
+        └── SMK_RSC_POS_PaymentMap_mst.md
 ```
 
 ## Tahap Berikutnya
 
 Setelah tabel yang sudah dirancang selesai dibuat dan diverifikasi di Cloud:
 
-1. desain `PaymentMap`, `TaxMap`, dan `RevenueMap`;
+1. desain `TaxMap` dan `RevenueMap`;
 2. buat IDO untuk tabel staging dan mapping;
 3. buat custom form monitoring;
 4. buat stored procedure validasi;
