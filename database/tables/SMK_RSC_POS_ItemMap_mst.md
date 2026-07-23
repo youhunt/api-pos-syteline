@@ -16,24 +16,32 @@ source_system + target_site + pos_item_code
 
 Item POS yang sama dapat dipetakan berbeda pada site berbeda.
 
-## Custom Columns
+## Struktur kolom
 
-| Column | Data Type | Null | Default | Description |
-|---|---|---:|---|---|
-| `source_system` | `nvarchar(30)` | No | `N'POS'` | Sistem sumber |
-| `target_site` | `SiteType` | No |  | Site target |
-| `pos_item_code` | `nvarchar(50)` | No |  | Kode item asli POS |
-| `pos_item_desc` | `nvarchar(200)` | Yes |  | Deskripsi item POS |
-| `pos_category` | `nvarchar(30)` | Yes |  | Kategori item POS |
-| `item` | `ItemType` | No |  | Item SyteLine hasil mapping |
-| `pos_u_m` | `nvarchar(10)` | Yes |  | U/M sumber |
-| `u_m` | `UMType` | Yes |  | U/M SyteLine |
-| `qty_conv_factor` | `QtyUnitType` | No | `1` | Faktor konversi quantity |
-| `inventory_flag` | `FlagNyType` | No | `1` | Relevan terhadap inventory |
-| `active_flag` | `FlagNyType` | No | `1` | Mapping aktif |
-| `effective_date` | `DateType` | No | `getdate()` | Mulai berlaku |
-| `expiration_date` | `DateType` | Yes |  | Akhir berlaku |
-| `notes` | `nvarchar(1000)` | Yes |  | Catatan |
+| Column Name | Schema | Table Name | Data Type | System Data Type | Length | Decimal Position | Default Value | Is Nullable | Primary Key | Key Sequence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `source_system` | dbo | ue_SMK_RSC_POS_ItemMap_mst | nvarchar | nvarchar | 30 |  | `N'POS'` | NO | 1 | 1 |
+| `target_site` | dbo | ue_SMK_RSC_POS_ItemMap_mst | SiteType | nvarchar | 8 |  |  | NO | 1 | 2 |
+| `pos_item_code` | dbo | ue_SMK_RSC_POS_ItemMap_mst | nvarchar | nvarchar | 50 |  |  | NO | 1 | 3 |
+| `pos_item_desc` | dbo | ue_SMK_RSC_POS_ItemMap_mst | nvarchar | nvarchar | 200 |  |  | YES | 0 |  |
+| `pos_category` | dbo | ue_SMK_RSC_POS_ItemMap_mst | nvarchar | nvarchar | 30 |  |  | YES | 0 |  |
+| `item` | dbo | ue_SMK_RSC_POS_ItemMap_mst | ItemType | nvarchar | 30 |  |  | NO | 0 |  |
+| `pos_u_m` | dbo | ue_SMK_RSC_POS_ItemMap_mst | nvarchar | nvarchar | 10 |  |  | YES | 0 |  |
+| `u_m` | dbo | ue_SMK_RSC_POS_ItemMap_mst | UMType | nvarchar | 3 |  |  | YES | 0 |  |
+| `qty_conv_factor` | dbo | ue_SMK_RSC_POS_ItemMap_mst | QtyUnitType | decimal | 23 | 8 | `1` | NO | 0 |  |
+| `inventory_flag` | dbo | ue_SMK_RSC_POS_ItemMap_mst | FlagNyType | tinyint |  |  | `1` | NO | 0 |  |
+| `active_flag` | dbo | ue_SMK_RSC_POS_ItemMap_mst | FlagNyType | tinyint |  |  | `1` | NO | 0 |  |
+| `effective_date` | dbo | ue_SMK_RSC_POS_ItemMap_mst | DateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `expiration_date` | dbo | ue_SMK_RSC_POS_ItemMap_mst | DateType | datetime |  |  |  | YES | 0 |  |
+| `notes` | dbo | ue_SMK_RSC_POS_ItemMap_mst | nvarchar | nvarchar | 1000 |  |  | YES | 0 |  |
+| `CreateDate` | dbo | ue_SMK_RSC_POS_ItemMap_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `CreatedBy` | dbo | ue_SMK_RSC_POS_ItemMap_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
+| `InWorkflow` | dbo | ue_SMK_RSC_POS_ItemMap_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `NoteExistsFlag` | dbo | ue_SMK_RSC_POS_ItemMap_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
+| `RecordDate` | dbo | ue_SMK_RSC_POS_ItemMap_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
+| `RowPointer` | dbo | ue_SMK_RSC_POS_ItemMap_mst | RowPointerType | uniqueidentifier |  |  | `newid()` | NO | 0 |  |
+| `SiteRef` | dbo | ue_SMK_RSC_POS_ItemMap_mst | SiteType | nvarchar | 8 |  | `rtrim(CONVERT([nvarchar](8),context_info(),(0)))` | NO | 0 |  |
+| `UpdatedBy` | dbo | ue_SMK_RSC_POS_ItemMap_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
 
 ## Quantity Conversion
 
