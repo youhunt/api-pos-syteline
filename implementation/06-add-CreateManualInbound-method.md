@@ -7,7 +7,7 @@ Menambahkan method pertama pada service IDO:
 ```text
 IDO    : ue_SMKRSCPosIntegration
 Method : CreateManualInbound
-Type   : Stored Procedure, no result set
+Type   : Stored Procedure - Standard Method
 SP     : dbo.SMKRSCPosCreateManualInboundSp
 ```
 
@@ -18,13 +18,42 @@ Method ini hanya membuat satu record inbound untuk memulai proses upload CSV man
 Environment tenant memakai enforced prefix `ue_` untuk custom IDO dan custom table. Prefix tersebut tidak otomatis diwajibkan untuk stored procedure pada application database.
 
 ```text
-IDO            : ue_SMKRSCPosIntegration
-Custom table   : dbo.ue_SMK_RSC_POS_Inbound_mst
+IDO             : ue_SMKRSCPosIntegration
+Custom table    : dbo.ue_SMK_RSC_POS_Inbound_mst
 Stored procedure: dbo.SMKRSCPosCreateManualInboundSp
-Public method  : CreateManualInbound
+Public method   : CreateManualInbound
 ```
 
 Stored procedure dipanggil berdasarkan nama object SQL Server yang benar-benar tersedia pada application database. Tabel yang diakses dari procedure tetap memakai nama fisik `dbo.ue_SMK_RSC_POS_Inbound_mst`.
+
+## SyteLine 10 Method Type Labels
+
+Pada tenant SyteLine/Mongoose 10 project ini, pilihan wizard tampil sebagai:
+
+```text
+Stored Procedure - Standard Method
+Stored Procedure - Custom Load Method
+Extension Class - Standard Method
+Extension Class - Custom Load Method
+```
+
+Untuk `CreateManualInbound`, pilih:
+
+```text
+Stored Procedure - Standard Method
+```
+
+Mapping konsepnya:
+
+```text
+Stored Procedure - Standard Method
+= stored procedure action tanpa result set; dipanggil melalui Invoke
+
+Stored Procedure - Custom Load Method
+= stored procedure yang mengembalikan result set untuk memuat collection
+```
+
+`CreateManualInbound` hanya mengembalikan return code dan output parameters, bukan rowset, sehingga tidak boleh dibuat sebagai Custom Load Method.
 
 ## Stored Procedure Parameters
 
@@ -94,7 +123,7 @@ Pastikan tujuh parameter dikenali sesuai urutan di atas.
 5. Fill the wizard:
 
 ```text
-Method Type      : Stored Procedure — no result set
+Method Type      : Stored Procedure - Standard Method
 Stored Procedure : SMKRSCPosCreateManualInboundSp
 Method Name      : CreateManualInbound
 Transactional    : checked
@@ -109,6 +138,15 @@ Nama stored procedure harus dipilih dari dropdown berdasarkan object SQL Server 
 10. Save and Check In the IDO.
 11. Discard IDO Cache.
 12. Re-login only if the web client still uses stale method metadata.
+
+## Why Standard Method
+
+`CreateManualInbound` menjalankan proses dan mengembalikan return code serta output parameters. Ia tidak menghasilkan tabel atau rowset untuk dijadikan collection.
+
+```text
+Standard Method    : action/process, input-output parameters, no rowset
+Custom Load Method : query/load collection, returns a result set
+```
 
 ## Why Transactional
 
@@ -158,6 +196,7 @@ This step is complete when:
 
 ```text
 [ ] Stored procedure dbo.SMKRSCPosCreateManualInboundSp exists in the application database
+[ ] Method Type is Stored Procedure - Standard Method
 [ ] CreateManualInbound appears on the Methods tab
 [ ] Transactional is checked
 [ ] Parameter order and output flags are correct
