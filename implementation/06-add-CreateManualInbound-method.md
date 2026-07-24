@@ -6,7 +6,7 @@ Menambahkan method pertama pada service IDO:
 
 ```text
 IDO    : ue_SMKRSCPosIntegration
-Method : CreateManualInbound
+Method : ue_CreateManualInbound
 Type   : Stored Procedure - Standard Method
 SP     : dbo.SMKRSCPosCreateManualInboundSp
 ```
@@ -15,13 +15,13 @@ Method ini hanya membuat satu record inbound untuk memulai proses upload CSV man
 
 ## Naming Correction
 
-Environment tenant memakai enforced prefix `ue_` untuk custom IDO dan custom table. Prefix tersebut tidak otomatis diwajibkan untuk stored procedure pada application database.
+Environment tenant memakai enforced prefix `ue_` untuk custom IDO, custom table, dan berdasarkan hasil aktual wizard juga pada IDO Method Name.
 
 ```text
-IDO             : ue_SMKRSCPosIntegration
-Custom table    : dbo.ue_SMK_RSC_POS_Inbound_mst
-Stored procedure: dbo.SMKRSCPosCreateManualInboundSp
-Public method   : CreateManualInbound
+IDO              : ue_SMKRSCPosIntegration
+Custom table     : dbo.ue_SMK_RSC_POS_Inbound_mst
+Stored procedure : dbo.SMKRSCPosCreateManualInboundSp
+Actual IDO method: ue_CreateManualInbound
 ```
 
 Stored procedure dipanggil berdasarkan nama object SQL Server yang benar-benar tersedia pada application database. Tabel yang diakses dari procedure tetap memakai nama fisik `dbo.ue_SMK_RSC_POS_Inbound_mst`.
@@ -37,7 +37,7 @@ Extension Class - Standard Method
 Extension Class - Custom Load Method
 ```
 
-Untuk `CreateManualInbound`, pilih:
+Untuk method ini, pilih:
 
 ```text
 Stored Procedure - Standard Method
@@ -53,7 +53,7 @@ Stored Procedure - Custom Load Method
 = stored procedure yang mengembalikan result set untuk memuat collection
 ```
 
-`CreateManualInbound` hanya mengembalikan return code dan output parameters, bukan rowset, sehingga tidak boleh dibuat sebagai Custom Load Method.
+Method hanya mengembalikan return code dan output parameters, bukan rowset, sehingga tidak boleh dibuat sebagai Custom Load Method.
 
 ## Stored Procedure Parameters
 
@@ -125,11 +125,12 @@ Pastikan tujuh parameter dikenali sesuai urutan di atas.
 ```text
 Method Type      : Stored Procedure - Standard Method
 Stored Procedure : SMKRSCPosCreateManualInboundSp
-Method Name      : CreateManualInbound
+Requested Name   : CreateManualInbound
+Actual Name      : ue_CreateManualInbound
 Transactional    : checked
 ```
 
-Nama stored procedure harus dipilih dari dropdown berdasarkan object SQL Server yang benar-benar tersedia. `Method Name` boleh berbeda dari nama stored procedure selama unik pada IDO.
+Tenant otomatis menambahkan prefix `ue_` pada Method Name. Gunakan nama aktual `ue_CreateManualInbound` saat melakukan Invoke.
 
 6. Click `OK`.
 7. Refresh the IDOs form.
@@ -141,7 +142,7 @@ Nama stored procedure harus dipilih dari dropdown berdasarkan object SQL Server 
 
 ## Why Standard Method
 
-`CreateManualInbound` menjalankan proses dan mengembalikan return code serta output parameters. Ia tidak menghasilkan tabel atau rowset untuk dijadikan collection.
+Method menjalankan proses dan mengembalikan return code serta output parameters. Ia tidak menghasilkan tabel atau rowset untuk dijadikan collection.
 
 ```text
 Standard Method    : action/process, input-output parameters, no rowset
@@ -195,13 +196,14 @@ BatchNum        = NULL
 This step is complete when:
 
 ```text
-[ ] Stored procedure dbo.SMKRSCPosCreateManualInboundSp exists in the application database
-[ ] Method Type is Stored Procedure - Standard Method
-[ ] CreateManualInbound appears on the Methods tab
-[ ] Transactional is checked
-[ ] Parameter order and output flags are correct
+[x] Stored procedure dbo.SMKRSCPosCreateManualInboundSp exists in the application database
+[x] Method Type is Stored Procedure - Standard Method
+[x] ue_CreateManualInbound appears on the Methods tab
+[x] Transactional is checked
+[x] Seven parameters are recognized
 [ ] IDO is checked in
 [ ] Method metadata is recognized after cache refresh
+[ ] Method invocation returns 0 and creates one inbound record
 ```
 
 Do not create `ValidateAttachedCsv` until this method can be invoked successfully.
