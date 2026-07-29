@@ -46,9 +46,9 @@ All notable changes to this repository will be documented in this file.
 - Test workspace and evidence-recording guidance under `tests/`.
 - `SMK069_temp_sales_mst` implementation documentation aligned to the revised sales requirement.
 - Six SMK069 process-control fields: `process_status`, `validation_msg`, `error_msg`, `retry_count`, `processed_date`, and `processed_by`.
-- `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with the base-form and Preview test guide.
-- `docs/17-current-status-and-new-chat-handoff.md` with actual progress, development rules, and a ready-to-paste new-chat prompt.
-- Tenant implementation record for the created `ue_SMK069APISalesErrorProcessing` Grid Only form object.
+- `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with completed form and Preview evidence.
+- `implementation/13-create-SMK069-customer-validation.md` defining the next reusable validation object and tenant-option verification step.
+- `docs/17-current-status-and-new-chat-handoff.md` with current progress and API direction.
 - Tenant evidence that the form opens successfully and displays the Order Date, CO Number, and Preview controls.
 - Verified blank-filter validation message: `Isi Order Date atau CO Number sebelum Preview.`
 - Controlled staging test records for `TEST000001` and `TEST000002`.
@@ -56,27 +56,24 @@ All notable changes to this repository will be documented in this file.
 - Tenant evidence that Order Date-only Preview filtering for `7/30/2026` returns only `TEST000002`.
 - Tenant evidence that mismatched Order Date `7/30/2026` and CO Number `TEST000001` return no business rows, confirming `order_date AND co_num`.
 - `process_statusGridCol` inline status mapping: `INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)`.
+- Tenant verification that `N` displays as `New` and the Status cell cannot be manually edited.
 
 ### Changed
 
-- Standardized all existing table documentation using the full SyteLine column format: `Column Name`, `Schema`, `Table Name`, `Data Type`, `System Data Type`, `Length`, `Decimal Position`, `Default Value`, `Is Nullable`, `Primary Key`, and `Key Sequence`.
+- Standardized all existing table documentation using the full SyteLine column format.
 - Added standard Mongoose columns to every documented table structure.
 - Added `database/tables/TABLE_DOCUMENTATION_TEMPLATE.md` as the required format for subsequent table documentation.
 - Updated README and database design to include payment, tax, revenue, posting-preview, inbound-request, and minimal raw-line designs.
 - Clarified that the complete transaction model and minimal flat model are alternatives selected after reviewing the official source data.
-- Clarified that current tables and IDOs are candidate PoC designs and may be simplified or adjusted after the official raw data, retention policy, accounting flow, and tenant standard are received.
 - Updated the architecture so public REST receive operations use controlled service IDO methods rather than direct entity-IDO writes.
-- Clarified that an entity, monitor, or service role is implemented with standard Mongoose IDO metadata; service behavior is supplied through IDO methods.
-- Established posting preview as the safe PoC boundary before actual financial posting is enabled.
-- Established manual CSV upload as an implementation step before the remaining complete-profile IDOs, using the same service processing core planned for REST API input.
+- Established manual CSV upload as an implementation step using the same service processing core planned for REST API input.
 - Aligned SMK069 phase 1 to sample CSV input because the official POS file format is not yet available.
 - Removed `cost` from the implemented SMK069 staging design after confirmation that cost is obtained from `item_mst`.
 - Corrected the SMK069 header calculation to `SUM(unit_price * qty_ordered)`.
 - Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
-- Updated SMK069 status to mark the base form, all Preview controls, and all four Preview behaviors as completed.
-- Documented that `process_status` stores the one-character code from list column 1 while displaying the description from list column 2.
-- Kept `process_status` as a system-maintained read-only field despite the configured list source.
-- Advanced the current task to `process_status` display and read-only verification before customer validation and processing.
+- Marked the SMK069 base form and all four Preview behaviors as completed.
+- Confirmed that `process_status` stores `N/V/E/P/C`, displays descriptive text, and remains system-maintained/read-only.
+- Advanced the immediate implementation target to reusable `cust_num` validation against `customer_mst`.
 
 ### Current SMK069 Status
 
@@ -86,15 +83,10 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] ue_SMK069TempSales IDO and properties update
 [COMPLETED] ue_SMK069APISalesErrorProcessing base form
 [COMPLETED] form-opening smoke test
-[COMPLETED] Preview controls displayed
-[COMPLETED] blank-filter validation
-[COMPLETED] controlled staging test data
-[COMPLETED] CO Number-only Preview filtering
-[COMPLETED] Order Date-only Preview filtering
-[COMPLETED] combined Order Date AND CO Number filtering
-[COMPLETED] process_status inline list source configured
-[IN PROGRESS] process_status display and read-only verification
-[PENDING]   customer validation
+[COMPLETED] Preview controls and all filtering behaviors
+[COMPLETED] process_status display mapping
+[COMPLETED] process_status read-only verification
+[NEXT]      customer validation against customer_mst
 [PENDING]   Process/reprocess method
 [PENDING]   controlled service IDO receive method
 [PENDING]   REST API ingestion
@@ -103,24 +95,14 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
-- Verify that `process_status` displays `New`, `Valid`, `Error`, `Processed`, or `Cancelled` while retaining `N`, `V`, `E`, `P`, or `C` as the stored value.
-- Verify the seven required read-only fields, beginning with `process_status`.
-- Confirm the primary collection and all 20 grid properties from form metadata.
-- Add `cust_num` validation against `customer_mst`.
+- Inspect tenant IDO method implementation options for `ue_SMK069TempSales` before saving a validation method.
+- Implement reusable `cust_num` validation against `customer_mst` for one `SiteRef + co_num` group.
 - Add controlled Process/Reprocess logic for all lines belonging to the selected `SiteRef + co_num`.
 - Design and implement the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Create Customer Order header and lines using supported SyteLine processing.
 - Prepare the SMK069 sample CSV and import flow.
 - Produce the final technical API document using the Nava_TempJournal document format as reference.
-- Minimum entity IDOs required by manual import: raw-line, process-log, and item-map IDOs.
-- `SMKRSCPosIntegration` service-method implementation for manual CSV import.
-- Remaining transaction, payment, mapping, and posting-preview entity IDOs.
-- Monitor/composite IDO design.
-- Final table/profile selection after raw data review.
-- Verify attachment access, CSV parser support, file-size limits, and retention policy in the tenant.
-- REST API implementation notes.
-- Postman collection.
-- Automated test execution and deployment runbook.
+- Complete REST API implementation notes, Postman collection, and deployment/runbook documentation.
 
 ## [0.1.0] — 2026-07-23
 
