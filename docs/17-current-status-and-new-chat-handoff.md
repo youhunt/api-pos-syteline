@@ -38,7 +38,7 @@ Physical table : dbo.ue_SMK069_temp_sales_mst
 Entity IDO     : ue_SMK069TempSales
 Form           : ue_SMK069APISalesErrorProcessing
 Form caption   : SMK API SALES ERROR PROCESSING
-Form status    : opens successfully
+Form status    : opens successfully; Preview verified
 ```
 
 ## Implemented Business Properties
@@ -105,7 +105,8 @@ SiteRef + co_num + co_line
 [COMPLETED] controlled staging test data created
 [COMPLETED] CO Number-only Preview filtering verified
 [COMPLETED] Order Date-only Preview filtering verified
-[IN PROGRESS] combined Order Date + CO Number Preview test
+[COMPLETED] combined Order Date + CO Number Preview filtering verified
+[IN PROGRESS] remaining form metadata and read-only verification
 [NOT STARTED] customer validation
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
@@ -139,6 +140,10 @@ CO Number TEST000001 + Order Date blank
 
 Order Date 7/30/2026 + CO Number blank
 → returns TEST000002 line 1 only
+
+Order Date 7/30/2026 + CO Number TEST000001
+→ returns no matching business rows
+→ confirms order_date AND co_num
 ```
 
 Still pending separate verification:
@@ -147,32 +152,20 @@ Still pending separate verification:
 - primary collection from form metadata
 - all 20 required grid properties
 - seven required read-only fields
-- combined Order Date + CO Number filtering
 ```
 
 ## Immediate Next Step
 
-Test only the combined filter using mismatched values:
+Test only the `process_status` read-only setting:
 
 ```text
-Order Date : 7/30/2026
-CO Number  : TEST000001
+1. Load CO Number TEST000002
+2. Click the Status cell containing N
+3. Attempt to type E
+4. Confirm the field cannot be edited and remains N
 ```
 
-Click Preview and confirm that the grid contains no rows.
-
-Expected empty result:
-
-```text
-TEST000001 exists only on 7/29/2026
-TEST000002 is the record on 7/30/2026
-```
-
-This verifies that the form applies:
-
-```text
-order_date AND co_num
-```
+If it unexpectedly becomes editable, press `Esc`, do not save, and send a screenshot.
 
 Do not add or test Process logic yet.
 
@@ -242,15 +235,13 @@ Status saat ini:
 - Physical table: dbo.ue_SMK069_temp_sales_mst.
 - IDO ue_SMK069TempSales selesai dan sudah resync.
 - Form ue_SMK069APISalesErrorProcessing berhasil dibuka.
-- Order Date, CO Number, Preview, dan blank-filter validation sudah ada.
-- Controlled test rows TEST000001 dan TEST000002 sudah dibuat.
-- CO Number-only filtering sudah berhasil.
-- Order Date-only filtering sudah berhasil.
-- Combined filtering belum diuji.
+- Seluruh perilaku Preview sudah berhasil diuji: blank, CO Number saja, Order Date saja, dan kombinasi AND.
+- Controlled test rows TEST000001 dan TEST000002 tersedia.
+- Read-only fields belum seluruhnya diuji.
 - Process, customer validation, Customer Order creation, service IDO receive method, dan REST API ingestion belum dimulai.
 
 Langkah berikutnya hanya satu:
-Isi Order Date 7/30/2026 dan CO Number TEST000001. Klik Preview. Hasil harus kosong untuk membuktikan filter menggunakan AND.
+Load TEST000002, lalu coba edit Status N menjadi E. Field harus read-only dan tetap N. Jangan save bila ternyata editable.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → Customer Order standard process.
