@@ -127,8 +127,9 @@ C = Cancelled
 Metadata table : SMK069_temp_sales_mst
 Physical table : dbo.ue_SMK069_temp_sales_mst
 Entity IDO     : ue_SMK069TempSales
-Planned form   : ue_SMK069APISalesErrorProcessing
+Form           : ue_SMK069APISalesErrorProcessing
 Form caption   : SMK API SALES ERROR PROCESSING
+Form status    : created; smoke test pending
 ```
 
 ## Current Progress
@@ -139,7 +140,8 @@ Form caption   : SMK API SALES ERROR PROCESSING
 [COMPLETED] six process-control columns added
 [COMPLETED] ue_SMK069TempSales IDO created
 [COMPLETED] IDO updated/resynchronized after table changes
-[NEXT]      create ue_SMK069APISalesErrorProcessing form
+[COMPLETED] ue_SMK069APISalesErrorProcessing form object created
+[IN PROGRESS] base-form smoke test and tenant verification
 [PENDING]   Order Date / CO Number Preview filters
 [PENDING]   customer validation
 [PENDING]   Process/reprocess method
@@ -148,19 +150,22 @@ Form caption   : SMK API SALES ERROR PROCESSING
 [PENDING]   final API documentation based on the Nava_TempJournal format
 ```
 
+The form object is not considered fully completed until it opens successfully, exposes the required 20 grid properties, and confirms the required read-only fields.
+
 ## Development Order
 
 ```text
 1. Create SMK069_temp_sales_mst                           COMPLETED
 2. Add process-control columns                            COMPLETED
 3. Create and update ue_SMK069TempSales IDO              COMPLETED
-4. Create ue_SMK069APISalesErrorProcessing form          NEXT
-5. Add Order Date / CO Number Preview filters            PENDING
-6. Add customer validation                               PENDING
-7. Add Process / Reprocess method                        PENDING
-8. Create Customer Order header and lines                PENDING
-9. Prepare sample CSV and import process                 PENDING
-10. Prepare technical API document and Postman examples  PENDING
+4. Create ue_SMK069APISalesErrorProcessing form          CREATED; TEST PENDING
+5. Smoke-test base form                                   CURRENT
+6. Add Order Date / CO Number Preview filters            PENDING
+7. Add customer validation                               PENDING
+8. Add Process / Reprocess method                        PENDING
+9. Create Customer Order header and lines                PENDING
+10. Prepare sample CSV and import process                PENDING
+11. Prepare technical API document and Postman examples  PENDING
 ```
 
 ## Scope Control
