@@ -3,13 +3,15 @@
 ## Current Status
 
 ```text
-Base form and Preview : COMPLETED
-process_status display: VERIFIED
+Base form and Preview   : COMPLETED
+process_status display  : VERIFIED
 process_status read-only: VERIFIED
-Customer validation  : NOT STARTED
-Process/Reprocess     : NOT STARTED
-Customer Order creation: NOT STARTED
-API ingestion         : NOT STARTED
+Method type             : CONFIRMED — Stored Procedure - Standard Method
+Customer validation SP  : NOT CREATED
+IDO method              : NOT CREATED
+Process/Reprocess        : NOT STARTED
+Customer Order creation : NOT STARTED
+API ingestion            : NOT STARTED
 ```
 
 ## Validation Requirement
@@ -20,38 +22,33 @@ The first mandatory business validation is:
 cust_num from SMK069_temp_sales_mst must exist in customer_mst
 ```
 
-## Validation Scope
-
 Validation is performed for one staged Customer Order group:
 
 ```text
 SiteRef + co_num
 ```
 
-All lines belonging to the selected `SiteRef + co_num` must be evaluated together.
+All lines belonging to the selected group are evaluated together. No Customer Order is created during this step.
 
-Expected outcomes:
+## Expected Outcomes
 
 ### Customer exists
 
 ```text
 process_status = V
-validation_msg = NULL or empty
-error_msg      = NULL or unchanged according to later processing rules
+validation_msg = NULL
 ```
 
-### Customer does not exist or is blank
+### Customer is blank or does not exist
 
 ```text
 process_status = E
 validation_msg = Customer <cust_num> tidak ditemukan di customer_mst.
 ```
 
-No Customer Order is created during this validation step.
-
 ## Architecture Rule
 
-Do not implement the customer lookup as UI-only logic. The validation must be reusable by:
+Customer validation must be implemented once as reusable server-side logic. It will later be called by:
 
 ```text
 Error Processing form
@@ -60,60 +57,101 @@ REST API ingestion
 Process/Reprocess action
 ```
 
-The target implementation is a controlled server-side IDO method or supported Mongoose server-side method. The form will call the reusable method; it must not contain duplicated customer-validation logic.
+Do not duplicate customer lookup logic inside the form.
 
-## Object Naming — Pending Tenant Confirmation
+## Confirmed Tenant Method Configuration
 
-Before creating a method, verify the method configuration options available in the tenant for:
-
-```text
-IDO: ue_SMK069TempSales
-```
-
-Do not invent a stored procedure, extension class, or method type until the tenant screen confirms which method implementation types are available.
-
-Proposed method responsibility:
+Tenant screenshot dated 29 July 2026 confirms this IDO Method Wizard configuration is available:
 
 ```text
-ValidateCustomer
+IDO Name     : ue_SMK069TempSales
+Method Type  : Stored Procedure - Standard Method
+Stored Proc. : required selection
+Method Name  : required/auto-populated and can be adjusted
+Transactional: available checkbox
 ```
 
-Proposed inputs:
+The wizard requires the stored procedure to exist before it can be selected. Therefore, the stored procedure must be created first.
+
+Official Mongoose behavior also confirms that a stored-procedure method is added by selecting an existing application-database stored procedure; the method name must be unique on the IDO, and the Transactional option can be enabled when the method should run in a transaction.
+
+## Confirmed Object Names
 
 ```text
-SiteRef
-co_num
+Physical stored procedure : dbo.ue_SMK069ValidateCustomerSp
+IDO                        : ue_SMK069TempSales
+IDO method name            : ValidateCustomer
+Method type                : Stored Procedure - Standard Method
+Transactional              : Yes (when the IDO method is registered)
 ```
 
-Proposed outputs:
+The `ue_` prefix is used on the physical custom stored procedure. The published IDO method uses the concise business name `ValidateCustomer`, which is suitable for later form and REST/API invocation.
+
+## Stored Procedure Contract
+
+### Inputs
 
 ```text
-ReturnCode
-ReturnMessage
+@SiteRef
+@CoNum
 ```
 
-These names remain proposed until the tenant method screen is reviewed.
+### Output
+
+```text
+@Infobar OUTPUT
+```
+
+### Return value
+
+```text
+0  = validation executed successfully; inspect process_status for Valid/Error business result
+16 = invalid invocation or technical failure
+```
+
+A missing customer is a business validation result, not a technical execution failure. Therefore, it updates the staging group to `E` and returns `0`.
+
+## SQL Source
+
+Repository script:
+
+```text
+database/stored-procedures/ue_SMK069ValidateCustomerSp.sql
+```
+
+The procedure only updates the custom staging table:
+
+```text
+dbo.ue_SMK069_temp_sales_mst
+```
+
+It reads `customer_mst` for validation and does not update standard Customer Order tables.
 
 ## Current Small Step
 
-Open the tenant's IDO method maintenance screen and locate:
+Create only this stored procedure in the application database:
 
 ```text
-ue_SMK069TempSales
+dbo.ue_SMK069ValidateCustomerSp
 ```
 
-Start a new method record only far enough to show the available method type/options. Do not save a method yet.
+After creation, verify that it appears in the Stored Procedure dropdown of the IDO Method Wizard.
 
-Capture or send a screenshot showing:
+Do not click OK to create the IDO method until the procedure is visible in the dropdown.
+
+## Next Step After Confirmation
+
+When the stored procedure is visible:
 
 ```text
-IDO name
-Method name field
-Method type / implementation type options
-Parameter area, if visible
+IDO Name     : ue_SMK069TempSales
+Method Type  : Stored Procedure - Standard Method
+Stored Proc. : ue_SMK069ValidateCustomerSp
+Method Name  : ValidateCustomer
+Transactional: checked
 ```
 
-After the tenant options are confirmed, the exact implementation instructions will be documented and performed one small step at a time.
+Then review the automatically generated parameters before saving.
 
 ## Stop Point
 
