@@ -104,7 +104,8 @@ SiteRef + co_num + co_line
 [COMPLETED] blank-filter validation verified
 [COMPLETED] controlled staging test data created
 [COMPLETED] CO Number-only Preview filtering verified
-[IN PROGRESS] remaining Preview filtering tests
+[COMPLETED] Order Date-only Preview filtering verified
+[IN PROGRESS] combined Order Date + CO Number Preview test
 [NOT STARTED] customer validation
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
@@ -130,7 +131,15 @@ TEST000001 | 2026-07-29 | line 2
 TEST000002 | 2026-07-30 | line 1
 ```
 
-A tenant screenshot confirms that entering `TEST000001` in CO Number with Order Date blank returns exactly its two lines and excludes `TEST000002`.
+Verified filtering evidence:
+
+```text
+CO Number TEST000001 + Order Date blank
+→ returns TEST000001 line 1 and line 2 only
+
+Order Date 7/30/2026 + CO Number blank
+→ returns TEST000002 line 1 only
+```
 
 Still pending separate verification:
 
@@ -138,20 +147,31 @@ Still pending separate verification:
 - primary collection from form metadata
 - all 20 required grid properties
 - seven required read-only fields
-- Order Date-only filtering
 - combined Order Date + CO Number filtering
 ```
 
 ## Immediate Next Step
 
-Test only the existing Order Date filter:
+Test only the combined filter using mismatched values:
 
 ```text
-1. Clear CO Number
-2. Enter 7/29/2026 in Order Date
-3. Click Preview
-4. Confirm TEST000001 line 1 and line 2 are displayed
-5. Confirm TEST000002 dated 7/30/2026 is excluded
+Order Date : 7/30/2026
+CO Number  : TEST000001
+```
+
+Click Preview and confirm that the grid contains no rows.
+
+Expected empty result:
+
+```text
+TEST000001 exists only on 7/29/2026
+TEST000002 is the record on 7/30/2026
+```
+
+This verifies that the form applies:
+
+```text
+order_date AND co_num
 ```
 
 Do not add or test Process logic yet.
@@ -224,12 +244,13 @@ Status saat ini:
 - Form ue_SMK069APISalesErrorProcessing berhasil dibuka.
 - Order Date, CO Number, Preview, dan blank-filter validation sudah ada.
 - Controlled test rows TEST000001 dan TEST000002 sudah dibuat.
-- Preview menggunakan CO Number TEST000001 sudah berhasil dan menampilkan tepat dua line.
-- Order Date-only dan combined filtering belum diuji.
+- CO Number-only filtering sudah berhasil.
+- Order Date-only filtering sudah berhasil.
+- Combined filtering belum diuji.
 - Process, customer validation, Customer Order creation, service IDO receive method, dan REST API ingestion belum dimulai.
 
 Langkah berikutnya hanya satu:
-Uji Order Date 7/29/2026 dengan CO Number kosong. Harus menampilkan dua line TEST000001 dan tidak menampilkan TEST000002 yang bertanggal 7/30/2026.
+Isi Order Date 7/30/2026 dan CO Number TEST000001. Klik Preview. Hasil harus kosong untuk membuktikan filter menggunakan AND.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → Customer Order standard process.
