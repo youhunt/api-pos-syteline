@@ -38,12 +38,7 @@ Physical table : dbo.ue_SMK069_temp_sales_mst
 Entity IDO     : ue_SMK069TempSales
 Form           : ue_SMK069APISalesErrorProcessing
 Form caption   : SMK API SALES ERROR PROCESSING
-```
-
-Primary key:
-
-```text
-SiteRef + co_num + co_line
+Primary key    : SiteRef + co_num + co_line
 ```
 
 Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement and Mongoose site context.
@@ -61,9 +56,9 @@ Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement an
 [COMPLETED] process_status inline display mapping
 [COMPLETED] process_status read-only verification
 [CONFIRMED] customer validation method type: Stored Procedure - Standard Method
-[DRAFTED]   dbo.ue_SMK069ValidateCustomerSp repository script
+[DRAFTED]   dbo.SMK069ValidateCustomerSp repository script
 [NOT CREATED IN TENANT] customer validation stored procedure
-[NOT CREATED] ValidateCustomer IDO method
+[NOT CREATED] customer validation IDO method
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -73,12 +68,6 @@ Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement an
 ```
 
 ## Verified Form Behavior
-
-Blank Preview message:
-
-```text
-Isi Order Date atau CO Number sebelum Preview.
-```
 
 Preview behavior:
 
@@ -119,25 +108,36 @@ SiteRef + co_num
 Confirmed tenant method configuration:
 
 ```text
-IDO Name     : ue_SMK069TempSales
-Method Type  : Stored Procedure - Standard Method
-Stored Proc. : required existing stored procedure
-Method Name  : required and unique
-Transactional: available
+IDO Name      : ue_SMK069TempSales
+Method Type   : Stored Procedure - Standard Method
+Stored Proc.  : required existing stored procedure
+Method Name   : generated as a custom ue_ method by the tenant
+Transactional : available
 ```
 
-Confirmed object names:
+## Confirmed Prefix Rule
+
+The user confirmed the tenant naming behavior:
 
 ```text
-Physical procedure : dbo.ue_SMK069ValidateCustomerSp
-IDO method          : ValidateCustomer
-Transactional       : Yes
+Stored Procedure : no ue_ prefix
+IDO Method       : ue_ prefix is added automatically
+```
+
+Correct object naming:
+
+```text
+Physical procedure : dbo.SMK069ValidateCustomerSp
+IDO                  : ue_SMK069TempSales
+Base business method : ValidateCustomer
+Actual method name   : verify the automatically generated ue_ value in the wizard
+Transactional         : Yes
 ```
 
 Repository source:
 
 ```text
-database/stored-procedures/ue_SMK069ValidateCustomerSp.sql
+database/stored-procedures/SMK069ValidateCustomerSp.sql
 implementation/13-create-SMK069-customer-validation.md
 ```
 
@@ -148,10 +148,12 @@ The procedure reads `customer_mst` and updates only `dbo.ue_SMK069_temp_sales_ms
 Create only this stored procedure in the tenant application database:
 
 ```text
-dbo.ue_SMK069ValidateCustomerSp
+dbo.SMK069ValidateCustomerSp
 ```
 
-Then reopen the IDO Method Wizard and confirm the procedure appears in the Stored Procedure dropdown. Do not save the IDO method until its automatically generated parameters are visible and reviewed.
+Then reopen the IDO Method Wizard and confirm the procedure appears in the Stored Procedure dropdown.
+
+Do not save the IDO method until the automatically generated Method Name and parameters have been reviewed.
 
 ## API Direction
 
@@ -171,7 +173,7 @@ Direct REST write to the staging entity IDO is not the intended final architectu
 1. Work one small step at a time.
 2. Adapt instructions to the controls actually available in tenant screenshots.
 3. Distinguish metadata names from physical Cloud SQL names.
-4. Custom IDO and form names in this tenant use `ue_`.
+4. Custom IDO and form names use `ue_`; stored procedures follow the confirmed tenant rule and do not manually use `ue_`.
 5. Do not mark work completed until tenant evidence confirms it.
 6. Update repository documentation after completed objects or design corrections.
 7. Keep customer validation and later processing reusable by both CSV and REST API paths.
@@ -183,7 +185,7 @@ Direct REST write to the staging entity IDO is not the intended final architectu
 docs/16-smk069-sales-spec-alignment.md
 docs/17-current-status-and-new-chat-handoff.md
 database/tables/SMK069_temp_sales_mst.md
-database/stored-procedures/ue_SMK069ValidateCustomerSp.sql
+database/stored-procedures/SMK069ValidateCustomerSp.sql
 implementation/11-create-SMK069-temp-sales-table.md
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 implementation/13-create-SMK069-customer-validation.md
@@ -200,12 +202,13 @@ Status:
 - Form ue_SMK069APISalesErrorProcessing dan seluruh Preview behavior selesai diuji.
 - process_status display mapping dan read-only selesai.
 - Tenant mengonfirmasi method type Stored Procedure - Standard Method.
-- Script dbo.ue_SMK069ValidateCustomerSp sudah tersedia di repository tetapi belum dibuat di tenant.
-- IDO method ValidateCustomer belum dibuat.
+- Tenant mengonfirmasi stored procedure tidak memakai ue_, sedangkan custom IDO method mendapat ue_ otomatis.
+- Script dbo.SMK069ValidateCustomerSp tersedia di database/stored-procedures/SMK069ValidateCustomerSp.sql tetapi belum dibuat di tenant.
+- Customer validation IDO method belum dibuat.
 - Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Langkah berikutnya hanya membuat dbo.ue_SMK069ValidateCustomerSp dari database/stored-procedures/ue_SMK069ValidateCustomerSp.sql, lalu memastikan procedure muncul pada dropdown Stored Procedure di IDO Method Wizard. Jangan save method sebelum parameter hasil generate diperiksa.
+Langkah berikutnya hanya membuat dbo.SMK069ValidateCustomerSp, lalu memastikan procedure muncul pada dropdown Stored Procedure di IDO Method Wizard. Jangan save method sebelum generated Method Name dan parameter diperiksa.
 ```
