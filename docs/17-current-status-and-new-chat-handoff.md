@@ -36,8 +36,9 @@ Cost         = obtained from item_mst
 Metadata table : SMK069_temp_sales_mst
 Physical table : dbo.ue_SMK069_temp_sales_mst
 Entity IDO     : ue_SMK069TempSales
-Planned form   : ue_SMK069APISalesErrorProcessing
+Form           : ue_SMK069APISalesErrorProcessing
 Form caption   : SMK API SALES ERROR PROCESSING
+Form status    : created; smoke test pending
 ```
 
 ## Implemented Business Properties
@@ -96,7 +97,8 @@ SiteRef + co_num + co_line
 [COMPLETED] six process-control columns added
 [COMPLETED] ue_SMK069TempSales IDO created
 [COMPLETED] IDO updated/resynchronized; properties generated automatically
-[NOT STARTED] ue_SMK069APISalesErrorProcessing form
+[COMPLETED] ue_SMK069APISalesErrorProcessing form object created
+[IN PROGRESS] base-form smoke test and tenant verification
 [NOT STARTED] Preview filters and event handlers
 [NOT STARTED] customer validation
 [NOT STARTED] Process/reprocess method
@@ -105,9 +107,11 @@ SiteRef + co_num + co_line
 [NOT STARTED] final API technical document and Postman examples
 ```
 
+The form object is recorded as created based on the user's confirmation. It is not considered fully completed until the tenant confirms that it opens successfully, contains the required grid properties, and applies the required read-only behavior.
+
 ## Immediate Next Step
 
-Create only the base form:
+Verify only the existing base form:
 
 ```text
 Form Name          : ue_SMK069APISalesErrorProcessing
@@ -117,9 +121,18 @@ Primary Collection : ue_SMK069TempSales
 Device Type        : Any
 ```
 
-Do not create Preview or Process logic until the base form opens successfully.
+Smoke-test checks:
 
-Detailed guide:
+```text
+1. Form opens without metadata errors
+2. Primary collection is ue_SMK069TempSales
+3. All 20 required grid properties are displayed
+4. SiteRef and six process-control fields are read-only
+```
+
+Do not create Preview or Process logic until this base-form smoke test is confirmed.
+
+Detailed guide and implementation record:
 
 ```text
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
@@ -181,6 +194,15 @@ Object yang sudah selesai:
 - Physical table: dbo.ue_SMK069_temp_sales_mst
 - IDO: ue_SMK069TempSales
 - IDO sudah di-update/resync dan properties otomatis sudah terbentuk.
+- Base form object ue_SMK069APISalesErrorProcessing sudah dibuat.
+
+Status form saat ini:
+- Form Name: ue_SMK069APISalesErrorProcessing
+- Caption: SMK API SALES ERROR PROCESSING
+- Form Type: Grid Only
+- Primary Collection: ue_SMK069TempSales
+- Device Type: Any
+- Smoke test belum dikonfirmasi di dokumentasi.
 
 Kolom kontrol yang sudah ada:
 - process_status
@@ -196,13 +218,15 @@ Primary key:
 Catatan penting:
 - Jangan membuat site_ref terpisah; gunakan standard SiteRef.
 - Prefix ue_ muncul pada physical table Cloud dan dipakai pada nama custom IDO/form di tenant ini.
-- Form BELUM dibuat.
+- Jangan menandai form fully completed sebelum form berhasil dibuka, 20 properties terkonfirmasi, dan field read-only teruji.
 
 Langkah berikutnya hanya satu:
-Bantu saya membuat base form Grid Only:
-- Form Name: ue_SMK069APISalesErrorProcessing
-- Caption: SMK API SALES ERROR PROCESSING
-- Primary Collection: ue_SMK069TempSales
+Bantu saya melakukan smoke test base form ue_SMK069APISalesErrorProcessing sampai berhasil dibuka.
+
+Periksa:
+- primary collection ue_SMK069TempSales
+- 20 required grid properties
+- SiteRef, process_status, validation_msg, error_msg, retry_count, processed_date, processed_by read-only
 
 Kerjakan satu langkah kecil per respons. Jangan langsung membuat filter, Preview, Process, method, Customer Order, dan API sekaligus. Setelah saya menyatakan langkah berhasil atau mengirim screenshot, baru lanjut langkah berikutnya.
 
