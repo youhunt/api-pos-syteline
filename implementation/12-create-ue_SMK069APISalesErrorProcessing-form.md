@@ -12,6 +12,7 @@ Controlled staging test data: CREATED
 CO Number-only filtering    : VERIFIED
 Order Date-only filtering   : VERIFIED
 Combined filtering          : VERIFIED
+process_status list source  : CONFIGURED; DISPLAY TEST PENDING
 Process logic               : NOT STARTED
 API ingestion               : NOT STARTED
 ```
@@ -47,6 +48,7 @@ Tenant screenshots confirm:
 [VERIFIED] TEST000001 dated 7/29/2026 is excluded from the 7/30/2026 result
 [VERIFIED] Order Date 7/30/2026 plus CO Number TEST000001 returns no matching business rows
 [VERIFIED] combined filtering uses order_date AND co_num
+[CONFIGURED] process_status grid component uses an inline list source
 ```
 
 Displayed blank-filter validation message:
@@ -155,6 +157,34 @@ processed_by
 
 They are maintained by validation and processing logic.
 
+## `process_status` Data Source Configuration
+
+The `process_statusGridCol` component is bound to:
+
+```text
+object.process_status
+```
+
+Its List Source is configured as:
+
+```text
+INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)
+```
+
+Meaning:
+
+| Stored value | Display text |
+| --- | --- |
+| `N` | New |
+| `V` | Valid |
+| `E` | Error |
+| `P` | Processed |
+| `C` | Cancelled |
+
+`VALUE(1)` keeps the one-character process code as the underlying value. `DISPLAY(2)` shows the descriptive text in the form.
+
+This list source does not change the business rule that `process_status` must remain read-only. Users must not manually change status through the grid; validation and processing logic will maintain it.
+
 ## Preview Rules
 
 The implemented and verified behavior is:
@@ -177,14 +207,15 @@ Verification status:
 
 The Preview behavior is now fully verified for the current test dataset.
 
-## Current Small Test — `process_status` Read-Only
+## Current Small Test — `process_status` Display and Read-Only
 
 Perform only this field-protection test:
 
-1. load an existing test row, for example CO Number `TEST000002`;
-2. click the grid cell under `Status`, currently showing `N`;
-3. attempt to type another value such as `E`;
-4. confirm the cell cannot be edited and remains `N`.
+1. save the form metadata change;
+2. open the form and load CO Number `TEST000002`;
+3. confirm the Status column displays `New` for the underlying value `N`;
+4. click the Status cell and attempt to select or type another status;
+5. confirm the field cannot be changed and the underlying value remains `N`.
 
 If the cell unexpectedly becomes editable, press `Esc` and do not save the row. Send a screenshot before changing form metadata.
 
@@ -252,6 +283,9 @@ cust_num must exist in customer_mst
 [x] CO Number-only filtering verified
 [x] Order Date-only filtering verified
 [x] combined Order Date + CO Number filtering verified
+[x] process_status inline list source configured
+[ ] process_status displays description while preserving one-character value
+[ ] process_status read-only behavior verified
 [ ] controlled service IDO receive method designed
 [ ] API ingestion implemented
 [ ] Process button verified
