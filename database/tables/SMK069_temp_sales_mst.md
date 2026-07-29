@@ -6,7 +6,7 @@
 Metadata object : SMK069_temp_sales_mst
 Physical table  : dbo.ue_SMK069_temp_sales_mst
 Purpose         : Menampung data sales dari file CSV sebelum divalidasi dan diproses menjadi Customer Order header dan Customer Order lines.
-Current status  : Table created; IDO created and updated; form not created yet.
+Current status  : Table created; IDO created and updated; base form created; smoke test pending.
 ```
 
 ## Confirmed Requirement Revisions
@@ -127,12 +127,15 @@ Additional item, warehouse, U/M, terms, tax, date, and quantity validation will 
 [COMPLETED] six technical process-control columns added
 [COMPLETED] entity IDO ue_SMK069TempSales created
 [COMPLETED] IDO updated/resynchronized after table changes
-[NEXT]      create form ue_SMK069APISalesErrorProcessing
+[COMPLETED] base form object ue_SMK069APISalesErrorProcessing created
+[IN PROGRESS] base-form smoke test and read-only verification
 [PENDING]   Preview filter event
 [PENDING]   customer validation
 [PENDING]   Process/reprocess method
 [PENDING]   Customer Order header and line creation
 ```
+
+The form object must not be marked fully completed until it opens successfully and the required grid properties and read-only behavior are verified in the tenant.
 
 ## Tenant Verification
 
