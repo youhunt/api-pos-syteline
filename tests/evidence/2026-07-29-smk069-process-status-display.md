@@ -1,4 +1,4 @@
-# SMK069 `process_status` Display Evidence
+# SMK069 `process_status` Display and Read-Only Evidence
 
 ## Tenant and Object
 
@@ -15,31 +15,43 @@ Binding   : object.process_status
 INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)
 ```
 
-## Screenshot Result
+## Tenant Result
 
-A tenant screenshot confirms that staging rows whose underlying `process_status` value is `N` are displayed as:
+Tenant evidence confirms that staging rows whose underlying `process_status` value is `N` are displayed as:
 
 ```text
 New
 ```
 
-This verifies the display mapping supplied by `DISPLAY(2)` for the current `N` test rows.
+The user also confirmed that clicking the Status cell does not put the component into edit mode. The field cannot be changed manually from the grid.
 
-## Verification Boundary
+## Verification Status
 
 ```text
 [VERIFIED] N is displayed as New
-[PENDING]  process_status is protected from manual editing
-[PENDING]  stored value remains N after an attempted edit
+[VERIFIED] process_status is protected from manual editing
+[VERIFIED] no user-editable dropdown or input is opened by clicking the cell
 ```
 
-The screenshot alone does not prove read-only behavior. The next test must attempt to change `New` to another status without saving if the field is unexpectedly editable.
+The status value remains system-maintained. Validation and processing logic—not the form user—will set `N`, `V`, `E`, `P`, or `C`.
 
-## Next Test
+## Scope Boundary
 
-1. Click a Status cell displaying `New`.
-2. Attempt to select or type `Error`.
-3. Confirm that the cell cannot be changed and still displays `New`.
-4. If editable, press `Esc` and do not save the row.
+This evidence verifies only `process_status` display and edit protection. It does not yet verify the other six required read-only fields:
 
-Process logic, customer validation, Customer Order creation, and API ingestion remain outside this test.
+```text
+SiteRef
+validation_msg
+error_msg
+retry_count
+processed_date
+processed_by
+```
+
+The next implementation area is customer validation:
+
+```text
+cust_num must exist in customer_mst
+```
+
+Process logic, Customer Order creation, controlled service IDO ingestion, and REST API exposure remain separate later steps.
