@@ -44,6 +44,10 @@ All notable changes to this repository will be documented in this file.
 - Initial 30-case PoC test matrix covering valid receive, mapping, reconciliation, idempotency, retry, security, preview, and concurrency.
 - Synthetic minimal-profile payloads for valid, unmapped-item, and negative-quantity scenarios.
 - Test workspace and evidence-recording guidance under `tests/`.
+- `SMK069_temp_sales_mst` implementation documentation aligned to the revised sales requirement.
+- Six SMK069 process-control fields: `process_status`, `validation_msg`, `error_msg`, `retry_count`, `processed_date`, and `processed_by`.
+- `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with the next-step base-form guide.
+- `docs/17-current-status-and-new-chat-handoff.md` with actual progress, development rules, and a ready-to-paste new-chat prompt.
 
 ### Changed
 
@@ -57,9 +61,34 @@ All notable changes to this repository will be documented in this file.
 - Clarified that an entity, monitor, or service role is implemented with standard Mongoose IDO metadata; service behavior is supplied through IDO methods.
 - Established posting preview as the safe PoC boundary before actual financial posting is enabled.
 - Established manual CSV upload as an implementation step before the remaining complete-profile IDOs, using the same service processing core planned for REST API input.
+- Aligned SMK069 phase 1 to sample CSV input because the official POS file format is not yet available.
+- Removed `cost` from the implemented SMK069 staging design after confirmation that cost is obtained from `item_mst`.
+- Corrected the SMK069 header calculation to `SUM(unit_price * qty_ordered)`.
+- Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
+- Updated SMK069 progress to reflect that the table and `ue_SMK069TempSales` IDO are complete while the form is not yet created.
+
+### Current SMK069 Status
+
+```text
+[COMPLETED] SMK069_temp_sales_mst table
+[COMPLETED] process-control columns
+[COMPLETED] ue_SMK069TempSales IDO and properties update
+[NEXT]      ue_SMK069APISalesErrorProcessing base form
+[PENDING]   Preview filters
+[PENDING]   customer validation
+[PENDING]   Process/reprocess method
+[PENDING]   Customer Order header and line creation
+```
 
 ### Planned
 
+- Create the base `ue_SMK069APISalesErrorProcessing` Grid Only form.
+- Add Order Date and CO Number Preview filters after the base form passes its smoke test.
+- Add `cust_num` validation against `customer_mst`.
+- Add controlled Process/Reprocess logic for all lines belonging to the selected `SiteRef + co_num`.
+- Create Customer Order header and lines using supported SyteLine processing.
+- Prepare the SMK069 sample CSV and import flow.
+- Produce the final technical API document using the Nava_TempJournal document format as reference.
 - Minimum entity IDOs required by manual import: raw-line, process-log, and item-map IDOs.
 - `SMKRSCPosIntegration` service-method implementation for manual CSV import.
 - Remaining transaction, payment, mapping, and posting-preview entity IDOs.
