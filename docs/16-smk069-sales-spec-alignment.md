@@ -129,7 +129,7 @@ Physical table : dbo.ue_SMK069_temp_sales_mst
 Entity IDO     : ue_SMK069TempSales
 Form           : ue_SMK069APISalesErrorProcessing
 Form caption   : SMK API SALES ERROR PROCESSING
-Form status    : created; smoke test pending
+Form status    : opens successfully; Preview verified
 ```
 
 ## Current Progress
@@ -140,17 +140,22 @@ Form status    : created; smoke test pending
 [COMPLETED] six process-control columns added
 [COMPLETED] ue_SMK069TempSales IDO created
 [COMPLETED] IDO updated/resynchronized after table changes
-[COMPLETED] ue_SMK069APISalesErrorProcessing form object created
-[IN PROGRESS] base-form smoke test and tenant verification
-[PENDING]   Order Date / CO Number Preview filters
+[COMPLETED] ue_SMK069APISalesErrorProcessing base form created
+[COMPLETED] base-form opening smoke test
+[COMPLETED] Order Date / CO Number Preview controls
+[COMPLETED] blank-filter validation
+[COMPLETED] CO Number-only filtering
+[COMPLETED] Order Date-only filtering
+[COMPLETED] combined Order Date AND CO Number filtering
+[IN PROGRESS] remaining form metadata and read-only verification
 [PENDING]   customer validation
 [PENDING]   Process/reprocess method
 [PENDING]   Customer Order header and line creation
+[PENDING]   controlled service IDO receive method
+[PENDING]   REST API ingestion
 [PENDING]   official POS CSV mapping
 [PENDING]   final API documentation based on the Nava_TempJournal format
 ```
-
-The form object is not considered fully completed until it opens successfully, exposes the required 20 grid properties, and confirms the required read-only fields.
 
 ## Development Order
 
@@ -158,14 +163,15 @@ The form object is not considered fully completed until it opens successfully, e
 1. Create SMK069_temp_sales_mst                           COMPLETED
 2. Add process-control columns                            COMPLETED
 3. Create and update ue_SMK069TempSales IDO              COMPLETED
-4. Create ue_SMK069APISalesErrorProcessing form          CREATED; TEST PENDING
-5. Smoke-test base form                                   CURRENT
-6. Add Order Date / CO Number Preview filters            PENDING
+4. Create ue_SMK069APISalesErrorProcessing form          COMPLETED
+5. Verify Preview behavior                               COMPLETED
+6. Verify required read-only and form metadata           CURRENT
 7. Add customer validation                               PENDING
 8. Add Process / Reprocess method                        PENDING
 9. Create Customer Order header and lines                PENDING
-10. Prepare sample CSV and import process                PENDING
-11. Prepare technical API document and Postman examples  PENDING
+10. Create controlled service IDO receive method         PENDING
+11. Prepare sample CSV and REST API ingestion            PENDING
+12. Prepare technical API document and Postman examples  PENDING
 ```
 
 ## Scope Control
