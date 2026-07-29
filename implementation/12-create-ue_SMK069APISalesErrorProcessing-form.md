@@ -3,14 +3,16 @@
 ## Current Status
 
 ```text
-Table : COMPLETED
-IDO   : COMPLETED and updated
-Form  : CREATED; SMOKE TEST PENDING
+Table              : COMPLETED
+IDO                : COMPLETED and updated
+Base form          : COMPLETED and opens successfully
+Preview controls   : CREATED
+Blank-filter check : VERIFIED
+Preview filtering  : TEST PENDING
+Process logic      : NOT STARTED
 ```
 
-The base form object has now been created in the tenant. Do not recreate the table, IDO, or form.
-
-The form is not marked fully completed until the tenant smoke test confirms that it opens successfully, displays the required properties, and enforces the required read-only fields.
+Do not recreate the table, IDO, or base form.
 
 ## Object Identity
 
@@ -22,34 +24,29 @@ Form Type          : Grid Only
 Device Type        : Any
 ```
 
-## Implementation Record — 29 July 2026
+## Tenant Evidence — 29 July 2026
 
-The user confirmed that the base form object was created.
-
-Recorded implementation scope:
+A tenant screenshot confirms:
 
 ```text
-Form Name          : ue_SMK069APISalesErrorProcessing
-Caption            : SMK API SALES ERROR PROCESSING
-Form Type          : Grid Only
-Primary Collection : ue_SMK069TempSales
-Device Type        : Any
+[VERIFIED] form opens without metadata error
+[VERIFIED] caption is SMK API SALES ERROR PROCESSING
+[VERIFIED] grid is displayed
+[VERIFIED] Order Date filter component is displayed
+[VERIFIED] CO Number filter component is displayed
+[VERIFIED] Preview button is displayed
+[VERIFIED] clicking Preview with both filters blank shows a validation message
 ```
 
-Verification evidence has not yet been recorded in the repository. Therefore, the current status is:
+Displayed validation message:
 
 ```text
-[COMPLETED] form object created
-[PENDING]   form opens successfully without metadata errors
-[PENDING]   all 20 required properties confirmed in the grid
-[PENDING]   required technical fields confirmed read-only
+Isi Order Date atau CO Number sebelum Preview.
 ```
 
-Do not continue to Preview filters or Process logic until the pending smoke-test items are confirmed by the user or supported by a tenant screenshot.
+The screenshot does not by itself prove every read-only setting or the actual filtering result. These remain separate tenant checks.
 
-## Step 1 — Base Form Configuration
-
-The base form was designed as a Grid Only form using `ue_SMK069TempSales` as the primary collection.
+## Base Grid Properties
 
 The required grid properties are:
 
@@ -115,7 +112,7 @@ UpdatedBy
 
 ## Read-Only Fields
 
-These process fields must be read-only for the user:
+These fields must be read-only for the user:
 
 ```text
 SiteRef
@@ -127,33 +124,9 @@ processed_date
 processed_by
 ```
 
-They will be maintained by system validation and processing logic.
+They are maintained by validation and processing logic.
 
-## Current Smoke-Test Step
-
-The next development action is only to verify the existing base form:
-
-1. open `ue_SMK069APISalesErrorProcessing`;
-2. confirm the form opens without metadata errors;
-3. confirm the primary collection is `ue_SMK069TempSales`;
-4. confirm all 20 selected properties appear;
-5. confirm the seven required fields cannot be edited manually.
-
-## Stop Point
-
-Stop after performing the base-form smoke test.
-
-Do not add Preview filters, buttons, event handlers, validation methods, or Customer Order processing until the smoke test passes.
-
-## Planned Step 2 — Filter Area
-
-After the base form passes, add:
-
-```text
-Order Date filter
-CO Number filter
-Preview button
-```
+## Preview Rules
 
 The intended behavior is:
 
@@ -164,9 +137,23 @@ Both entered           → filter by order_date AND co_num
 Both blank             → show validation message; do not load all staging data
 ```
 
-## Planned Step 3 — Process Button
+The fourth rule is now verified in the tenant.
 
-After Preview works, add:
+## Current Small Test — CO Number Only
+
+The next test is only:
+
+1. use a `co_num` that exists in `dbo.ue_SMK069_temp_sales_mst`;
+2. leave Order Date blank;
+3. enter that value in CO Number;
+4. click Preview;
+5. verify only rows for that `co_num` are displayed.
+
+Do not proceed to Process, customer validation, or Customer Order creation during this test.
+
+## Planned Process Button
+
+After Preview filtering is fully verified, add or verify:
 
 ```text
 Button Name : btnProcess
@@ -194,16 +181,19 @@ cust_num must exist in customer_mst
 
 ```text
 [x] base Grid Only form object created
-[ ] form opens successfully
-[ ] primary collection ue_SMK069TempSales confirmed
-[ ] 20 required grid properties displayed
+[x] form opens successfully
+[x] caption confirmed
+[ ] primary collection ue_SMK069TempSales verified from form metadata
+[ ] all 20 required grid properties confirmed
 [ ] seven required fields confirmed read-only
-[ ] filter variables added
-[ ] Order Date filter component added
-[ ] CO Number filter component added
-[ ] Preview button added
-[ ] blank-filter validation added
-[ ] Process button added
+[x] Order Date filter component displayed
+[x] CO Number filter component displayed
+[x] Preview button displayed
+[x] blank-filter validation verified
+[ ] CO Number-only filtering verified
+[ ] Order Date-only filtering verified
+[ ] combined Order Date + CO Number filtering verified
+[ ] Process button verified
 [ ] customer validation method connected
 [ ] processing method connected
 ```
