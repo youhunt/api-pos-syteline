@@ -19,16 +19,16 @@ POS sample CSV
 → standard SyteLine co_mst and coitem_mst
 ```
 
-The final POS CSV structure is not available yet. Development is intentionally incremental.
+The final POS payload/file structure is not available yet. Development remains incremental, but the target is still a controlled API integration.
 
-## Confirmed Corrections
+## Confirmed Requirement Corrections
 
 ```text
 Header total = SUM(unit_price * qty_ordered)
 Cost         = obtained from item_mst
 ```
 
-`cost` is therefore not part of the implemented staging table.
+`cost` is not stored in the temporary table.
 
 ## Current Objects
 
@@ -38,181 +38,129 @@ Physical table : dbo.ue_SMK069_temp_sales_mst
 Entity IDO     : ue_SMK069TempSales
 Form           : ue_SMK069APISalesErrorProcessing
 Form caption   : SMK API SALES ERROR PROCESSING
-Form status    : opens successfully; Preview verified
 ```
 
-## Implemented Business Properties
-
-```text
-SiteRef
-cust_num
-order_date
-terms_code
-co_num
-co_line
-unit_price
-tax_code1
-exch_rate
-whse
-item
-qty_ordered
-due_date
-u_m
-```
-
-## Implemented Process-Control Properties
-
-```text
-process_status
-validation_msg
-error_msg
-retry_count
-processed_date
-processed_by
-```
-
-Status values:
-
-```text
-N = New
-V = Valid
-E = Error
-P = Processed
-C = Cancelled
-```
-
-The `process_statusGridCol` component now uses this List Source:
-
-```text
-INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)
-```
-
-The stored value remains the one-character code, while the form displays the description. The field must still remain read-only for users.
-
-## Primary Key
+Primary key:
 
 ```text
 SiteRef + co_num + co_line
 ```
 
-`SiteRef` is used for both the specification's `site_ref` requirement and Mongoose multi-site context. Do not add a second `site_ref` column.
+Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement and Mongoose site context.
 
-## Actual Progress
+## Current Progress
 
 ```text
-[COMPLETED] SMK069_temp_sales_mst created
-[COMPLETED] cost removed from the implemented design
-[COMPLETED] six process-control columns added
-[COMPLETED] ue_SMK069TempSales IDO created
-[COMPLETED] IDO updated/resynchronized; properties generated automatically
-[COMPLETED] ue_SMK069APISalesErrorProcessing base form created
-[COMPLETED] form opens successfully without metadata error
-[COMPLETED] Order Date and CO Number controls displayed
-[COMPLETED] Preview button displayed
-[COMPLETED] blank-filter validation verified
-[COMPLETED] controlled staging test data created
-[COMPLETED] CO Number-only Preview filtering verified
-[COMPLETED] Order Date-only Preview filtering verified
-[COMPLETED] combined Order Date + CO Number Preview filtering verified
-[COMPLETED] process_status inline list source configured
-[IN PROGRESS] process_status display and read-only verification
-[NOT STARTED] customer validation
+[COMPLETED] SMK069_temp_sales_mst
+[COMPLETED] six process-control columns
+[COMPLETED] ue_SMK069TempSales IDO and resynchronization
+[COMPLETED] ue_SMK069APISalesErrorProcessing base form
+[COMPLETED] form-opening smoke test
+[COMPLETED] Order Date and CO Number Preview controls
+[COMPLETED] blank-filter validation
+[COMPLETED] CO Number-only Preview filtering
+[COMPLETED] Order Date-only Preview filtering
+[COMPLETED] combined Order Date AND CO Number filtering
+[COMPLETED] process_status inline display mapping
+[COMPLETED] process_status read-only verification
+[NEXT]      customer validation against customer_mst
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
-[NOT STARTED] sample CSV import for SMK069
+[NOT STARTED] sample CSV import
 [NOT STARTED] controlled service IDO receive method
 [NOT STARTED] REST API ingestion
 [NOT STARTED] final API technical document and Postman examples
 ```
 
-## Tenant Evidence
+## Verified Form Behavior
 
-The blank-filter test displays:
+Blank Preview message:
 
 ```text
 Isi Order Date atau CO Number sebelum Preview.
 ```
 
-Controlled test rows:
+Preview behavior:
 
 ```text
-TEST000001 | 2026-07-29 | line 1
-TEST000001 | 2026-07-29 | line 2
-TEST000002 | 2026-07-30 | line 1
+Order Date only → order_date
+CO Number only  → co_num
+Both entered    → order_date AND co_num
+Both blank      → validation message; no unrestricted staging load
 ```
 
-Verified filtering evidence:
+`process_statusGridCol` List Source:
 
 ```text
-CO Number TEST000001 + Order Date blank
-→ returns TEST000001 line 1 and line 2 only
-
-Order Date 7/30/2026 + CO Number blank
-→ returns TEST000002 line 1 only
-
-Order Date 7/30/2026 + CO Number TEST000001
-→ returns no matching business rows
-→ confirms order_date AND co_num
+INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)
 ```
 
-Still pending separate verification:
+Tenant verification confirms:
 
 ```text
-- primary collection from form metadata
-- all 20 required grid properties
-- seven required read-only fields
-- process_status description display and stored-value behavior
+N displays as New
+Status cell cannot be manually edited
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-29-smk069-process-status-display.md
 ```
 
 ## Immediate Next Step
 
-Test only the `process_status` display and read-only behavior:
+Begin only the customer-validation implementation:
 
 ```text
-1. Save the process_status List Source configuration
-2. Open the form and load CO Number TEST000002
-3. Confirm Status displays New for underlying value N
-4. Attempt to change the Status value
-5. Confirm it cannot be changed and remains N
+cust_num from SMK069_temp_sales_mst must exist in customer_mst
 ```
 
-If it unexpectedly becomes editable, press `Esc`, do not save, and send a screenshot.
-
-Do not add or test Process logic yet.
-
-Detailed guide and implementation record:
+Validation scope:
 
 ```text
-implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
+SiteRef + co_num
 ```
+
+The validation must be reusable by the form, CSV import, REST API ingestion, and Process/Reprocess action. Do not implement customer lookup only inside a form event.
+
+Detailed next guide:
+
+```text
+implementation/13-create-SMK069-customer-validation.md
+```
+
+The first small action is to open the tenant IDO method maintenance screen for:
+
+```text
+ue_SMK069TempSales
+```
+
+Show the available method implementation/type options before creating or saving a method. This prevents inventing an unsupported stored-procedure or extension-class pattern.
 
 ## API Direction
 
-The project target remains an API integration, not only a form.
-
 ```text
 POS / Postman / sample CSV
-→ controlled service IDO receive method
+→ controlled service IDO method
 → dbo.ue_SMK069_temp_sales_mst
-→ validation and Error Processing form
+→ reusable validation and Error Processing
 → supported Customer Order business process
 → co_mst + coitem_mst
 ```
 
-CSV import and REST API ingestion must reuse the same server-side processing core. Direct REST writes to the staging entity IDO are not the intended final architecture, and direct SQL insertion into standard Customer Order tables is prohibited.
+Direct REST write to the staging entity IDO is not the intended final architecture. Direct SQL insertion into standard Customer Order tables is prohibited.
 
 ## Development Rules
 
 1. Work one small step at a time.
-2. Do not combine table, IDO, form, method, and test work in one response.
-3. Trust the user's SyteLine screenshots and adapt instructions to the available tenant controls.
-4. Clearly distinguish metadata object names from physical SQL names.
-5. Metadata table names do not manually include `ue_`; physical Cloud tables do.
-6. Custom form and IDO names in this tenant use `ue_`.
-7. IDO properties are generated automatically when the base table is added or the IDO is updated.
-8. Update repository documentation after every completed object or material design correction.
-9. Never mark a step completed merely because instructions were provided.
-10. Item mapping and broad item validation remain postponed.
+2. Adapt instructions to the controls actually available in tenant screenshots.
+3. Distinguish metadata names from physical Cloud SQL names.
+4. Custom IDO and form names in this tenant use `ue_`.
+5. Do not mark work completed until tenant evidence confirms it.
+6. Update repository documentation after completed objects or design corrections.
+7. Keep customer validation and later processing reusable by both CSV and REST API paths.
+8. Item mapping and broader item validation remain postponed.
 
 ## Repository Documents to Read First
 
@@ -222,42 +170,28 @@ docs/17-current-status-and-new-chat-handoff.md
 database/tables/SMK069_temp_sales_mst.md
 implementation/11-create-SMK069-temp-sales-table.md
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
+implementation/13-create-SMK069-customer-validation.md
 CHANGELOG.md
 ```
 
 ## Ready-to-Paste Prompt for a New Chat
 
 ```text
-Anda adalah Senior Infor SyteLine/Mongoose Technical Consultant dan API Integration Developer.
+Lanjutkan repository private youhunt/api-pos-syteline sebagai source of truth.
 
-Lanjutkan project private GitHub berikut sebagai source of truth:
-Repository: youhunt/api-pos-syteline
-
-Baca dahulu:
-1. docs/16-smk069-sales-spec-alignment.md
-2. docs/17-current-status-and-new-chat-handoff.md
-3. database/tables/SMK069_temp_sales_mst.md
-4. implementation/11-create-SMK069-temp-sales-table.md
-5. implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
-6. CHANGELOG.md
-
-Status saat ini:
-- Table SMK069_temp_sales_mst selesai.
-- Physical table: dbo.ue_SMK069_temp_sales_mst.
-- IDO ue_SMK069TempSales selesai dan sudah resync.
-- Form ue_SMK069APISalesErrorProcessing berhasil dibuka.
-- Seluruh perilaku Preview sudah berhasil diuji: blank, CO Number saja, Order Date saja, dan kombinasi AND.
-- Controlled test rows TEST000001 dan TEST000002 tersedia.
-- process_statusGridCol menggunakan List Source: INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1).
-- Stored value harus tetap N/V/E/P/C, sedangkan form menampilkan keterangannya.
-- Read-only fields belum seluruhnya diuji.
-- Process, customer validation, Customer Order creation, service IDO receive method, dan REST API ingestion belum dimulai.
-
-Langkah berikutnya hanya satu:
-Save form, load TEST000002, pastikan Status menampilkan New untuk nilai N dan tidak dapat diedit.
+Status:
+- SMK069_temp_sales_mst dan ue_SMK069TempSales selesai.
+- Form ue_SMK069APISalesErrorProcessing selesai dan berhasil dibuka.
+- Seluruh Preview behavior selesai diuji.
+- process_status menampilkan New/Valid/Error/Processed/Cancelled tetapi menyimpan N/V/E/P/C.
+- process_status sudah terkonfirmasi read-only.
+- Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
 
 Target akhirnya tetap API:
-POS/Postman/sample CSV → controlled service IDO → staging → validation → Customer Order standard process.
+POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Kerjakan satu langkah kecil per respons dan update dokumentasi hanya setelah hasil tenant benar-benar terkonfirmasi.
+Langkah berikutnya hanya customer validation:
+cust_num harus ada di customer_mst.
+
+Baca implementation/13-create-SMK069-customer-validation.md. Pertama, buka IDO method maintenance untuk ue_SMK069TempSales dan tampilkan opsi method type/implementation type yang tersedia. Jangan save method sebelum opsi tenant terlihat.
 ```
