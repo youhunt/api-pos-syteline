@@ -3,18 +3,18 @@
 ## Current Status
 
 ```text
-Base form and Preview      : COMPLETED
-process_status display     : VERIFIED
-process_status read-only   : VERIFIED
-Method type                : CONFIRMED — Stored Procedure - Standard Method
-Customer validation SP     : CREATED IN TENANT
-IDO method attributes      : CONFIGURED
-Generated parameters       : VERIFIED
-IDO method persisted       : NOT YET CONFIRMED AFTER REOPEN
-Execution test             : NOT STARTED
-Process/Reprocess           : NOT STARTED
-Customer Order creation    : NOT STARTED
-API ingestion              : NOT STARTED
+Base form and Preview    : COMPLETED
+process_status display   : VERIFIED
+process_status read-only : VERIFIED
+Method type              : CONFIRMED — Stored Procedure - Standard Method
+Customer validation SP   : CREATED IN TENANT
+IDO method attributes    : CONFIGURED
+Generated parameters     : VERIFIED
+IDO method persisted     : VERIFIED
+Execution test           : NOT STARTED
+Process/Reprocess         : NOT STARTED
+Customer Order creation  : NOT STARTED
+API ingestion             : NOT STARTED
 ```
 
 ## Validation Requirement
@@ -173,17 +173,12 @@ The **Custom Load Method Output Properties** area is blank. This is correct beca
 
 No generated parameter was manually changed.
 
-## Current Small Step — Persist and Reopen
+## Persistence Evidence
 
-Do only this verification:
-
-1. save the current IDO Methods record using the tenant Save action;
-2. close the IDO Methods form;
-3. reopen the IDO Methods form for `ue_SMK069TempSales`;
-4. select `ue_SMK069ValidateCustomerSp`;
-5. confirm the method still shows:
+After saving and reopening the IDO Methods form, the tenant still displays:
 
 ```text
+IDO Method       : ue_SMK069ValidateCustomerSp
 Stored Procedure : SMK069ValidateCustomerSp
 Transactional    : checked
 Parameter 1      : SiteRef
@@ -191,17 +186,53 @@ Parameter 2      : CoNum
 Parameter 3      : Infobar
 ```
 
-Do not execute the validation method yet during this step.
+This confirms that the IDO method metadata was saved successfully. Do not recreate the method.
 
-## Next Step After Persistence Confirmation
+## Current Small Step — Confirm Invalid Test Customer
 
-After the method remains available after reopening:
+Before executing the IDO method, confirm that the staged test customer for `TEST000002` is not present in `customer_mst`.
+
+Run only this query:
+
+```sql
+SELECT
+    s.SiteRef,
+    s.co_num,
+    s.cust_num,
+    CASE
+        WHEN EXISTS
+        (
+            SELECT 1
+            FROM dbo.customer_mst AS c
+            WHERE c.site_ref = s.SiteRef
+              AND c.cust_num = s.cust_num
+              AND c.cust_seq = 0
+        )
+        THEN N'EXISTS'
+        ELSE N'NOT FOUND'
+    END AS CustomerCheck
+FROM dbo.ue_SMK069_temp_sales_mst AS s
+WHERE s.SiteRef = N'DEFAULT'
+  AND s.co_num = N'TEST000002';
+```
+
+Expected test result:
 
 ```text
-- run one invalid-customer execution test;
+TEST000002 | TST0002 | NOT FOUND
+```
+
+Do not execute the method yet during this step. If the query returns `EXISTS`, use a different deliberately invalid test customer before method execution.
+
+## Next Step After Confirmation
+
+After `TEST000002` is confirmed as an invalid customer test case:
+
+```text
+- invoke ue_SMK069ValidateCustomerSp for DEFAULT + TEST000002;
 - verify process_status becomes E;
 - verify validation_msg is populated;
-- then run a valid-customer test separately.
+- then test a real customer separately.
 ```
 
 The tests must be performed one at a time.
