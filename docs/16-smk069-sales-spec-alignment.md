@@ -2,7 +2,7 @@
 
 ## Source Requirement
 
-The approved requirement dated 20 July 2026 defines this production flow:
+The requirement dated 20 July 2026 defines this target flow:
 
 ```text
 Pizza Hut POS
@@ -19,68 +19,73 @@ The requested deliverables are:
 2. UI `SMK API SALES ERROR PROCESSING`;
 3. validation that `cust_num` exists in `customer_mst`;
 4. Preview by Order Date / CO Number;
-5. Process button to retry posting;
-6. creation of Customer Order header and lines in `co_mst` and `coitem_mst`.
+5. Process button for posting or reprocessing;
+6. creation of Customer Order header and lines in standard SyteLine tables `co_mst` and `coitem_mst`.
 
-## Development Decision
+## Phase-1 Input Decision
 
-The existing integration foundation remains in use:
+The official POS file layout is not yet available. The agreed first development phase uses a CSV file to load data into the temporary table.
 
 ```text
-ue_SMKRSCPosInbounds
-ue_SMKRSCPosBatches
-ue_SMKRSCPosProcessLogs
-ue_SMKRSCPosIntegration
-SMKRSCPosImportCenter
+POS sample CSV
+→ load into SMK069_temp_sales_mst
+→ validate
+→ review errors
+→ process to Customer Order
 ```
 
-The item mapping work is paused until the SMK069 staging, customer validation, error UI, and Customer Order processing flow are implemented.
+The final API contract and POS field mapping will be adapted later when the official POS file is received. The staging, validation, form, and Customer Order processing developed now remain reusable.
 
-## Target Architecture
+## Confirmed Corrections
+
+The specification author confirmed two corrections on 28 July 2026:
 
 ```text
-Pizza Hut POS / Integration API
+1. Header total must use SUM(unit_price * qty_ordered)
+2. cost must be obtained from item_mst
+```
+
+Implementation consequences:
+
+```text
+- remove cost from SMK069_temp_sales_mst
+- retain unit_price as source sales price
+- obtain item cost during Customer Order processing
+```
+
+## Target Architecture for Current Phase
+
+```text
+Pizza Hut POS sample CSV
         ↓
-ue_SMKRSCPosInbounds
-        ↓
-ue_SMKRSCPosBatches
+CSV import / integration process
         ↓
 dbo.ue_SMK069_temp_sales_mst
         ↓
-Customer validation and error processing UI
+ue_SMK069TempSales IDO
+        ↓
+ue_SMK069APISalesErrorProcessing form
+        ↓
+Customer validation and error review
         ↓
 Controlled Customer Order processing
         ↓
 co_mst + coitem_mst
 ```
 
-Manual CSV attachment remains available only for PoC, UAT, troubleshooting, and fallback.
+The standard `co_mst` and `coitem_mst` tables are the intended result. The implementation should use supported SyteLine Customer Order business processing instead of uncontrolled direct SQL insertion wherever the tenant provides a suitable standard IDO or business method.
 
-## Scope Order
+## Implemented Staging Fields
 
-```text
-1. Create SMK069_temp_sales_mst
-2. Create ue_SMK069TempSales IDO
-3. Build SMK API Sales Error Processing UI
-4. Implement customer validation
-5. Implement Preview
-6. Implement Process / Reprocess
-7. Create Customer Order header and lines
-8. Resume item-level validation and mapping
-```
-
-## Source Fields
-
-The requirement explicitly defines:
+The implemented business fields are:
 
 ```text
-site_ref
+SiteRef
 cust_num
 order_date
 terms_code
 co_num
 co_line
-cost
 unit_price
 tax_code1
 exch_rate
@@ -91,14 +96,14 @@ due_date
 u_m
 ```
 
+`SiteRef` is used for the source requirement `site_ref` and the Mongoose site context. A separate `site_ref` column is not created.
+
 ## Technical Control Fields
 
-The requirement asks for error control and reprocessing but does not define the fields needed to support it. The implementation therefore adds clearly separated technical fields:
+The following fields were added because the requirement asks for error control and reprocessing:
 
 ```text
-request_id
-batch_num
-process_stat
+process_status
 validation_msg
 error_msg
 retry_count
@@ -106,4 +111,64 @@ processed_date
 processed_by
 ```
 
-These fields support filtering, audit, retry, and status tracking without changing the business mapping defined by the requirement.
+Status values:
+
+```text
+N = New
+V = Valid
+E = Error
+P = Processed
+C = Cancelled
+```
+
+## Current Object Names
+
+```text
+Metadata table : SMK069_temp_sales_mst
+Physical table : dbo.ue_SMK069_temp_sales_mst
+Entity IDO     : ue_SMK069TempSales
+Planned form   : ue_SMK069APISalesErrorProcessing
+Form caption   : SMK API SALES ERROR PROCESSING
+```
+
+## Current Progress
+
+```text
+[COMPLETED] table created
+[COMPLETED] cost removed from implemented design
+[COMPLETED] six process-control columns added
+[COMPLETED] ue_SMK069TempSales IDO created
+[COMPLETED] IDO updated/resynchronized after table changes
+[NEXT]      create ue_SMK069APISalesErrorProcessing form
+[PENDING]   Order Date / CO Number Preview filters
+[PENDING]   customer validation
+[PENDING]   Process/reprocess method
+[PENDING]   Customer Order header and line creation
+[PENDING]   official POS CSV mapping
+[PENDING]   final API documentation based on the Nava_TempJournal format
+```
+
+## Development Order
+
+```text
+1. Create SMK069_temp_sales_mst                           COMPLETED
+2. Add process-control columns                            COMPLETED
+3. Create and update ue_SMK069TempSales IDO              COMPLETED
+4. Create ue_SMK069APISalesErrorProcessing form          NEXT
+5. Add Order Date / CO Number Preview filters            PENDING
+6. Add customer validation                               PENDING
+7. Add Process / Reprocess method                        PENDING
+8. Create Customer Order header and lines                PENDING
+9. Prepare sample CSV and import process                 PENDING
+10. Prepare technical API document and Postman examples  PENDING
+```
+
+## Scope Control
+
+Item mapping and broader item-level validation remain postponed. Initial validation follows the source specification and starts with:
+
+```text
+cust_num must exist in customer_mst
+```
+
+Further validations will be added incrementally after the first Customer Order flow is working.
