@@ -10,7 +10,7 @@ Preview controls            : CREATED
 Blank-filter check          : VERIFIED
 Controlled staging test data: CREATED
 CO Number-only filtering    : VERIFIED
-Order Date-only filtering   : TEST PENDING
+Order Date-only filtering   : VERIFIED
 Combined filtering          : TEST PENDING
 Process logic               : NOT STARTED
 API ingestion               : NOT STARTED
@@ -43,6 +43,8 @@ Tenant screenshots confirm:
 [VERIFIED] controlled test rows exist in the staging table
 [VERIFIED] CO Number TEST000001 returns exactly line 1 and line 2
 [VERIFIED] TEST000002 is excluded from the TEST000001 result
+[VERIFIED] Order Date 7/30/2026 with CO Number blank returns TEST000002 line 1 only
+[VERIFIED] TEST000001 dated 7/29/2026 is excluded from the 7/30/2026 result
 ```
 
 Displayed blank-filter validation message:
@@ -51,7 +53,7 @@ Displayed blank-filter validation message:
 Isi Order Date atau CO Number sebelum Preview.
 ```
 
-The screenshot does not by itself prove every read-only setting. Read-only verification remains a separate tenant check.
+The screenshots do not by themselves prove every read-only setting. Read-only verification remains a separate tenant check.
 
 ## Controlled Test Dataset
 
@@ -167,19 +169,27 @@ Verified rules:
 ```text
 [VERIFIED] Both blank
 [VERIFIED] CO Number only
-[PENDING]  Order Date only
+[VERIFIED] Order Date only
 [PENDING]  Both entered
 ```
 
-## Current Small Test — Order Date Only
+## Current Small Test — Combined Order Date and CO Number
 
-Perform only this test:
+Perform only this decisive AND-filter test:
 
-1. clear the CO Number field;
-2. enter `7/29/2026` in Order Date;
+1. enter `7/30/2026` in Order Date;
+2. enter `TEST000001` in CO Number;
 3. click Preview;
-4. confirm only the two `TEST000001` rows dated `7/29/2026` are displayed;
-5. confirm `TEST000002`, dated `7/30/2026`, is excluded.
+4. confirm that no rows are displayed.
+
+Expected result is empty because:
+
+```text
+TEST000001 exists only on 7/29/2026
+TEST000002 exists on 7/30/2026
+```
+
+An empty result proves that the two filters are applied using `AND`. An `OR` implementation or an implementation that ignores either filter would return one or more rows.
 
 Do not proceed to Process, customer validation, Customer Order creation, or API implementation during this test.
 
@@ -243,7 +253,7 @@ cust_num must exist in customer_mst
 [x] blank-filter validation verified
 [x] controlled staging test data created
 [x] CO Number-only filtering verified
-[ ] Order Date-only filtering verified
+[x] Order Date-only filtering verified
 [ ] combined Order Date + CO Number filtering verified
 [ ] controlled service IDO receive method designed
 [ ] API ingestion implemented
