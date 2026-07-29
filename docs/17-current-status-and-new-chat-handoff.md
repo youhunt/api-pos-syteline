@@ -56,9 +56,10 @@ Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement an
 [COMPLETED] process_status inline display mapping
 [COMPLETED] process_status read-only verification
 [CONFIRMED] customer validation method type: Stored Procedure - Standard Method
-[DRAFTED]   dbo.SMK069ValidateCustomerSp repository script
-[NOT CREATED IN TENANT] customer validation stored procedure
-[NOT CREATED] customer validation IDO method
+[COMPLETED] dbo.SMK069ValidateCustomerSp created and visible in the wizard
+[CONFIRMED] generated IDO method name ue_SMK069ValidateCustomerSp
+[IN PROGRESS] generated method parameter review before final save
+[NOT STARTED] customer validation method execution test
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -110,27 +111,26 @@ Confirmed tenant method configuration:
 ```text
 IDO Name      : ue_SMK069TempSales
 Method Type   : Stored Procedure - Standard Method
-Stored Proc.  : required existing stored procedure
-Method Name   : generated as a custom ue_ method by the tenant
-Transactional : available
+Stored Proc.  : SMK069ValidateCustomerSp
+Method Name   : ue_SMK069ValidateCustomerSp
+Transactional : checked
 ```
 
 ## Confirmed Prefix Rule
 
-The user confirmed the tenant naming behavior:
+The tenant naming behavior is:
 
 ```text
 Stored Procedure : no ue_ prefix
 IDO Method       : ue_ prefix is added automatically
 ```
 
-Correct object naming:
+Final confirmed object naming:
 
 ```text
 Physical procedure : dbo.SMK069ValidateCustomerSp
 IDO                  : ue_SMK069TempSales
-Base business method : ValidateCustomer
-Actual method name   : verify the automatically generated ue_ value in the wizard
+IDO method            : ue_SMK069ValidateCustomerSp
 Transactional         : Yes
 ```
 
@@ -145,15 +145,17 @@ The procedure reads `customer_mst` and updates only `dbo.ue_SMK069_temp_sales_ms
 
 ## Immediate Next Step
 
-Create only this stored procedure in the tenant application database:
+On the populated Method Attributes screen, keep the confirmed values unchanged and click `OK`.
+
+When the generated parameter screen appears, do not change or finalize the method yet. Capture all generated parameters and verify:
 
 ```text
-dbo.SMK069ValidateCustomerSp
+SiteRef   input
+CoNum     input
+Infobar   output
 ```
 
-Then reopen the IDO Method Wizard and confirm the procedure appears in the Stored Procedure dropdown.
-
-Do not save the IDO method until the automatically generated Method Name and parameters have been reviewed.
+The SQL return value may appear separately. Review tenant-generated sequence, direction, data type, and length before saving the IDO method.
 
 ## API Direction
 
@@ -202,13 +204,13 @@ Status:
 - Form ue_SMK069APISalesErrorProcessing dan seluruh Preview behavior selesai diuji.
 - process_status display mapping dan read-only selesai.
 - Tenant mengonfirmasi method type Stored Procedure - Standard Method.
-- Tenant mengonfirmasi stored procedure tidak memakai ue_, sedangkan custom IDO method mendapat ue_ otomatis.
-- Script dbo.SMK069ValidateCustomerSp tersedia di database/stored-procedures/SMK069ValidateCustomerSp.sql tetapi belum dibuat di tenant.
-- Customer validation IDO method belum dibuat.
+- Stored procedure dbo.SMK069ValidateCustomerSp sudah dibuat dan muncul di wizard.
+- Wizard otomatis menghasilkan IDO method ue_SMK069ValidateCustomerSp dan Transactional sudah dicentang.
+- Parameter hasil generate belum diperiksa dan IDO method belum dikonfirmasi tersimpan.
 - Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Langkah berikutnya hanya membuat dbo.SMK069ValidateCustomerSp, lalu memastikan procedure muncul pada dropdown Stored Procedure di IDO Method Wizard. Jangan save method sebelum generated Method Name dan parameter diperiksa.
+Langkah berikutnya hanya klik OK pada Method Attributes, lalu periksa layar parameter hasil generate. Jangan ubah atau finalize method sebelum parameter SiteRef, CoNum, Infobar, direction, sequence, dan data type diperiksa.
 ```
