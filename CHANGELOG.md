@@ -55,6 +55,7 @@ All notable changes to this repository will be documented in this file.
 - Tenant evidence that CO Number-only Preview filtering returns both `TEST000001` lines and excludes `TEST000002`.
 - Tenant evidence that Order Date-only Preview filtering for `7/30/2026` returns only `TEST000002`.
 - Tenant evidence that mismatched Order Date `7/30/2026` and CO Number `TEST000001` return no business rows, confirming `order_date AND co_num`.
+- `process_statusGridCol` inline status mapping: `INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)`.
 
 ### Changed
 
@@ -73,7 +74,9 @@ All notable changes to this repository will be documented in this file.
 - Corrected the SMK069 header calculation to `SUM(unit_price * qty_ordered)`.
 - Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
 - Updated SMK069 status to mark the base form, all Preview controls, and all four Preview behaviors as completed.
-- Advanced the current task to remaining form metadata and read-only verification before customer validation and processing.
+- Documented that `process_status` stores the one-character code from list column 1 while displaying the description from list column 2.
+- Kept `process_status` as a system-maintained read-only field despite the configured list source.
+- Advanced the current task to `process_status` display and read-only verification before customer validation and processing.
 
 ### Current SMK069 Status
 
@@ -89,7 +92,8 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] CO Number-only Preview filtering
 [COMPLETED] Order Date-only Preview filtering
 [COMPLETED] combined Order Date AND CO Number filtering
-[IN PROGRESS] form metadata and read-only verification
+[COMPLETED] process_status inline list source configured
+[IN PROGRESS] process_status display and read-only verification
 [PENDING]   customer validation
 [PENDING]   Process/reprocess method
 [PENDING]   controlled service IDO receive method
@@ -99,6 +103,7 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
+- Verify that `process_status` displays `New`, `Valid`, `Error`, `Processed`, or `Cancelled` while retaining `N`, `V`, `E`, `P`, or `C` as the stored value.
 - Verify the seven required read-only fields, beginning with `process_status`.
 - Confirm the primary collection and all 20 grid properties from form metadata.
 - Add `cust_num` validation against `customer_mst`.
