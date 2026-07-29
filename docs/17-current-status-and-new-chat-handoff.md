@@ -33,12 +33,14 @@ Cost         = obtained from item_mst
 ## Current Objects
 
 ```text
-Metadata table : SMK069_temp_sales_mst
-Physical table : dbo.ue_SMK069_temp_sales_mst
-Entity IDO     : ue_SMK069TempSales
-Form           : ue_SMK069APISalesErrorProcessing
-Form caption   : SMK API SALES ERROR PROCESSING
-Primary key    : SiteRef + co_num + co_line
+Metadata table       : SMK069_temp_sales_mst
+Physical table       : dbo.ue_SMK069_temp_sales_mst
+Entity IDO           : ue_SMK069TempSales
+Form                 : ue_SMK069APISalesErrorProcessing
+Form caption         : SMK API SALES ERROR PROCESSING
+Primary key          : SiteRef + co_num + co_line
+Validation procedure : dbo.SMK069ValidateCustomerSp
+Validation IDO method: ue_SMK069ValidateCustomerSp
 ```
 
 Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement and Mongoose site context.
@@ -55,12 +57,12 @@ Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement an
 [COMPLETED] all Preview filtering behaviors
 [COMPLETED] process_status inline display mapping
 [COMPLETED] process_status read-only verification
-[CONFIRMED] customer validation method type: Stored Procedure - Standard Method
-[COMPLETED] dbo.SMK069ValidateCustomerSp created and visible in the wizard
-[CONFIRMED] generated IDO method name ue_SMK069ValidateCustomerSp
-[COMPLETED] generated parameter review
-[IN PROGRESS] save/persistence confirmation after reopening IDO Methods
-[NOT STARTED] customer validation method execution test
+[COMPLETED] dbo.SMK069ValidateCustomerSp created
+[COMPLETED] ue_SMK069ValidateCustomerSp method persisted
+[COMPLETED] generated method parameter review
+[NEXT]      confirm TEST000002 customer is invalid
+[NOT STARTED] invalid-customer method execution test
+[NOT STARTED] valid-customer method execution test
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -93,7 +95,7 @@ N displays as New
 Status cell cannot be manually edited
 ```
 
-## Customer Validation Design
+## Customer Validation Object
 
 Validation requirement:
 
@@ -107,7 +109,7 @@ Validation scope:
 SiteRef + co_num
 ```
 
-Confirmed tenant method configuration:
+Confirmed tenant configuration:
 
 ```text
 IDO Name      : ue_SMK069TempSales
@@ -117,41 +119,19 @@ Method Name   : ue_SMK069ValidateCustomerSp
 Transactional : checked
 ```
 
-## Confirmed Prefix Rule
-
-The tenant naming behavior is:
+Confirmed tenant prefix rule:
 
 ```text
 Stored Procedure : no ue_ prefix
 IDO Method       : ue_ prefix is added automatically
 ```
 
-Final confirmed object naming:
+Generated and persisted parameters:
 
 ```text
-Physical procedure : dbo.SMK069ValidateCustomerSp
-IDO                  : ue_SMK069TempSales
-IDO method            : ue_SMK069ValidateCustomerSp
-Transactional         : Yes
-```
-
-Repository source:
-
-```text
-database/stored-procedures/SMK069ValidateCustomerSp.sql
-implementation/13-create-SMK069-customer-validation.md
-```
-
-The procedure reads `customer_mst` and updates only `dbo.ue_SMK069_temp_sales_mst`. It does not create or update Customer Orders.
-
-## Generated Parameter Evidence
-
-Tenant-generated parameter grid:
-
-```text
-Sequence 1 : SiteRef : VARIANT
-Sequence 2 : CoNum   : VARIANT
-Sequence 3 : Infobar : VARIANT
+1. SiteRef : VARIANT
+2. CoNum   : VARIANT
+3. Infobar : VARIANT
 ```
 
 Direction follows the stored procedure definition:
@@ -162,21 +142,50 @@ CoNum   : input
 Infobar : output
 ```
 
-The visible tenant grid does not show separate direction, SQL type, or length columns. The Custom Load Method Output Properties area is blank, which is correct for a standard stored-procedure method.
+The method remained available after the IDO Methods form was saved, closed, and reopened. This confirms the method metadata was persisted successfully.
+
+Repository sources:
+
+```text
+database/stored-procedures/SMK069ValidateCustomerSp.sql
+implementation/13-create-SMK069-customer-validation.md
+```
+
+The procedure reads `customer_mst` and updates only `dbo.ue_SMK069_temp_sales_mst`. It does not create or update Customer Orders.
 
 ## Immediate Next Step
 
-Verify persistence only:
+Confirm that `TEST000002` is an invalid-customer test case before invoking the method:
 
-```text
-1. Save the current IDO Methods record
-2. Close IDO Methods
-3. Reopen IDO Methods for ue_SMK069TempSales
-4. Select ue_SMK069ValidateCustomerSp
-5. Confirm Stored Procedure, Transactional, and all three parameters remain
+```sql
+SELECT
+    s.SiteRef,
+    s.co_num,
+    s.cust_num,
+    CASE
+        WHEN EXISTS
+        (
+            SELECT 1
+            FROM dbo.customer_mst AS c
+            WHERE c.site_ref = s.SiteRef
+              AND c.cust_num = s.cust_num
+              AND c.cust_seq = 0
+        )
+        THEN N'EXISTS'
+        ELSE N'NOT FOUND'
+    END AS CustomerCheck
+FROM dbo.ue_SMK069_temp_sales_mst AS s
+WHERE s.SiteRef = N'DEFAULT'
+  AND s.co_num = N'TEST000002';
 ```
 
-Do not execute the validation method yet during this step.
+Expected result:
+
+```text
+TEST000002 | TST0002 | NOT FOUND
+```
+
+Do not execute the method in the same step. If the customer exists, prepare a different deliberately invalid test customer.
 
 ## API Direction
 
@@ -221,17 +230,15 @@ CHANGELOG.md
 Lanjutkan repository private youhunt/api-pos-syteline sebagai source of truth.
 
 Status:
-- SMK069_temp_sales_mst dan ue_SMK069TempSales selesai.
-- Form ue_SMK069APISalesErrorProcessing dan seluruh Preview behavior selesai diuji.
-- process_status display mapping dan read-only selesai.
-- Stored procedure dbo.SMK069ValidateCustomerSp sudah dibuat dan muncul di wizard.
-- IDO method otomatis bernama ue_SMK069ValidateCustomerSp dan Transactional dicentang.
-- Parameter generated sudah terkonfirmasi: SiteRef sequence 1 VARIANT, CoNum sequence 2 VARIANT, Infobar sequence 3 VARIANT.
-- Method belum dikonfirmasi tetap tersimpan setelah form IDO Methods ditutup dan dibuka ulang.
-- Execution test, Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
+- Staging table, IDO, Error Processing form, Preview, dan process_status mapping selesai.
+- Stored procedure dbo.SMK069ValidateCustomerSp sudah dibuat.
+- IDO method ue_SMK069ValidateCustomerSp sudah tersimpan, Transactional checked.
+- Parameter method sudah terverifikasi: SiteRef, CoNum, Infobar.
+- Customer validation belum pernah dieksekusi.
+- Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Langkah berikutnya hanya save IDO Methods record, tutup, buka kembali, lalu pastikan ue_SMK069ValidateCustomerSp dan ketiga parameternya tetap ada. Jangan eksekusi method dahulu.
+Langkah berikutnya hanya memastikan customer TEST000002/TST0002 tidak ada di customer_mst. Jangan menjalankan method pada langkah yang sama.
 ```
