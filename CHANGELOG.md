@@ -48,6 +48,8 @@ All notable changes to this repository will be documented in this file.
 - Six SMK069 process-control fields: `process_status`, `validation_msg`, `error_msg`, `retry_count`, `processed_date`, and `processed_by`.
 - `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with the next-step base-form guide.
 - `docs/17-current-status-and-new-chat-handoff.md` with actual progress, development rules, and a ready-to-paste new-chat prompt.
+- Tenant implementation record for the created `ue_SMK069APISalesErrorProcessing` Grid Only form object.
+- Explicit smoke-test gate requiring successful form opening, 20 required grid properties, and seven read-only fields before the form is marked fully completed.
 
 ### Changed
 
@@ -65,7 +67,8 @@ All notable changes to this repository will be documented in this file.
 - Removed `cost` from the implemented SMK069 staging design after confirmation that cost is obtained from `item_mst`.
 - Corrected the SMK069 header calculation to `SUM(unit_price * qty_ordered)`.
 - Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
-- Updated SMK069 progress to reflect that the table and `ue_SMK069TempSales` IDO are complete while the form is not yet created.
+- Updated SMK069 progress to reflect that the table and `ue_SMK069TempSales` IDO are complete.
+- Updated the base-form status from not created to created with smoke test pending; Preview and Process remain not started.
 
 ### Current SMK069 Status
 
@@ -73,7 +76,8 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] SMK069_temp_sales_mst table
 [COMPLETED] process-control columns
 [COMPLETED] ue_SMK069TempSales IDO and properties update
-[NEXT]      ue_SMK069APISalesErrorProcessing base form
+[COMPLETED] ue_SMK069APISalesErrorProcessing form object created
+[IN PROGRESS] base-form smoke test and tenant verification
 [PENDING]   Preview filters
 [PENDING]   customer validation
 [PENDING]   Process/reprocess method
@@ -82,7 +86,7 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
-- Create the base `ue_SMK069APISalesErrorProcessing` Grid Only form.
+- Complete the base `ue_SMK069APISalesErrorProcessing` smoke test before adding any further UI logic.
 - Add Order Date and CO Number Preview filters after the base form passes its smoke test.
 - Add `cust_num` validation against `customer_mst`.
 - Add controlled Process/Reprocess logic for all lines belonging to the selected `SiteRef + co_num`.
