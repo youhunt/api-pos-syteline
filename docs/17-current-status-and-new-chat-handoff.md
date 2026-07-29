@@ -57,13 +57,13 @@ Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement an
 [COMPLETED] ue_SMK069APISalesErrorProcessing base form
 [COMPLETED] form-opening smoke test
 [COMPLETED] Order Date and CO Number Preview controls
-[COMPLETED] blank-filter validation
-[COMPLETED] CO Number-only Preview filtering
-[COMPLETED] Order Date-only Preview filtering
-[COMPLETED] combined Order Date AND CO Number filtering
+[COMPLETED] all Preview filtering behaviors
 [COMPLETED] process_status inline display mapping
 [COMPLETED] process_status read-only verification
-[NEXT]      customer validation against customer_mst
+[CONFIRMED] customer validation method type: Stored Procedure - Standard Method
+[DRAFTED]   dbo.ue_SMK069ValidateCustomerSp repository script
+[NOT CREATED IN TENANT] customer validation stored procedure
+[NOT CREATED] ValidateCustomer IDO method
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -102,15 +102,9 @@ N displays as New
 Status cell cannot be manually edited
 ```
 
-Evidence:
+## Customer Validation Design
 
-```text
-tests/evidence/2026-07-29-smk069-process-status-display.md
-```
-
-## Immediate Next Step
-
-Begin only the customer-validation implementation:
+Validation requirement:
 
 ```text
 cust_num from SMK069_temp_sales_mst must exist in customer_mst
@@ -122,21 +116,42 @@ Validation scope:
 SiteRef + co_num
 ```
 
-The validation must be reusable by the form, CSV import, REST API ingestion, and Process/Reprocess action. Do not implement customer lookup only inside a form event.
-
-Detailed next guide:
+Confirmed tenant method configuration:
 
 ```text
+IDO Name     : ue_SMK069TempSales
+Method Type  : Stored Procedure - Standard Method
+Stored Proc. : required existing stored procedure
+Method Name  : required and unique
+Transactional: available
+```
+
+Confirmed object names:
+
+```text
+Physical procedure : dbo.ue_SMK069ValidateCustomerSp
+IDO method          : ValidateCustomer
+Transactional       : Yes
+```
+
+Repository source:
+
+```text
+database/stored-procedures/ue_SMK069ValidateCustomerSp.sql
 implementation/13-create-SMK069-customer-validation.md
 ```
 
-The first small action is to open the tenant IDO method maintenance screen for:
+The procedure reads `customer_mst` and updates only `dbo.ue_SMK069_temp_sales_mst`. It does not create or update Customer Orders.
+
+## Immediate Next Step
+
+Create only this stored procedure in the tenant application database:
 
 ```text
-ue_SMK069TempSales
+dbo.ue_SMK069ValidateCustomerSp
 ```
 
-Show the available method implementation/type options before creating or saving a method. This prevents inventing an unsupported stored-procedure or extension-class pattern.
+Then reopen the IDO Method Wizard and confirm the procedure appears in the Stored Procedure dropdown. Do not save the IDO method until its automatically generated parameters are visible and reviewed.
 
 ## API Direction
 
@@ -168,6 +183,7 @@ Direct REST write to the staging entity IDO is not the intended final architectu
 docs/16-smk069-sales-spec-alignment.md
 docs/17-current-status-and-new-chat-handoff.md
 database/tables/SMK069_temp_sales_mst.md
+database/stored-procedures/ue_SMK069ValidateCustomerSp.sql
 implementation/11-create-SMK069-temp-sales-table.md
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 implementation/13-create-SMK069-customer-validation.md
@@ -181,17 +197,15 @@ Lanjutkan repository private youhunt/api-pos-syteline sebagai source of truth.
 
 Status:
 - SMK069_temp_sales_mst dan ue_SMK069TempSales selesai.
-- Form ue_SMK069APISalesErrorProcessing selesai dan berhasil dibuka.
-- Seluruh Preview behavior selesai diuji.
-- process_status menampilkan New/Valid/Error/Processed/Cancelled tetapi menyimpan N/V/E/P/C.
-- process_status sudah terkonfirmasi read-only.
+- Form ue_SMK069APISalesErrorProcessing dan seluruh Preview behavior selesai diuji.
+- process_status display mapping dan read-only selesai.
+- Tenant mengonfirmasi method type Stored Procedure - Standard Method.
+- Script dbo.ue_SMK069ValidateCustomerSp sudah tersedia di repository tetapi belum dibuat di tenant.
+- IDO method ValidateCustomer belum dibuat.
 - Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Langkah berikutnya hanya customer validation:
-cust_num harus ada di customer_mst.
-
-Baca implementation/13-create-SMK069-customer-validation.md. Pertama, buka IDO method maintenance untuk ue_SMK069TempSales dan tampilkan opsi method type/implementation type yang tersedia. Jangan save method sebelum opsi tenant terlihat.
+Langkah berikutnya hanya membuat dbo.ue_SMK069ValidateCustomerSp dari database/stored-procedures/ue_SMK069ValidateCustomerSp.sql, lalu memastikan procedure muncul pada dropdown Stored Procedure di IDO Method Wizard. Jangan save method sebelum parameter hasil generate diperiksa.
 ```
