@@ -58,7 +58,8 @@ Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement an
 [CONFIRMED] customer validation method type: Stored Procedure - Standard Method
 [COMPLETED] dbo.SMK069ValidateCustomerSp created and visible in the wizard
 [CONFIRMED] generated IDO method name ue_SMK069ValidateCustomerSp
-[IN PROGRESS] generated method parameter review before final save
+[COMPLETED] generated parameter review
+[IN PROGRESS] save/persistence confirmation after reopening IDO Methods
 [NOT STARTED] customer validation method execution test
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
@@ -143,19 +144,39 @@ implementation/13-create-SMK069-customer-validation.md
 
 The procedure reads `customer_mst` and updates only `dbo.ue_SMK069_temp_sales_mst`. It does not create or update Customer Orders.
 
-## Immediate Next Step
+## Generated Parameter Evidence
 
-On the populated Method Attributes screen, keep the confirmed values unchanged and click `OK`.
-
-When the generated parameter screen appears, do not change or finalize the method yet. Capture all generated parameters and verify:
+Tenant-generated parameter grid:
 
 ```text
-SiteRef   input
-CoNum     input
-Infobar   output
+Sequence 1 : SiteRef : VARIANT
+Sequence 2 : CoNum   : VARIANT
+Sequence 3 : Infobar : VARIANT
 ```
 
-The SQL return value may appear separately. Review tenant-generated sequence, direction, data type, and length before saving the IDO method.
+Direction follows the stored procedure definition:
+
+```text
+SiteRef : input
+CoNum   : input
+Infobar : output
+```
+
+The visible tenant grid does not show separate direction, SQL type, or length columns. The Custom Load Method Output Properties area is blank, which is correct for a standard stored-procedure method.
+
+## Immediate Next Step
+
+Verify persistence only:
+
+```text
+1. Save the current IDO Methods record
+2. Close IDO Methods
+3. Reopen IDO Methods for ue_SMK069TempSales
+4. Select ue_SMK069ValidateCustomerSp
+5. Confirm Stored Procedure, Transactional, and all three parameters remain
+```
+
+Do not execute the validation method yet during this step.
 
 ## API Direction
 
@@ -203,14 +224,14 @@ Status:
 - SMK069_temp_sales_mst dan ue_SMK069TempSales selesai.
 - Form ue_SMK069APISalesErrorProcessing dan seluruh Preview behavior selesai diuji.
 - process_status display mapping dan read-only selesai.
-- Tenant mengonfirmasi method type Stored Procedure - Standard Method.
 - Stored procedure dbo.SMK069ValidateCustomerSp sudah dibuat dan muncul di wizard.
-- Wizard otomatis menghasilkan IDO method ue_SMK069ValidateCustomerSp dan Transactional sudah dicentang.
-- Parameter hasil generate belum diperiksa dan IDO method belum dikonfirmasi tersimpan.
-- Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
+- IDO method otomatis bernama ue_SMK069ValidateCustomerSp dan Transactional dicentang.
+- Parameter generated sudah terkonfirmasi: SiteRef sequence 1 VARIANT, CoNum sequence 2 VARIANT, Infobar sequence 3 VARIANT.
+- Method belum dikonfirmasi tetap tersimpan setelah form IDO Methods ditutup dan dibuka ulang.
+- Execution test, Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Langkah berikutnya hanya klik OK pada Method Attributes, lalu periksa layar parameter hasil generate. Jangan ubah atau finalize method sebelum parameter SiteRef, CoNum, Infobar, direction, sequence, dan data type diperiksa.
+Langkah berikutnya hanya save IDO Methods record, tutup, buka kembali, lalu pastikan ue_SMK069ValidateCustomerSp dan ketiga parameternya tetap ada. Jangan eksekusi method dahulu.
 ```
