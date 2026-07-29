@@ -81,6 +81,14 @@ P = Processed
 C = Cancelled
 ```
 
+The `process_statusGridCol` component now uses this List Source:
+
+```text
+INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)
+```
+
+The stored value remains the one-character code, while the form displays the description. The field must still remain read-only for users.
+
 ## Primary Key
 
 ```text
@@ -106,7 +114,8 @@ SiteRef + co_num + co_line
 [COMPLETED] CO Number-only Preview filtering verified
 [COMPLETED] Order Date-only Preview filtering verified
 [COMPLETED] combined Order Date + CO Number Preview filtering verified
-[IN PROGRESS] remaining form metadata and read-only verification
+[COMPLETED] process_status inline list source configured
+[IN PROGRESS] process_status display and read-only verification
 [NOT STARTED] customer validation
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
@@ -152,17 +161,19 @@ Still pending separate verification:
 - primary collection from form metadata
 - all 20 required grid properties
 - seven required read-only fields
+- process_status description display and stored-value behavior
 ```
 
 ## Immediate Next Step
 
-Test only the `process_status` read-only setting:
+Test only the `process_status` display and read-only behavior:
 
 ```text
-1. Load CO Number TEST000002
-2. Click the Status cell containing N
-3. Attempt to type E
-4. Confirm the field cannot be edited and remains N
+1. Save the process_status List Source configuration
+2. Open the form and load CO Number TEST000002
+3. Confirm Status displays New for underlying value N
+4. Attempt to change the Status value
+5. Confirm it cannot be changed and remains N
 ```
 
 If it unexpectedly becomes editable, press `Esc`, do not save, and send a screenshot.
@@ -237,11 +248,13 @@ Status saat ini:
 - Form ue_SMK069APISalesErrorProcessing berhasil dibuka.
 - Seluruh perilaku Preview sudah berhasil diuji: blank, CO Number saja, Order Date saja, dan kombinasi AND.
 - Controlled test rows TEST000001 dan TEST000002 tersedia.
+- process_statusGridCol menggunakan List Source: INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1).
+- Stored value harus tetap N/V/E/P/C, sedangkan form menampilkan keterangannya.
 - Read-only fields belum seluruhnya diuji.
 - Process, customer validation, Customer Order creation, service IDO receive method, dan REST API ingestion belum dimulai.
 
 Langkah berikutnya hanya satu:
-Load TEST000002, lalu coba edit Status N menjadi E. Field harus read-only dan tetap N. Jangan save bila ternyata editable.
+Save form, load TEST000002, pastikan Status menampilkan New untuk nilai N dan tidak dapat diedit.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → Customer Order standard process.
