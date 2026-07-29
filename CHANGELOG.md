@@ -51,6 +51,8 @@ All notable changes to this repository will be documented in this file.
 - Tenant implementation record for the created `ue_SMK069APISalesErrorProcessing` Grid Only form object.
 - Tenant evidence that the form opens successfully and displays the Order Date, CO Number, and Preview controls.
 - Verified blank-filter validation message: `Isi Order Date atau CO Number sebelum Preview.`
+- Controlled staging test records for `TEST000001` and `TEST000002`.
+- Tenant evidence that CO Number-only Preview filtering returns both `TEST000001` lines and excludes `TEST000002`.
 
 ### Changed
 
@@ -68,8 +70,8 @@ All notable changes to this repository will be documented in this file.
 - Removed `cost` from the implemented SMK069 staging design after confirmation that cost is obtained from `item_mst`.
 - Corrected the SMK069 header calculation to `SUM(unit_price * qty_ordered)`.
 - Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
-- Updated SMK069 status to mark the base form opening and blank-filter validation as completed.
-- Advanced the current task from base-form creation to Preview filtering tests.
+- Updated SMK069 status to mark the base form opening, blank-filter validation, controlled test data, and CO Number-only filtering as completed.
+- Advanced the current task to Order Date-only Preview testing.
 
 ### Current SMK069 Status
 
@@ -81,20 +83,24 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] form-opening smoke test
 [COMPLETED] Preview controls displayed
 [COMPLETED] blank-filter validation
-[IN PROGRESS] Preview filtering behavior tests
+[COMPLETED] controlled staging test data
+[COMPLETED] CO Number-only Preview filtering
+[IN PROGRESS] Order Date-only and combined Preview tests
 [PENDING]   customer validation
 [PENDING]   Process/reprocess method
+[PENDING]   controlled service IDO receive method
+[PENDING]   REST API ingestion
 [PENDING]   Customer Order header and line creation
 ```
 
 ### Planned
 
-- Verify CO Number-only Preview filtering.
 - Verify Order Date-only Preview filtering.
 - Verify combined Order Date and CO Number filtering.
 - Confirm all 20 grid properties and the seven required read-only fields.
 - Add `cust_num` validation against `customer_mst`.
 - Add controlled Process/Reprocess logic for all lines belonging to the selected `SiteRef + co_num`.
+- Design and implement the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Create Customer Order header and lines using supported SyteLine processing.
 - Prepare the SMK069 sample CSV and import flow.
 - Produce the final technical API document using the Nava_TempJournal document format as reference.
