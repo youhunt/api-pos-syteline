@@ -8,8 +8,9 @@ IDO                : COMPLETED and updated
 Base form          : COMPLETED and opens successfully
 Preview controls   : CREATED
 Blank-filter check : VERIFIED
-Preview filtering  : TEST PENDING
+Preview filtering  : BLOCKED — staging table has no test data
 Process logic      : NOT STARTED
+API ingestion      : NOT STARTED
 ```
 
 Do not recreate the table, IDO, or base form.
@@ -26,7 +27,7 @@ Device Type        : Any
 
 ## Tenant Evidence — 29 July 2026
 
-A tenant screenshot confirms:
+Tenant screenshots confirm:
 
 ```text
 [VERIFIED] form opens without metadata error
@@ -36,6 +37,7 @@ A tenant screenshot confirms:
 [VERIFIED] CO Number filter component is displayed
 [VERIFIED] Preview button is displayed
 [VERIFIED] clicking Preview with both filters blank shows a validation message
+[BLOCKED]  CO Number filtering cannot yet be verified because staging contains no business/test rows
 ```
 
 Displayed validation message:
@@ -44,7 +46,9 @@ Displayed validation message:
 Isi Order Date atau CO Number sebelum Preview.
 ```
 
-The screenshot does not by itself prove every read-only setting or the actual filtering result. These remain separate tenant checks.
+A second screenshot shows CO Number `123` entered and Preview executed, but no matching business row is displayed. This is not evidence that the filter works or fails because the staging table is currently empty.
+
+The screenshots do not by themselves prove every read-only setting. Read-only verification remains a separate tenant check.
 
 ## Base Grid Properties
 
@@ -137,19 +141,49 @@ Both entered           → filter by order_date AND co_num
 Both blank             → show validation message; do not load all staging data
 ```
 
-The fourth rule is now verified in the tenant.
+Only the fourth rule is currently verified in the tenant.
 
-## Current Small Test — CO Number Only
+## Current Small Step — Provide Controlled Test Data
 
-The next test is only:
+Preview filtering cannot be tested until the custom staging table contains controlled test rows.
 
-1. use a `co_num` that exists in `dbo.ue_SMK069_temp_sales_mst`;
-2. leave Order Date blank;
-3. enter that value in CO Number;
-4. click Preview;
-5. verify only rows for that `co_num` are displayed.
+The immediate next step is only to create a small test dataset in:
 
-Do not proceed to Process, customer validation, or Customer Order creation during this test.
+```text
+dbo.ue_SMK069_temp_sales_mst
+```
+
+This is a custom staging table. No direct SQL insert may be performed into standard SyteLine tables `co_mst` or `coitem_mst`.
+
+The recommended test dataset contains:
+
+```text
+TEST000001 line 1
+TEST000001 line 2
+TEST000002 line 1
+```
+
+This permits verification that filtering by `TEST000001` returns both of its lines and excludes `TEST000002`.
+
+The temporary seed is only for UI smoke testing. The production ingestion direction remains:
+
+```text
+POS / Postman / sample CSV
+→ controlled service IDO method
+→ dbo.ue_SMK069_temp_sales_mst
+→ validation and error processing
+→ supported Customer Order business process
+```
+
+Do not treat a direct staging seed as the final API implementation.
+
+## API Direction
+
+The final integration must use a controlled service IDO method rather than exposing unrestricted direct REST writes to the entity IDO.
+
+CSV import and REST API ingestion should call the same reusable server-side receive/validation core so business logic is not duplicated.
+
+The official POS payload is still unavailable, so the final external API contract remains pending. A PoC request may use the confirmed SMK069 staging fields, but must not be presented as the final POS contract.
 
 ## Planned Process Button
 
@@ -190,9 +224,12 @@ cust_num must exist in customer_mst
 [x] CO Number filter component displayed
 [x] Preview button displayed
 [x] blank-filter validation verified
+[ ] controlled staging test data created
 [ ] CO Number-only filtering verified
 [ ] Order Date-only filtering verified
 [ ] combined Order Date + CO Number filtering verified
+[ ] controlled service IDO receive method designed
+[ ] API ingestion implemented
 [ ] Process button verified
 [ ] customer validation method connected
 [ ] processing method connected
