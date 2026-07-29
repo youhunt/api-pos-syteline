@@ -3,15 +3,15 @@
 ## Current Status
 
 ```text
-Base form and Preview   : COMPLETED
-process_status display  : VERIFIED
-process_status read-only: VERIFIED
-Method type             : CONFIRMED — Stored Procedure - Standard Method
-Customer validation SP  : NOT CREATED
-IDO method              : NOT CREATED
-Process/Reprocess        : NOT STARTED
-Customer Order creation : NOT STARTED
-API ingestion            : NOT STARTED
+Base form and Preview    : COMPLETED
+process_status display   : VERIFIED
+process_status read-only : VERIFIED
+Method type              : CONFIRMED — Stored Procedure - Standard Method
+Customer validation SP   : NOT CREATED IN TENANT
+IDO method               : NOT CREATED
+Process/Reprocess         : NOT STARTED
+Customer Order creation  : NOT STARTED
+API ingestion             : NOT STARTED
 ```
 
 ## Validation Requirement
@@ -28,7 +28,7 @@ Validation is performed for one staged Customer Order group:
 SiteRef + co_num
 ```
 
-All lines belonging to the selected group are evaluated together. No Customer Order is created during this step.
+All lines belonging to the selected group are evaluated together. No Customer Order is created during this validation step.
 
 ## Expected Outcomes
 
@@ -61,31 +61,41 @@ Do not duplicate customer lookup logic inside the form.
 
 ## Confirmed Tenant Method Configuration
 
-Tenant screenshot dated 29 July 2026 confirms this IDO Method Wizard configuration is available:
+Tenant screenshots dated 29 July 2026 confirm:
 
 ```text
-IDO Name     : ue_SMK069TempSales
-Method Type  : Stored Procedure - Standard Method
-Stored Proc. : required selection
-Method Name  : required/auto-populated and can be adjusted
-Transactional: available checkbox
+IDO Name      : ue_SMK069TempSales
+Method Type   : Stored Procedure - Standard Method
+Stored Proc.  : required existing stored procedure
+Method Name   : required/auto-generated custom method name
+Transactional : available checkbox
 ```
 
-The wizard requires the stored procedure to exist before it can be selected. Therefore, the stored procedure must be created first.
+The stored procedure must exist before it can be selected in the wizard.
 
-Official Mongoose behavior also confirms that a stored-procedure method is added by selecting an existing application-database stored procedure; the method name must be unique on the IDO, and the Transactional option can be enabled when the method should run in a transaction.
+## Corrected Tenant Naming Rule
 
-## Confirmed Object Names
+The user confirmed the actual tenant behavior:
 
 ```text
-Physical stored procedure : dbo.ue_SMK069ValidateCustomerSp
+Stored Procedure : no ue_ prefix
+IDO Method       : ue_ prefix is added automatically
+```
+
+Therefore, use:
+
+```text
+Physical stored procedure : dbo.SMK069ValidateCustomerSp
 IDO                        : ue_SMK069TempSales
-IDO method name            : ValidateCustomer
+Base business method name  : ValidateCustomer
+Actual IDO method name     : confirm the automatically generated ue_ name in the wizard
 Method type                : Stored Procedure - Standard Method
-Transactional              : Yes (when the IDO method is registered)
+Transactional              : Yes, when the method is registered
 ```
 
-The `ue_` prefix is used on the physical custom stored procedure. The published IDO method uses the concise business name `ValidateCustomer`, which is suitable for later form and REST/API invocation.
+Do not manually add `ue_` to the stored procedure name.
+
+Do not finalize the exact published method name until the tenant wizard displays the automatically generated value.
 
 ## Stored Procedure Contract
 
@@ -109,49 +119,55 @@ The `ue_` prefix is used on the physical custom stored procedure. The published 
 16 = invalid invocation or technical failure
 ```
 
-A missing customer is a business validation result, not a technical execution failure. Therefore, it updates the staging group to `E` and returns `0`.
+A missing customer is a business validation result. It updates the staging group to `E` and returns `0`.
 
 ## SQL Source
 
 Repository script:
 
 ```text
-database/stored-procedures/ue_SMK069ValidateCustomerSp.sql
+database/stored-procedures/SMK069ValidateCustomerSp.sql
 ```
 
-The procedure only updates the custom staging table:
+The procedure reads:
+
+```text
+dbo.customer_mst
+```
+
+and updates only:
 
 ```text
 dbo.ue_SMK069_temp_sales_mst
 ```
 
-It reads `customer_mst` for validation and does not update standard Customer Order tables.
+It does not update `co_mst` or `coitem_mst`.
 
 ## Current Small Step
 
-Create only this stored procedure in the application database:
+Create only this stored procedure in the tenant application database:
 
 ```text
-dbo.ue_SMK069ValidateCustomerSp
+dbo.SMK069ValidateCustomerSp
 ```
 
-After creation, verify that it appears in the Stored Procedure dropdown of the IDO Method Wizard.
+After creation, reopen the IDO Method Wizard and confirm it appears in the Stored Procedure dropdown.
 
-Do not click OK to create the IDO method until the procedure is visible in the dropdown.
+Do not click OK to create the IDO method until the generated Method Name and parameter area have been reviewed.
 
 ## Next Step After Confirmation
 
-When the stored procedure is visible:
+Expected wizard values:
 
 ```text
-IDO Name     : ue_SMK069TempSales
-Method Type  : Stored Procedure - Standard Method
-Stored Proc. : ue_SMK069ValidateCustomerSp
-Method Name  : ValidateCustomer
-Transactional: checked
+IDO Name      : ue_SMK069TempSales
+Method Type   : Stored Procedure - Standard Method
+Stored Proc.  : SMK069ValidateCustomerSp
+Method Name   : tenant-generated ue_ custom method name; verify from screen
+Transactional : checked
 ```
 
-Then review the automatically generated parameters before saving.
+Then review the generated parameters before saving.
 
 ## Stop Point
 
