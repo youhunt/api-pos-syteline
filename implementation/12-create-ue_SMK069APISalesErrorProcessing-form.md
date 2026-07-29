@@ -6,17 +6,17 @@
 Table                       : COMPLETED
 IDO                         : COMPLETED and updated
 Base form                   : COMPLETED and opens successfully
-Preview controls            : CREATED
+Preview controls            : COMPLETED
 Blank-filter check          : VERIFIED
 Controlled staging test data: CREATED
 CO Number-only filtering    : VERIFIED
 Order Date-only filtering   : VERIFIED
-Combined filtering          : TEST PENDING
+Combined filtering          : VERIFIED
 Process logic               : NOT STARTED
 API ingestion               : NOT STARTED
 ```
 
-Do not recreate the table, IDO, or base form.
+Do not recreate the table, IDO, base form, or Preview controls.
 
 ## Object Identity
 
@@ -45,6 +45,8 @@ Tenant screenshots confirm:
 [VERIFIED] TEST000002 is excluded from the TEST000001 result
 [VERIFIED] Order Date 7/30/2026 with CO Number blank returns TEST000002 line 1 only
 [VERIFIED] TEST000001 dated 7/29/2026 is excluded from the 7/30/2026 result
+[VERIFIED] Order Date 7/30/2026 plus CO Number TEST000001 returns no matching business rows
+[VERIFIED] combined filtering uses order_date AND co_num
 ```
 
 Displayed blank-filter validation message:
@@ -155,7 +157,7 @@ They are maintained by validation and processing logic.
 
 ## Preview Rules
 
-The intended behavior is:
+The implemented and verified behavior is:
 
 ```text
 Order Date only        → filter by order_date
@@ -164,34 +166,29 @@ Both entered           → filter by order_date AND co_num
 Both blank             → show validation message; do not load all staging data
 ```
 
-Verified rules:
+Verification status:
 
 ```text
 [VERIFIED] Both blank
 [VERIFIED] CO Number only
 [VERIFIED] Order Date only
-[PENDING]  Both entered
+[VERIFIED] Both entered
 ```
 
-## Current Small Test — Combined Order Date and CO Number
+The Preview behavior is now fully verified for the current test dataset.
 
-Perform only this decisive AND-filter test:
+## Current Small Test — `process_status` Read-Only
 
-1. enter `7/30/2026` in Order Date;
-2. enter `TEST000001` in CO Number;
-3. click Preview;
-4. confirm that no rows are displayed.
+Perform only this field-protection test:
 
-Expected result is empty because:
+1. load an existing test row, for example CO Number `TEST000002`;
+2. click the grid cell under `Status`, currently showing `N`;
+3. attempt to type another value such as `E`;
+4. confirm the cell cannot be edited and remains `N`.
 
-```text
-TEST000001 exists only on 7/29/2026
-TEST000002 exists on 7/30/2026
-```
+If the cell unexpectedly becomes editable, press `Esc` and do not save the row. Send a screenshot before changing form metadata.
 
-An empty result proves that the two filters are applied using `AND`. An `OR` implementation or an implementation that ignores either filter would return one or more rows.
-
-Do not proceed to Process, customer validation, Customer Order creation, or API implementation during this test.
+Do not test Process, customer validation, Customer Order creation, or API ingestion during this step.
 
 ## API Direction
 
@@ -214,7 +211,7 @@ POS / Postman / sample CSV
 
 ## Planned Process Button
 
-After Preview filtering is fully verified, add or verify:
+After the remaining form-protection checks are complete, add or verify:
 
 ```text
 Button Name : btnProcess
@@ -254,7 +251,7 @@ cust_num must exist in customer_mst
 [x] controlled staging test data created
 [x] CO Number-only filtering verified
 [x] Order Date-only filtering verified
-[ ] combined Order Date + CO Number filtering verified
+[x] combined Order Date + CO Number filtering verified
 [ ] controlled service IDO receive method designed
 [ ] API ingestion implemented
 [ ] Process button verified
