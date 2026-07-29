@@ -53,6 +53,8 @@ All notable changes to this repository will be documented in this file.
 - Verified blank-filter validation message: `Isi Order Date atau CO Number sebelum Preview.`
 - Controlled staging test records for `TEST000001` and `TEST000002`.
 - Tenant evidence that CO Number-only Preview filtering returns both `TEST000001` lines and excludes `TEST000002`.
+- Tenant evidence that Order Date-only Preview filtering for `7/30/2026` returns only `TEST000002`.
+- Tenant evidence that mismatched Order Date `7/30/2026` and CO Number `TEST000001` return no business rows, confirming `order_date AND co_num`.
 
 ### Changed
 
@@ -70,8 +72,8 @@ All notable changes to this repository will be documented in this file.
 - Removed `cost` from the implemented SMK069 staging design after confirmation that cost is obtained from `item_mst`.
 - Corrected the SMK069 header calculation to `SUM(unit_price * qty_ordered)`.
 - Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
-- Updated SMK069 status to mark the base form opening, blank-filter validation, controlled test data, and CO Number-only filtering as completed.
-- Advanced the current task to Order Date-only Preview testing.
+- Updated SMK069 status to mark the base form, all Preview controls, and all four Preview behaviors as completed.
+- Advanced the current task to remaining form metadata and read-only verification before customer validation and processing.
 
 ### Current SMK069 Status
 
@@ -85,7 +87,9 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] blank-filter validation
 [COMPLETED] controlled staging test data
 [COMPLETED] CO Number-only Preview filtering
-[IN PROGRESS] Order Date-only and combined Preview tests
+[COMPLETED] Order Date-only Preview filtering
+[COMPLETED] combined Order Date AND CO Number filtering
+[IN PROGRESS] form metadata and read-only verification
 [PENDING]   customer validation
 [PENDING]   Process/reprocess method
 [PENDING]   controlled service IDO receive method
@@ -95,9 +99,8 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
-- Verify Order Date-only Preview filtering.
-- Verify combined Order Date and CO Number filtering.
-- Confirm all 20 grid properties and the seven required read-only fields.
+- Verify the seven required read-only fields, beginning with `process_status`.
+- Confirm the primary collection and all 20 grid properties from form metadata.
 - Add `cust_num` validation against `customer_mst`.
 - Add controlled Process/Reprocess logic for all lines belonging to the selected `SiteRef + co_num`.
 - Design and implement the controlled service IDO receive method shared by CSV and REST API ingestion.
