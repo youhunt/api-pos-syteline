@@ -33,12 +33,13 @@ All notable changes to this repository will be documented in this file.
 - `SMK069_temp_sales_mst` implementation documentation aligned to the revised sales requirement.
 - Six SMK069 process-control fields: `process_status`, `validation_msg`, `error_msg`, `retry_count`, `processed_date`, and `processed_by`.
 - `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with completed form and Preview evidence.
-- `implementation/13-create-SMK069-customer-validation.md` with confirmed tenant method type, prefix rules, and generated validation method name.
+- `implementation/13-create-SMK069-customer-validation.md` with confirmed tenant method type, naming rules, and generated parameters.
 - `database/stored-procedures/SMK069ValidateCustomerSp.sql` implementation for reusable customer validation.
 - `docs/17-current-status-and-new-chat-handoff.md` with current progress and API direction.
 - Tenant evidence for completed Preview behavior and read-only `process_status` display mapping.
 - Tenant evidence that `SMK069ValidateCustomerSp` is visible in the IDO Method Wizard.
 - Confirmed generated customer-validation IDO method name `ue_SMK069ValidateCustomerSp` with Transactional enabled.
+- Confirmed generated parameter order: `SiteRef` sequence 1, `CoNum` sequence 2, and `Infobar` sequence 3, all displayed as `VARIANT` in the tenant grid.
 
 ### Changed
 
@@ -55,7 +56,7 @@ All notable changes to this repository will be documented in this file.
 - Documented that stored procedures do not receive the `ue_` prefix in this tenant, while custom IDO method names receive `ue_` automatically.
 - Confirmed the generated IDO method name as `ue_SMK069ValidateCustomerSp`.
 - Defined customer-not-found as a business validation result (`process_status = E`) rather than a technical stored-procedure failure.
-- Advanced the active task to generated method-parameter review before the IDO method is finalized.
+- Completed the generated method-parameter review and advanced the active task to save/persistence verification after reopening IDO Methods.
 
 ### Current SMK069 Status
 
@@ -68,7 +69,8 @@ All notable changes to this repository will be documented in this file.
 [CONFIRMED] Stored Procedure - Standard Method tenant option
 [COMPLETED] dbo.SMK069ValidateCustomerSp created in tenant
 [CONFIRMED] generated IDO method name ue_SMK069ValidateCustomerSp
-[IN PROGRESS] generated parameter review before final method save
+[COMPLETED] generated parameter review
+[IN PROGRESS] IDO method save/persistence verification
 [PENDING]   customer validation execution tests
 [PENDING]   Process/reprocess method
 [PENDING]   controlled service IDO receive method
@@ -78,9 +80,7 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
-- Click OK on the populated Method Attributes screen and review generated parameters.
-- Confirm `SiteRef` and `CoNum` are input parameters and `Infobar` is output.
-- Review parameter order, data types, lengths, and SQL return-value representation before saving the IDO method.
+- Save the current IDO Methods record, close the form, reopen it, and confirm `ue_SMK069ValidateCustomerSp` plus all three parameters remain.
 - Test invalid and valid customer outcomes against `customer_mst` one at a time.
 - Add controlled Process/Reprocess logic for `SiteRef + co_num`.
 - Design and implement the controlled service IDO receive method shared by CSV and REST API ingestion.
