@@ -102,19 +102,35 @@ SiteRef + co_num + co_line
 [COMPLETED] Order Date and CO Number controls displayed
 [COMPLETED] Preview button displayed
 [COMPLETED] blank-filter validation verified
-[IN PROGRESS] Preview filtering behavior tests
+[COMPLETED] controlled staging test data created
+[COMPLETED] CO Number-only Preview filtering verified
+[IN PROGRESS] remaining Preview filtering tests
 [NOT STARTED] customer validation
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import for SMK069
+[NOT STARTED] controlled service IDO receive method
+[NOT STARTED] REST API ingestion
 [NOT STARTED] final API technical document and Postman examples
 ```
 
-The tenant screenshot dated 29 July 2026 confirms the form opens and shows this validation when Preview is clicked with both filters blank:
+## Tenant Evidence
+
+The blank-filter test displays:
 
 ```text
 Isi Order Date atau CO Number sebelum Preview.
 ```
+
+Controlled test rows:
+
+```text
+TEST000001 | 2026-07-29 | line 1
+TEST000001 | 2026-07-29 | line 2
+TEST000002 | 2026-07-30 | line 1
+```
+
+A tenant screenshot confirms that entering `TEST000001` in CO Number with Order Date blank returns exactly its two lines and excludes `TEST000002`.
 
 Still pending separate verification:
 
@@ -122,21 +138,20 @@ Still pending separate verification:
 - primary collection from form metadata
 - all 20 required grid properties
 - seven required read-only fields
-- CO Number-only filtering
 - Order Date-only filtering
-- combined filtering
+- combined Order Date + CO Number filtering
 ```
 
 ## Immediate Next Step
 
-Test only the existing CO Number filter:
+Test only the existing Order Date filter:
 
 ```text
-1. Select a co_num that already exists in dbo.ue_SMK069_temp_sales_mst
-2. Leave Order Date blank
-3. Enter the value in CO Number
-4. Click Preview
-5. Confirm only rows for that co_num are displayed
+1. Clear CO Number
+2. Enter 7/29/2026 in Order Date
+3. Click Preview
+4. Confirm TEST000001 line 1 and line 2 are displayed
+5. Confirm TEST000002 dated 7/30/2026 is excluded
 ```
 
 Do not add or test Process logic yet.
@@ -146,6 +161,21 @@ Detailed guide and implementation record:
 ```text
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 ```
+
+## API Direction
+
+The project target remains an API integration, not only a form.
+
+```text
+POS / Postman / sample CSV
+→ controlled service IDO receive method
+→ dbo.ue_SMK069_temp_sales_mst
+→ validation and Error Processing form
+→ supported Customer Order business process
+→ co_mst + coitem_mst
+```
+
+CSV import and REST API ingestion must reuse the same server-side processing core. Direct REST writes to the staging entity IDO are not the intended final architecture, and direct SQL insertion into standard Customer Order tables is prohibited.
 
 ## Development Rules
 
@@ -164,6 +194,7 @@ implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 
 ```text
 docs/16-smk069-sales-spec-alignment.md
+docs/17-current-status-and-new-chat-handoff.md
 database/tables/SMK069_temp_sales_mst.md
 implementation/11-create-SMK069-temp-sales-table.md
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
@@ -176,10 +207,9 @@ CHANGELOG.md
 Anda adalah Senior Infor SyteLine/Mongoose Technical Consultant dan API Integration Developer.
 
 Lanjutkan project private GitHub berikut sebagai source of truth:
-https://github.com/youhunt/api-pos-syteline
 Repository: youhunt/api-pos-syteline
 
-Baca dahulu file berikut dari repository sebelum memberi instruksi:
+Baca dahulu:
 1. docs/16-smk069-sales-spec-alignment.md
 2. docs/17-current-status-and-new-chat-handoff.md
 3. database/tables/SMK069_temp_sales_mst.md
@@ -187,44 +217,22 @@ Baca dahulu file berikut dari repository sebelum memberi instruksi:
 5. implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 6. CHANGELOG.md
 
-Konteks project:
-- Integrasi Pizza Hut POS ke Infor SyteLine/Mongoose.
-- Tahap pertama memakai contoh file CSV karena format resmi POS belum tersedia.
-- Data CSV masuk ke staging, divalidasi, kemudian diproses menjadi Customer Order header dan lines.
-- Target standar SyteLine adalah co_mst dan coitem_mst, tetapi implementasi posting harus menggunakan business process/IDO yang sesuai, bukan direct SQL insert sembarangan.
-
-Koreksi requirement yang sudah dikonfirmasi:
-- Total header = SUM(unit_price * qty_ordered).
-- Cost diambil dari item_mst.
-- Kolom cost tidak dibuat pada temporary table.
-
-Object yang sudah selesai:
-- Metadata table: SMK069_temp_sales_mst
-- Physical table: dbo.ue_SMK069_temp_sales_mst
-- IDO: ue_SMK069TempSales
-- IDO sudah di-update/resync dan properties otomatis sudah terbentuk.
-- Base form ue_SMK069APISalesErrorProcessing sudah dibuat dan berhasil dibuka.
-- Order Date, CO Number, dan Preview sudah tampil.
-- Validasi kedua filter kosong sudah berhasil diuji.
-
-Status Preview saat ini:
-- Blank filter validation: COMPLETED
-- CO Number-only filtering: TEST PENDING
-- Order Date-only filtering: TEST PENDING
-- Combined filtering: TEST PENDING
-
-Primary key:
-- SiteRef + co_num + co_line
-
-Catatan penting:
-- Jangan membuat site_ref terpisah; gunakan standard SiteRef.
-- Prefix ue_ muncul pada physical table Cloud dan dipakai pada nama custom IDO/form di tenant ini.
-- Jangan lanjut ke Process sebelum seluruh perilaku Preview teruji.
+Status saat ini:
+- Table SMK069_temp_sales_mst selesai.
+- Physical table: dbo.ue_SMK069_temp_sales_mst.
+- IDO ue_SMK069TempSales selesai dan sudah resync.
+- Form ue_SMK069APISalesErrorProcessing berhasil dibuka.
+- Order Date, CO Number, Preview, dan blank-filter validation sudah ada.
+- Controlled test rows TEST000001 dan TEST000002 sudah dibuat.
+- Preview menggunakan CO Number TEST000001 sudah berhasil dan menampilkan tepat dua line.
+- Order Date-only dan combined filtering belum diuji.
+- Process, customer validation, Customer Order creation, service IDO receive method, dan REST API ingestion belum dimulai.
 
 Langkah berikutnya hanya satu:
-Uji Preview menggunakan CO Number saja dengan co_num yang sudah ada pada temporary table.
+Uji Order Date 7/29/2026 dengan CO Number kosong. Harus menampilkan dua line TEST000001 dan tidak menampilkan TEST000002 yang bertanggal 7/30/2026.
 
-Kerjakan satu langkah kecil per respons. Setelah saya menyatakan langkah berhasil atau mengirim screenshot, baru lanjut langkah berikutnya.
+Target akhirnya tetap API:
+POS/Postman/sample CSV → controlled service IDO → staging → validation → Customer Order standard process.
 
-Setiap ada perubahan desain atau object yang selesai, update dokumentasi repository. Jangan menganggap sebuah langkah selesai hanya karena instruksi sudah diberikan.
+Kerjakan satu langkah kecil per respons dan update dokumentasi hanya setelah hasil tenant benar-benar terkonfirmasi.
 ```
