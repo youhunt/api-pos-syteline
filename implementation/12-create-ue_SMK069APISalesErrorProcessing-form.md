@@ -5,10 +5,12 @@
 ```text
 Table : COMPLETED
 IDO   : COMPLETED and updated
-Form  : NOT CREATED
+Form  : CREATED; SMOKE TEST PENDING
 ```
 
-This document begins at the actual current stop point. Do not recreate the table or IDO.
+The base form object has now been created in the tenant. Do not recreate the table, IDO, or form.
+
+The form is not marked fully completed until the tenant smoke test confirms that it opens successfully, displays the required properties, and enforces the required read-only fields.
 
 ## Object Identity
 
@@ -20,17 +22,36 @@ Form Type          : Grid Only
 Device Type        : Any
 ```
 
-## Step 1 — Create the Base Form
+## Implementation Record — 29 July 2026
 
-Open:
+The user confirmed that the base form object was created.
+
+Recorded implementation scope:
 
 ```text
-Form Wizard
+Form Name          : ue_SMK069APISalesErrorProcessing
+Caption            : SMK API SALES ERROR PROCESSING
+Form Type          : Grid Only
+Primary Collection : ue_SMK069TempSales
+Device Type        : Any
 ```
 
-Create a new Grid Only form using `ue_SMK069TempSales` as the primary collection.
+Verification evidence has not yet been recorded in the repository. Therefore, the current status is:
 
-Select the following properties for the grid:
+```text
+[COMPLETED] form object created
+[PENDING]   form opens successfully without metadata errors
+[PENDING]   all 20 required properties confirmed in the grid
+[PENDING]   required technical fields confirmed read-only
+```
+
+Do not continue to Preview filters or Process logic until the pending smoke-test items are confirmed by the user or supported by a tenant screenshot.
+
+## Step 1 — Base Form Configuration
+
+The base form was designed as a Grid Only form using `ue_SMK069TempSales` as the primary collection.
+
+The required grid properties are:
 
 ```text
 SiteRef
@@ -108,21 +129,21 @@ processed_by
 
 They will be maintained by system validation and processing logic.
 
-## Step 1 Test
+## Current Smoke-Test Step
 
-After the wizard finishes:
+The next development action is only to verify the existing base form:
 
 1. open `ue_SMK069APISalesErrorProcessing`;
 2. confirm the form opens without metadata errors;
 3. confirm the primary collection is `ue_SMK069TempSales`;
 4. confirm all 20 selected properties appear;
-5. confirm process-control fields cannot be edited manually.
+5. confirm the seven required fields cannot be edited manually.
 
 ## Stop Point
 
-Stop after the base form opens successfully.
+Stop after performing the base-form smoke test.
 
-Do not add Preview filters, buttons, or event handlers until this smoke test passes.
+Do not add Preview filters, buttons, event handlers, validation methods, or Customer Order processing until the smoke test passes.
 
 ## Planned Step 2 — Filter Area
 
@@ -172,10 +193,11 @@ cust_num must exist in customer_mst
 ## Implementation Checklist
 
 ```text
-[ ] base Grid Only form created
+[x] base Grid Only form object created
 [ ] form opens successfully
+[ ] primary collection ue_SMK069TempSales confirmed
 [ ] 20 required grid properties displayed
-[ ] technical process fields read-only
+[ ] seven required fields confirmed read-only
 [ ] filter variables added
 [ ] Order Date filter component added
 [ ] CO Number filter component added
