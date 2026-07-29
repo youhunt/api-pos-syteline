@@ -3,14 +3,17 @@
 ## Current Status
 
 ```text
-Table              : COMPLETED
-IDO                : COMPLETED and updated
-Base form          : COMPLETED and opens successfully
-Preview controls   : CREATED
-Blank-filter check : VERIFIED
-Preview filtering  : BLOCKED — staging table has no test data
-Process logic      : NOT STARTED
-API ingestion      : NOT STARTED
+Table                       : COMPLETED
+IDO                         : COMPLETED and updated
+Base form                   : COMPLETED and opens successfully
+Preview controls            : CREATED
+Blank-filter check          : VERIFIED
+Controlled staging test data: CREATED
+CO Number-only filtering    : VERIFIED
+Order Date-only filtering   : TEST PENDING
+Combined filtering          : TEST PENDING
+Process logic               : NOT STARTED
+API ingestion               : NOT STARTED
 ```
 
 Do not recreate the table, IDO, or base form.
@@ -37,18 +40,36 @@ Tenant screenshots confirm:
 [VERIFIED] CO Number filter component is displayed
 [VERIFIED] Preview button is displayed
 [VERIFIED] clicking Preview with both filters blank shows a validation message
-[BLOCKED]  CO Number filtering cannot yet be verified because staging contains no business/test rows
+[VERIFIED] controlled test rows exist in the staging table
+[VERIFIED] CO Number TEST000001 returns exactly line 1 and line 2
+[VERIFIED] TEST000002 is excluded from the TEST000001 result
 ```
 
-Displayed validation message:
+Displayed blank-filter validation message:
 
 ```text
 Isi Order Date atau CO Number sebelum Preview.
 ```
 
-A second screenshot shows CO Number `123` entered and Preview executed, but no matching business row is displayed. This is not evidence that the filter works or fails because the staging table is currently empty.
+The screenshot does not by itself prove every read-only setting. Read-only verification remains a separate tenant check.
 
-The screenshots do not by themselves prove every read-only setting. Read-only verification remains a separate tenant check.
+## Controlled Test Dataset
+
+The following temporary records were created only for form testing:
+
+```text
+TEST000001 | 2026-07-29 | line 1
+TEST000001 | 2026-07-29 | line 2
+TEST000002 | 2026-07-30 | line 1
+```
+
+These records are stored in the custom staging table:
+
+```text
+dbo.ue_SMK069_temp_sales_mst
+```
+
+No direct SQL insert is allowed into standard SyteLine tables `co_mst` or `coitem_mst`.
 
 ## Base Grid Properties
 
@@ -141,49 +162,45 @@ Both entered           → filter by order_date AND co_num
 Both blank             → show validation message; do not load all staging data
 ```
 
-Only the fourth rule is currently verified in the tenant.
-
-## Current Small Step — Provide Controlled Test Data
-
-Preview filtering cannot be tested until the custom staging table contains controlled test rows.
-
-The immediate next step is only to create a small test dataset in:
+Verified rules:
 
 ```text
-dbo.ue_SMK069_temp_sales_mst
+[VERIFIED] Both blank
+[VERIFIED] CO Number only
+[PENDING]  Order Date only
+[PENDING]  Both entered
 ```
 
-This is a custom staging table. No direct SQL insert may be performed into standard SyteLine tables `co_mst` or `coitem_mst`.
+## Current Small Test — Order Date Only
 
-The recommended test dataset contains:
+Perform only this test:
 
-```text
-TEST000001 line 1
-TEST000001 line 2
-TEST000002 line 1
-```
+1. clear the CO Number field;
+2. enter `7/29/2026` in Order Date;
+3. click Preview;
+4. confirm only the two `TEST000001` rows dated `7/29/2026` are displayed;
+5. confirm `TEST000002`, dated `7/30/2026`, is excluded.
 
-This permits verification that filtering by `TEST000001` returns both of its lines and excludes `TEST000002`.
-
-The temporary seed is only for UI smoke testing. The production ingestion direction remains:
-
-```text
-POS / Postman / sample CSV
-→ controlled service IDO method
-→ dbo.ue_SMK069_temp_sales_mst
-→ validation and error processing
-→ supported Customer Order business process
-```
-
-Do not treat a direct staging seed as the final API implementation.
+Do not proceed to Process, customer validation, Customer Order creation, or API implementation during this test.
 
 ## API Direction
 
 The final integration must use a controlled service IDO method rather than exposing unrestricted direct REST writes to the entity IDO.
 
-CSV import and REST API ingestion should call the same reusable server-side receive/validation core so business logic is not duplicated.
+CSV import and REST API ingestion should call the same reusable server-side receive and validation core so business logic is not duplicated.
 
-The official POS payload is still unavailable, so the final external API contract remains pending. A PoC request may use the confirmed SMK069 staging fields, but must not be presented as the final POS contract.
+The official POS payload is still unavailable. The final external API contract therefore remains pending. A PoC request may use the confirmed SMK069 staging fields, but must not be presented as the final POS contract.
+
+Target flow:
+
+```text
+POS / Postman / sample CSV
+→ controlled service IDO receive method
+→ dbo.ue_SMK069_temp_sales_mst
+→ validation and error processing
+→ supported Customer Order business process
+→ co_mst + coitem_mst
+```
 
 ## Planned Process Button
 
@@ -224,8 +241,8 @@ cust_num must exist in customer_mst
 [x] CO Number filter component displayed
 [x] Preview button displayed
 [x] blank-filter validation verified
-[ ] controlled staging test data created
-[ ] CO Number-only filtering verified
+[x] controlled staging test data created
+[x] CO Number-only filtering verified
 [ ] Order Date-only filtering verified
 [ ] combined Order Date + CO Number filtering verified
 [ ] controlled service IDO receive method designed
