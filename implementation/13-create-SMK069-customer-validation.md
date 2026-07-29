@@ -7,8 +7,9 @@ Base form and Preview    : COMPLETED
 process_status display   : VERIFIED
 process_status read-only : VERIFIED
 Method type              : CONFIRMED — Stored Procedure - Standard Method
-Customer validation SP   : NOT CREATED IN TENANT
-IDO method               : NOT CREATED
+Customer validation SP   : CREATED IN TENANT
+IDO method attributes    : CONFIGURED; PARAMETER REVIEW PENDING
+IDO method saved         : NOT YET CONFIRMED
 Process/Reprocess         : NOT STARTED
 Customer Order creation  : NOT STARTED
 API ingestion             : NOT STARTED
@@ -66,36 +67,33 @@ Tenant screenshots dated 29 July 2026 confirm:
 ```text
 IDO Name      : ue_SMK069TempSales
 Method Type   : Stored Procedure - Standard Method
-Stored Proc.  : required existing stored procedure
-Method Name   : required/auto-generated custom method name
-Transactional : available checkbox
+Stored Proc.  : SMK069ValidateCustomerSp
+Method Name   : ue_SMK069ValidateCustomerSp
+Transactional : checked
 ```
 
-The stored procedure must exist before it can be selected in the wizard.
+The stored procedure must exist before it can be selected in the wizard. Its presence in the Stored Procedure dropdown confirms that `dbo.SMK069ValidateCustomerSp` has been created and is visible to Mongoose metadata.
 
-## Corrected Tenant Naming Rule
+## Confirmed Tenant Naming Rule
 
-The user confirmed the actual tenant behavior:
+The tenant applies this naming behavior:
 
 ```text
 Stored Procedure : no ue_ prefix
 IDO Method       : ue_ prefix is added automatically
 ```
 
-Therefore, use:
+Final confirmed object names:
 
 ```text
 Physical stored procedure : dbo.SMK069ValidateCustomerSp
 IDO                        : ue_SMK069TempSales
-Base business method name  : ValidateCustomer
-Actual IDO method name     : confirm the automatically generated ue_ name in the wizard
+IDO method name            : ue_SMK069ValidateCustomerSp
 Method type                : Stored Procedure - Standard Method
-Transactional              : Yes, when the method is registered
+Transactional              : Yes
 ```
 
-Do not manually add `ue_` to the stored procedure name.
-
-Do not finalize the exact published method name until the tenant wizard displays the automatically generated value.
+Do not manually add `ue_` to the physical stored procedure name.
 
 ## Stored Procedure Contract
 
@@ -143,32 +141,49 @@ dbo.ue_SMK069_temp_sales_mst
 
 It does not update `co_mst` or `coitem_mst`.
 
-## Current Small Step
+## Current Small Step — Review Generated Parameters
 
-Create only this stored procedure in the tenant application database:
+The Method Attributes screen is now correctly populated.
 
-```text
-dbo.SMK069ValidateCustomerSp
-```
+Perform only this next action:
 
-After creation, reopen the IDO Method Wizard and confirm it appears in the Stored Procedure dropdown.
-
-Do not click OK to create the IDO method until the generated Method Name and parameter area have been reviewed.
-
-## Next Step After Confirmation
-
-Expected wizard values:
+1. keep these values unchanged:
 
 ```text
 IDO Name      : ue_SMK069TempSales
 Method Type   : Stored Procedure - Standard Method
 Stored Proc.  : SMK069ValidateCustomerSp
-Method Name   : tenant-generated ue_ custom method name; verify from screen
+Method Name   : ue_SMK069ValidateCustomerSp
 Transactional : checked
 ```
 
-Then review the generated parameters before saving.
+2. click `OK`;
+3. when the generated method parameter screen appears, do not finalize or close it yet;
+4. send a screenshot showing every generated parameter, its sequence, input/output direction, data type, and length if visible.
+
+Expected stored-procedure parameters are:
+
+```text
+SiteRef   input
+CoNum     input
+Infobar   output
+```
+
+The wizard may also represent the SQL return value separately. Do not change any generated parameter before the tenant screen is reviewed.
+
+## Next Step After Parameter Confirmation
+
+After parameter mapping is verified:
+
+```text
+- save/register the IDO method;
+- test the method with an invalid staged customer;
+- verify process_status becomes E and validation_msg is populated;
+- then test with a real customer and verify process_status becomes V.
+```
+
+These tests will be performed one at a time.
 
 ## Stop Point
 
-Do not create the Process button, Customer Order, CSV importer, or REST endpoint during this step.
+Do not create the Process button, Customer Order, CSV importer, service receive method, or REST endpoint during this step.
