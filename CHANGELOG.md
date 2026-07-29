@@ -33,8 +33,8 @@ All notable changes to this repository will be documented in this file.
 - `SMK069_temp_sales_mst` implementation documentation aligned to the revised sales requirement.
 - Six SMK069 process-control fields: `process_status`, `validation_msg`, `error_msg`, `retry_count`, `processed_date`, and `processed_by`.
 - `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with completed form and Preview evidence.
-- `implementation/13-create-SMK069-customer-validation.md` with confirmed tenant method type and stored-procedure contract.
-- `database/stored-procedures/ue_SMK069ValidateCustomerSp.sql` draft implementation for reusable customer validation.
+- `implementation/13-create-SMK069-customer-validation.md` with confirmed tenant method type and corrected prefix rules.
+- `database/stored-procedures/SMK069ValidateCustomerSp.sql` draft implementation for reusable customer validation.
 - `docs/17-current-status-and-new-chat-handoff.md` with current progress and API direction.
 - Tenant evidence for completed Preview behavior and read-only `process_status` display mapping.
 
@@ -49,7 +49,9 @@ All notable changes to this repository will be documented in this file.
 - Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
 - Marked the SMK069 base form, all four Preview behaviors, process-status display mapping, and read-only behavior as completed.
 - Confirmed tenant support for `Stored Procedure - Standard Method` on `ue_SMK069TempSales`.
-- Selected `dbo.ue_SMK069ValidateCustomerSp` as the physical validation procedure and `ValidateCustomer` as the published IDO method name.
+- Corrected the customer-validation procedure name from `dbo.ue_SMK069ValidateCustomerSp` to `dbo.SMK069ValidateCustomerSp`.
+- Documented that stored procedures do not receive the `ue_` prefix in this tenant, while custom IDO method names receive `ue_` automatically.
+- Kept the base business method name as `ValidateCustomer`; the exact generated `ue_` method name must be verified in the wizard before saving.
 - Defined customer-not-found as a business validation result (`process_status = E`) rather than a technical stored-procedure failure.
 
 ### Current SMK069 Status
@@ -61,9 +63,9 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] ue_SMK069APISalesErrorProcessing base form and Preview
 [COMPLETED] process_status display and read-only verification
 [CONFIRMED] Stored Procedure - Standard Method tenant option
-[DRAFTED]   dbo.ue_SMK069ValidateCustomerSp SQL source
+[DRAFTED]   dbo.SMK069ValidateCustomerSp SQL source
 [PENDING]   create customer validation stored procedure in tenant
-[PENDING]   register ValidateCustomer IDO method
+[PENDING]   register tenant-generated ue_ customer validation IDO method
 [PENDING]   Process/reprocess method
 [PENDING]   controlled service IDO receive method
 [PENDING]   REST API ingestion
@@ -72,9 +74,9 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
-- Create `dbo.ue_SMK069ValidateCustomerSp` in the tenant application database.
+- Create `dbo.SMK069ValidateCustomerSp` in the tenant application database.
 - Verify the procedure appears in the IDO Method Wizard Stored Procedure dropdown.
-- Register `ValidateCustomer` as a transactional Stored Procedure - Standard Method after reviewing generated parameters.
+- Review the tenant-generated `ue_` Method Name and generated parameters before saving the transactional method.
 - Test valid and invalid customer outcomes against `customer_mst`.
 - Add controlled Process/Reprocess logic for `SiteRef + co_num`.
 - Design and implement the controlled service IDO receive method shared by CSV and REST API ingestion.
