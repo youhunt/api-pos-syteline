@@ -46,10 +46,11 @@ All notable changes to this repository will be documented in this file.
 - Test workspace and evidence-recording guidance under `tests/`.
 - `SMK069_temp_sales_mst` implementation documentation aligned to the revised sales requirement.
 - Six SMK069 process-control fields: `process_status`, `validation_msg`, `error_msg`, `retry_count`, `processed_date`, and `processed_by`.
-- `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with the next-step base-form guide.
+- `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with the base-form and Preview test guide.
 - `docs/17-current-status-and-new-chat-handoff.md` with actual progress, development rules, and a ready-to-paste new-chat prompt.
 - Tenant implementation record for the created `ue_SMK069APISalesErrorProcessing` Grid Only form object.
-- Explicit smoke-test gate requiring successful form opening, 20 required grid properties, and seven read-only fields before the form is marked fully completed.
+- Tenant evidence that the form opens successfully and displays the Order Date, CO Number, and Preview controls.
+- Verified blank-filter validation message: `Isi Order Date atau CO Number sebelum Preview.`
 
 ### Changed
 
@@ -67,8 +68,8 @@ All notable changes to this repository will be documented in this file.
 - Removed `cost` from the implemented SMK069 staging design after confirmation that cost is obtained from `item_mst`.
 - Corrected the SMK069 header calculation to `SUM(unit_price * qty_ordered)`.
 - Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
-- Updated SMK069 progress to reflect that the table and `ue_SMK069TempSales` IDO are complete.
-- Updated the base-form status from not created to created with smoke test pending; Preview and Process remain not started.
+- Updated SMK069 status to mark the base form opening and blank-filter validation as completed.
+- Advanced the current task from base-form creation to Preview filtering tests.
 
 ### Current SMK069 Status
 
@@ -76,9 +77,11 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] SMK069_temp_sales_mst table
 [COMPLETED] process-control columns
 [COMPLETED] ue_SMK069TempSales IDO and properties update
-[COMPLETED] ue_SMK069APISalesErrorProcessing form object created
-[IN PROGRESS] base-form smoke test and tenant verification
-[PENDING]   Preview filters
+[COMPLETED] ue_SMK069APISalesErrorProcessing base form
+[COMPLETED] form-opening smoke test
+[COMPLETED] Preview controls displayed
+[COMPLETED] blank-filter validation
+[IN PROGRESS] Preview filtering behavior tests
 [PENDING]   customer validation
 [PENDING]   Process/reprocess method
 [PENDING]   Customer Order header and line creation
@@ -86,8 +89,10 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
-- Complete the base `ue_SMK069APISalesErrorProcessing` smoke test before adding any further UI logic.
-- Add Order Date and CO Number Preview filters after the base form passes its smoke test.
+- Verify CO Number-only Preview filtering.
+- Verify Order Date-only Preview filtering.
+- Verify combined Order Date and CO Number filtering.
+- Confirm all 20 grid properties and the seven required read-only fields.
 - Add `cust_num` validation against `customer_mst`.
 - Add controlled Process/Reprocess logic for all lines belonging to the selected `SiteRef + co_num`.
 - Create Customer Order header and lines using supported SyteLine processing.
