@@ -38,7 +38,7 @@ Physical table : dbo.ue_SMK069_temp_sales_mst
 Entity IDO     : ue_SMK069TempSales
 Form           : ue_SMK069APISalesErrorProcessing
 Form caption   : SMK API SALES ERROR PROCESSING
-Form status    : created; smoke test pending
+Form status    : opens successfully
 ```
 
 ## Implemented Business Properties
@@ -97,9 +97,12 @@ SiteRef + co_num + co_line
 [COMPLETED] six process-control columns added
 [COMPLETED] ue_SMK069TempSales IDO created
 [COMPLETED] IDO updated/resynchronized; properties generated automatically
-[COMPLETED] ue_SMK069APISalesErrorProcessing form object created
-[IN PROGRESS] base-form smoke test and tenant verification
-[NOT STARTED] Preview filters and event handlers
+[COMPLETED] ue_SMK069APISalesErrorProcessing base form created
+[COMPLETED] form opens successfully without metadata error
+[COMPLETED] Order Date and CO Number controls displayed
+[COMPLETED] Preview button displayed
+[COMPLETED] blank-filter validation verified
+[IN PROGRESS] Preview filtering behavior tests
 [NOT STARTED] customer validation
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
@@ -107,30 +110,36 @@ SiteRef + co_num + co_line
 [NOT STARTED] final API technical document and Postman examples
 ```
 
-The form object is recorded as created based on the user's confirmation. It is not considered fully completed until the tenant confirms that it opens successfully, contains the required grid properties, and applies the required read-only behavior.
+The tenant screenshot dated 29 July 2026 confirms the form opens and shows this validation when Preview is clicked with both filters blank:
+
+```text
+Isi Order Date atau CO Number sebelum Preview.
+```
+
+Still pending separate verification:
+
+```text
+- primary collection from form metadata
+- all 20 required grid properties
+- seven required read-only fields
+- CO Number-only filtering
+- Order Date-only filtering
+- combined filtering
+```
 
 ## Immediate Next Step
 
-Verify only the existing base form:
+Test only the existing CO Number filter:
 
 ```text
-Form Name          : ue_SMK069APISalesErrorProcessing
-Caption            : SMK API SALES ERROR PROCESSING
-Form Type          : Grid Only
-Primary Collection : ue_SMK069TempSales
-Device Type        : Any
+1. Select a co_num that already exists in dbo.ue_SMK069_temp_sales_mst
+2. Leave Order Date blank
+3. Enter the value in CO Number
+4. Click Preview
+5. Confirm only rows for that co_num are displayed
 ```
 
-Smoke-test checks:
-
-```text
-1. Form opens without metadata errors
-2. Primary collection is ue_SMK069TempSales
-3. All 20 required grid properties are displayed
-4. SiteRef and six process-control fields are read-only
-```
-
-Do not create Preview or Process logic until this base-form smoke test is confirmed.
+Do not add or test Process logic yet.
 
 Detailed guide and implementation record:
 
@@ -194,23 +203,15 @@ Object yang sudah selesai:
 - Physical table: dbo.ue_SMK069_temp_sales_mst
 - IDO: ue_SMK069TempSales
 - IDO sudah di-update/resync dan properties otomatis sudah terbentuk.
-- Base form object ue_SMK069APISalesErrorProcessing sudah dibuat.
+- Base form ue_SMK069APISalesErrorProcessing sudah dibuat dan berhasil dibuka.
+- Order Date, CO Number, dan Preview sudah tampil.
+- Validasi kedua filter kosong sudah berhasil diuji.
 
-Status form saat ini:
-- Form Name: ue_SMK069APISalesErrorProcessing
-- Caption: SMK API SALES ERROR PROCESSING
-- Form Type: Grid Only
-- Primary Collection: ue_SMK069TempSales
-- Device Type: Any
-- Smoke test belum dikonfirmasi di dokumentasi.
-
-Kolom kontrol yang sudah ada:
-- process_status
-- validation_msg
-- error_msg
-- retry_count
-- processed_date
-- processed_by
+Status Preview saat ini:
+- Blank filter validation: COMPLETED
+- CO Number-only filtering: TEST PENDING
+- Order Date-only filtering: TEST PENDING
+- Combined filtering: TEST PENDING
 
 Primary key:
 - SiteRef + co_num + co_line
@@ -218,17 +219,12 @@ Primary key:
 Catatan penting:
 - Jangan membuat site_ref terpisah; gunakan standard SiteRef.
 - Prefix ue_ muncul pada physical table Cloud dan dipakai pada nama custom IDO/form di tenant ini.
-- Jangan menandai form fully completed sebelum form berhasil dibuka, 20 properties terkonfirmasi, dan field read-only teruji.
+- Jangan lanjut ke Process sebelum seluruh perilaku Preview teruji.
 
 Langkah berikutnya hanya satu:
-Bantu saya melakukan smoke test base form ue_SMK069APISalesErrorProcessing sampai berhasil dibuka.
+Uji Preview menggunakan CO Number saja dengan co_num yang sudah ada pada temporary table.
 
-Periksa:
-- primary collection ue_SMK069TempSales
-- 20 required grid properties
-- SiteRef, process_status, validation_msg, error_msg, retry_count, processed_date, processed_by read-only
-
-Kerjakan satu langkah kecil per respons. Jangan langsung membuat filter, Preview, Process, method, Customer Order, dan API sekaligus. Setelah saya menyatakan langkah berhasil atau mengirim screenshot, baru lanjut langkah berikutnya.
+Kerjakan satu langkah kecil per respons. Setelah saya menyatakan langkah berhasil atau mengirim screenshot, baru lanjut langkah berikutnya.
 
 Setiap ada perubahan desain atau object yang selesai, update dokumentasi repository. Jangan menganggap sebuah langkah selesai hanya karena instruksi sudah diberikan.
 ```
