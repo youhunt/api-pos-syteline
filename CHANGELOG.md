@@ -27,7 +27,8 @@ Lines  : SL.SLCoitems
 - `tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md` confirming published parameter metadata properties.
 - `tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md` confirming `InputFlag`, `OutputFlag`, and `MessageFlag`.
 - `tests/evidence/2026-07-30-idomethods-idoinfo-properties.md` confirming published method-level metadata properties.
-- `tests/evidence/2026-07-30-create-co-and-lines-method-row.md` recording the effective method rows for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
+- `tests/evidence/2026-07-30-create-co-and-lines-method-row.md` recording effective method contexts for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
+- `tests/evidence/2026-07-30-idocollections-idoinfo-properties.md` confirming collection-level extension and inheritance metadata properties.
 
 ### Changed
 
@@ -88,10 +89,22 @@ SLCos_FT
 ZIT_SLCos
 ```
 
-- Recorded that `MethodDesc`, `StoredProcName`, and `DerOutriggerProfile` are NULL for all returned rows.
-- Avoided assuming the inheritance or implementation owner because the collection hierarchy is not yet tenant-confirmed.
-- Kept the supported Customer Order creation sequence unconfirmed until the exact JSON schema and runtime result behavior are verified.
-- Advanced the next step to read-only `IdoCollections` property discovery.
+- Recorded that `MethodDesc`, `StoredProcName`, and `DerOutriggerProfile` are NULL for all returned method rows.
+- Confirmed that `IdoCollections` exposes the following implementation and hierarchy properties:
+
+```text
+Extends
+ExtClassName
+ExtClassNamespace
+CustomAssemblyName
+ServerName
+AccessAs
+OutriggerProfile
+DerServerPlusCollection
+```
+
+- Kept the supported Customer Order creation sequence unconfirmed until the collection hierarchy, exact JSON schema, and runtime result behavior are verified.
+- Advanced the next step to a read-only metadata load for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
 
 ### Current SMK069 Status
 
@@ -111,7 +124,8 @@ ZIT_SLCos
 [CONFIRMED] CoAndLineInfoJson = input-only
 [CONFIRMED] CoResult = input/output + message parameter
 [CONFIRMED] effective contexts = SLCos, SLCos_FT, ZIT_SLCos
-[NEXT] inspect read-only IdoCollections property metadata
+[CONFIRMED] IdoCollections extension/inheritance metadata properties
+[NEXT] load collection rows for SLCos, SLCos_FT, and ZIT_SLCos
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -120,8 +134,8 @@ ZIT_SLCos
 
 ### Planned
 
-- Call REST v1 IDOInfo for `IdoCollections` and identify properties related to base collection, inheritance, extension class, assembly, or profile metadata.
-- Load collection metadata for `SLCos`, `SLCos_FT`, and `ZIT_SLCos` only after the property names are confirmed.
+- Load read-only `IdoCollections` rows for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
+- Confirm the actual `Extends` chain and extension class, namespace, assembly, server project, access-as, outrigger, and server-plus metadata.
 - Determine the exact `CoAndLineInfoJson` schema and `CoResult` behavior without risking standard-table inserts.
 - Inspect `NewCustomerOrderValidSp` or `SL.SLCoitems` methods only after `CreateCoAndLines` has been evaluated.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
