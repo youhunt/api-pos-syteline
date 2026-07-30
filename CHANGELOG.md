@@ -11,8 +11,7 @@ All notable changes to this repository will be documented in this file.
 - `SMK069_temp_sales_mst` implementation documentation and six process-control fields.
 - Completed `ue_SMK069APISalesErrorProcessing` base form and Preview documentation.
 - `dbo.SMK069ValidateCustomerSp` and `ue_SMK069ValidateCustomerSp` implementation documentation.
-- Evidence for invalid-customer direct SQL and Mongoose REST tests.
-- Evidence for valid-customer Mongoose REST response and persisted Valid staging result.
+- Evidence for invalid-customer and valid-customer SQL/Mongoose REST tests.
 - `implementation/14-discover-standard-customer-order-processing.md` for tenant-specific Customer Order discovery.
 - Evidence confirming standard Customer Order IDOs:
 
@@ -22,10 +21,11 @@ Lines  : SL.SLCoitems
 ```
 
 - `tests/evidence/2026-07-30-slcoss-header-method-list.md` recording relevant standard header-method candidates.
-- `tests/evidence/2026-07-30-create-co-and-lines-parameters.md` recording the standard extension-method parameter metadata.
+- `tests/evidence/2026-07-30-create-co-and-lines-parameters.md` recording the standard extension-method parameter names.
 - `implementation/15-idomethodparameters-metadata-fallback.md` documenting the failed legacy metadata route and successful REST v1 fallback.
 - `tests/evidence/2026-07-30-idomethodparameters-info-endpoint-500.md` recording the generic HTTP 500 response.
-- `tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md` confirming published metadata properties including parameter direction flags.
+- `tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md` confirming published metadata properties.
+- `tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md` confirming `InputFlag`, `OutputFlag`, and `MessageFlag` for both parameters.
 
 ### Changed
 
@@ -65,29 +65,18 @@ Transactional : unchecked / false
 Stored Proc.  : not applicable
 ```
 
-- Confirmed `CreateCoAndLines` parameter rows:
+- Confirmed `CreateCoAndLines` parameter direction contract:
 
 ```text
-1. CoAndLineInfoJson : VARIANT
-2. CoResult          : VARIANT
+CoAndLineInfoJson : VARIANT, InputFlag=1, OutputFlag=0, MessageFlag=0
+CoResult          : VARIANT, InputFlag=1, OutputFlag=1, MessageFlag=1
 ```
 
-- Confirmed that `IdoMethodParameters` exposes these relevant properties:
-
-```text
-CollectionName
-MethodName
-ParameterName
-Sequence
-DataType
-InputFlag
-OutputFlag
-MessageFlag
-```
-
+- Confirmed that `CoAndLineInfoJson` is input-only.
+- Confirmed that `CoResult` is input/output and is the framework message parameter.
 - Replaced the failed `/ido/info/IdoMethodParameters` route with the successful REST v1 IDOInfo fallback.
-- Advanced the next step to a read-only Advanced LoadCollection query filtered to `SLCos / CreateCoAndLines`.
-- Kept the supported Customer Order creation sequence unconfirmed until parameter directions, JSON schema, and behavior are verified.
+- Kept the supported Customer Order creation sequence unconfirmed until the exact JSON schema and runtime result behavior are verified.
+- Advanced the next step to a read-only `IdoMethods` metadata inspection; no business method execution is required.
 
 ### Current SMK069 Status
 
@@ -98,16 +87,15 @@ MessageFlag
 [COMPLETED] process_status display and read-only verification
 [COMPLETED] dbo.SMK069ValidateCustomerSp
 [COMPLETED] ue_SMK069ValidateCustomerSp transactional IDO method
-[COMPLETED] invalid-customer direct SQL and Mongoose REST tests
-[COMPLETED] valid-customer Mongoose REST and persisted staging tests
+[COMPLETED] invalid-customer and valid-customer tests
 [COMPLETED] mandatory customer validation requirement
 [CONFIRMED] standard Customer Order header IDO = SL.SLCos
 [CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
 [REVIEWED] SL.SLCos method-name list
 [CONFIRMED] CreateCoAndLines is Extension Class - Standard Method
-[CONFIRMED] CreateCoAndLines parameters = CoAndLineInfoJson, CoResult
-[CONFIRMED] IdoMethodParameters direction properties are available
-[NEXT] load direction rows for SLCos / CreateCoAndLines
+[CONFIRMED] CoAndLineInfoJson = input-only
+[CONFIRMED] CoResult = input/output + message parameter
+[NEXT] discover exact CreateCoAndLines JSON schema
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -116,7 +104,7 @@ MessageFlag
 
 ### Planned
 
-- Load only the `IdoMethodParameters` rows for `SLCos / CreateCoAndLines` and inspect `InputFlag`, `OutputFlag`, and `MessageFlag`.
+- Read `IdoMethods` property metadata and identify any implementation-class, assembly, source, help, or description fields.
 - Determine the exact `CoAndLineInfoJson` schema and `CoResult` behavior without risking standard-table inserts.
 - Inspect `NewCustomerOrderValidSp` or `SL.SLCoitems` methods only after `CreateCoAndLines` has been evaluated.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
