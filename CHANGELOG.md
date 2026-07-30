@@ -33,6 +33,7 @@ tests/evidence/2026-07-30-event-action-metadata-collections.md
 tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
+tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no-match.md
 ```
 
 ### Changed
@@ -81,9 +82,11 @@ Base64 decode
 EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
 EventActions.Parameters LIKE '%CreateCoAndLines%'
 EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
+EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 ```
 
-- Selected `EventActions.SubstitutedParameters` as the next separate fallback. Revision metadata remains a later path.
+- Exhausted the current `EventActions` fields without finding the call site.
+- Selected read-only `EventActionRevisions` property discovery as the next step before filtering any revision rows.
 
 ### Current SMK069 Status
 
@@ -102,7 +105,8 @@ EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
 [COMPLETED] parent MethodToCall search = zero rows
 [COMPLETED] raw EventActions.Parameters search = zero rows
 [COMPLETED] EventActions.ExpandedParameters search = zero rows
-[NEXT] filter EventActions.SubstitutedParameters for CreateCoAndLines
+[COMPLETED] EventActions.SubstitutedParameters search = zero rows
+[NEXT] read EventActionRevisions property metadata
 [PENDING] locate exact standard CreateCoAndLines call site
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
@@ -113,8 +117,9 @@ EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
 
 ### Planned
 
-- Filter `EventActions.SubstitutedParameters` for `CreateCoAndLines` using a read-only REST v1 load.
-- Inspect revision, form, or script metadata only as later separate steps if the substituted search returns no match.
+- Read `EventActionRevisions` IDOInfo property metadata.
+- Filter revision metadata only after the tenant-published property contract is confirmed.
+- Inspect event-handler revisions, form metadata, or scripts only as later separate steps when evidence requires them.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
