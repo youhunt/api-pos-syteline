@@ -7,7 +7,7 @@ Environment                        : DEV
 Disposable Customer Order testing : ALLOWED
 ```
 
-The environment gate for a controlled runtime probe is passed.
+The environment gate for controlled runtime probing is passed.
 
 ## Confirmed Method
 
@@ -27,52 +27,112 @@ CoAndLineInfoJson : input-only
 CoResult          : input/output + message parameter
 ```
 
+## Completed First Runtime Probe
+
+Submitted values:
+
+```text
+CoAndLineInfoJson : {
+CoResult          : blank
+```
+
+Tenant response:
+
+```json
+{
+  "Message": null,
+  "MessageCode": 0,
+  "Parameters": [
+    "{",
+    "[{\"ErrrorMessage\":\"The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters. \",\"Status\":\"Fail\",\"Message\":\"Error occurred during customer order/line creation\"}]"
+  ],
+  "ReturnValue": null
+}
+```
+
+## Confirmed Discovery
+
+```text
+CoAndLineInfoJson must contain Base64-encoded content.
+```
+
+The raw `{` value failed during Base64 decoding. The decoded JSON schema remains unknown.
+
+`MessageCode = 0` means the method call reached the Mongoose method layer; it does not mean Customer Order creation succeeded. The business result must be read from `CoResult`.
+
+Confirmed failure result shape:
+
+```text
+CoResult = string containing a JSON array
+Status   = Fail
+Message  = Error occurred during customer order/line creation
+Key      = ErrrorMessage
+```
+
+The exact tenant key is `ErrrorMessage` with three consecutive `r` characters.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
+```
+
 ## Current Unknowns
 
 ```text
-- exact CoAndLineInfoJson schema
+- decoded JSON property names and nesting
 - required and optional header fields
 - required and optional line fields
 - co_num generation behavior
 - success CoResult shape
-- failure CoResult shape
+- deeper JSON validation errors
 - atomicity of header and line creation
 ```
 
 ## Next Step Only
 
-Run one deliberately malformed JSON contract probe:
+Perform a separate read-only verification for Customer Orders created around the first probe:
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/SLCos/CreateCoAndLines?parms=%7B,
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
+```sql
+SELECT TOP (20)
+       co_num,
+       cust_num,
+       order_date,
+       CreateDate,
+       CreatedBy,
+       RecordDate,
+       UpdatedBy
+FROM dbo.co_mst
+WHERE RecordDate >= DATEADD(MINUTE, -30, GETDATE())
+   OR CreateDate >= DATEADD(MINUTE, -30, GETDATE())
+ORDER BY COALESCE(RecordDate, CreateDate) DESC;
 ```
 
-Postman Params equivalent:
+Send the complete result, including an empty result. If SQL reports an unavailable column, send the exact error and stop.
+
+Do not invoke `CreateCoAndLines` again during this step.
+
+## Prepared Future Probe — Not Yet Authorized
+
+After no-order verification, the next malformed decoded-content probe may use:
 
 ```text
-parms = {,
+Raw content : {
+Base64      : ew==
 ```
 
-The first parameter is the malformed JSON value `{`; the trailing comma supplies the blank initial value for `CoResult`.
-
-Capture the complete HTTP status and JSON response. Do not replace the malformed payload with guessed valid JSON during this step.
+This is intended to pass Base64 decoding and reach JSON parsing. Do not send it yet.
 
 ## Status
 
 ```text
-Environment gate           : PASSED
-Malformed runtime probe    : READY — NOT YET EXECUTED
-Valid order probe          : NOT READY
-Process/Reprocess           : NOT STARTED
-Customer Order creation     : NOT STARTED
-Controlled receive API      : NOT STARTED
-```
-
-## Evidence
-
-```text
-tests/evidence/2026-07-30-dev-runtime-test-boundary.md
-implementation/16-controlled-createcoandlines-runtime-probe.md
+Environment gate              : PASSED
+Raw JSON malformed probe      : COMPLETED
+Base64 requirement            : CONFIRMED
+No-order read-only check      : PENDING
+Base64 malformed-content test : NOT YET RUN
+Valid order probe             : NOT READY
+Process/Reprocess              : NOT STARTED
+Customer Order creation        : NOT STARTED
+Controlled receive API         : NOT STARTED
 ```
