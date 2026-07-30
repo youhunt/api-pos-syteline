@@ -3,21 +3,18 @@
 ## Status
 
 ```text
-Environment                         : DEV
-Controlled malformed probes         : COMPLETED
-All four no-order checks             : COMPLETED — ZERO ROWS
-Base64 input requirement             : CONFIRMED
-Decoded payload type                 : JSON object / JObject
-Specific order structure required    : CONFIRMED
-Exact business JSON schema           : NOT YET CONFIRMED
-Further property-name guessing       : STOPPED
-Standard call-site discovery         : STARTED — READ-ONLY
-Candidate event metadata IDOs        : CONFIRMED
-EventHandlers property discovery     : COMPLETED
-Filtered MethodToCall search         : COMPLETED — ZERO ROWS
-Event-action collection discovery    : COMPLETED
-EventActions property discovery      : COMPLETED
-Filtered EventActions.Parameters     : NEXT
+Environment                           : DEV
+Controlled malformed probes           : COMPLETED
+All four no-order checks               : COMPLETED — ZERO ROWS
+Base64 input requirement               : CONFIRMED
+Decoded payload type                  : JSON object / JObject
+Specific order structure required      : CONFIRMED
+Exact business JSON schema             : NOT YET CONFIRMED
+Further property-name guessing         : STOPPED
+Standard call-site discovery           : STARTED — READ-ONLY
+EventHandlers.MethodToCall search       : COMPLETED — ZERO ROWS
+EventActions.Parameters search          : COMPLETED — ZERO ROWS
+EventActions.ExpandedParameters search  : NEXT
 ```
 
 ## Why the Discovery Path Changed
@@ -43,8 +40,6 @@ SLCos.CreateCoAndLines
 A standard call site may reveal the exact JSON construction and Base64 encoding behavior.
 
 ## Confirmed Event Metadata Collections
-
-Read-only tenant metadata returned:
 
 ```text
 EventHandlerRevisions
@@ -100,8 +95,6 @@ tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.m
 
 ## Confirmed Event-Action Collections
 
-Read-only `IdoCollections` discovery returned:
-
 ```text
 EventAction_GenericParms
 EventActionRevisions
@@ -119,8 +112,6 @@ tests/evidence/2026-07-30-event-action-metadata-collections.md
 ```
 
 ## Confirmed EventActions Properties
-
-REST v1 IDOInfo confirmed these call-site-relevant properties:
 
 ```text
 ActionType                     : Byte, required
@@ -141,26 +132,51 @@ IsEventActionRevision          : Byte
 EventHandlerRevisionRowPointer : GUID, read-only
 ```
 
-The strongest first search field is the raw action configuration:
-
-```text
-Parameters
-```
-
-`ExpandedParameters` and `SubstitutedParameters` are derived/read-only fields and remain later fallback paths. No meaning is assigned to numeric `ActionType` values before matching tenant rows are returned.
-
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
 ```
 
-## Current Small Step — Filter Raw EventActions.Parameters
+## Completed Step — Filter Raw EventActions.Parameters
+
+Read-only request:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Tenant result:
+
+```text
+Message        : Success
+MessageCode    : 0
+Items          : zero rows
+MoreRowsExists : false
+```
+
+Confirmed conclusion:
+
+```text
+No current EventActions row stores CreateCoAndLines in raw Parameters.
+```
+
+This does not rule out a standard call site. The reference may be in derived parameter fields, revisions, form metadata, scripts, or another metadata object.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
+```
+
+## Current Small Step — Filter EventActions.ExpandedParameters
 
 Run this read-only REST v1 request:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=ExpandedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
@@ -170,11 +186,11 @@ Capture the complete JSON response, including an empty result.
 ### Interpretation Rules
 
 ```text
-- A returned row proves only that its raw Parameters contains CreateCoAndLines.
+- A returned row proves only that ExpandedParameters contains CreateCoAndLines.
 - Do not infer ActionType meaning from its number alone.
 - Do not execute the action.
-- Do not query ExpandedParameters, SubstitutedParameters, or EventActionRevisions in the same step.
-- If zero rows return, derived parameter fields become a later separate fallback.
+- Do not search SubstitutedParameters or revision metadata in the same step.
+- If zero rows return, SubstitutedParameters becomes a later separate fallback.
 ```
 
 ## Safety Boundary
