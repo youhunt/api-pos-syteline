@@ -25,6 +25,7 @@ tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter
 tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-script-named-metadata-collections.md
 tests/evidence/2026-07-30-script-description-metadata-collections.md
+tests/evidence/2026-07-30-form-named-metadata-collections.md
 ```
 
 ### Changed
@@ -65,18 +66,20 @@ EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 - Attempted `EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'`; the tenant returned `MessageCode 450`, `IllegalFilterException`, and `Items = null`.
 - Classified that attempt as a rejected filter, not a zero-row result.
 - Confirmed `EventHandlerRevisions` has no direct call-site text field and instead exposes child `EventActionRevisions`/`EventActions`.
-- Searched tenant collection names for `Script`; no production form/global script metadata candidate was identified.
-- Searched tenant collection descriptions for `script`; results were:
+- Searched tenant collection names and descriptions for `Script`; neither path identified a production form/global script metadata candidate.
+- Searched tenant collection names for `Form`; the broad substring returned many false positives from words including `Performance`, `Formula`, `Information`, `Format`, and `ProForma`.
+- Confirmed relevant form-oriented candidates:
 
 ```text
-BuildApplicationMessagesScript : temporary application-message script-generation IDO
-Deployment                     : deployment scripts/XML for applet deployment
-SLInvSequences                 : lexical false positive because "description" contains "script"
-SLInvSequences_IDS             : same lexical false-positive mechanism
+FormsAndObjects        : Wrapper for FormControl and FormSync — MGCore/Core
+FormAliases            : MGCore/Core
+AppForms               : IDO for Widget Forms — MGCore/Core
+DocTypeFormProperties  : MGCore/Core
+WSFormExtensionHints   : MGCore/Core
 ```
 
-- Concluded that neither the script-name nor script-description discovery path identified a useful application call-site metadata source.
-- Selected tenant `Form` collection discovery as the next read-only path.
+- Selected `FormsAndObjects` as the strongest tenant-confirmed form metadata candidate because its description directly references `FormControl` and `FormSync`.
+- No claim is made yet that `FormsAndObjects` exposes script text or contains `CreateCoAndLines`; its property contract is the next read-only step.
 - Decision history on 30 July 2026:
 
 ```text
@@ -100,11 +103,12 @@ SLInvSequences_IDS             : same lexical false-positive mechanism
 [COMPLETED] EventActionRevisions.Parameters search = zero rows
 [FAILED] EventActionRevisions.ExpandedParameters filter = IllegalFilterException
 [CONFIRMED] EventHandlerRevisions has no direct call-site text field
-[COMPLETED] Script-named collection discovery = no useful app script candidate
-[COMPLETED] Script-description discovery = no useful app script candidate
+[COMPLETED] Script metadata collection discovery = no useful app script candidate
+[COMPLETED] Form metadata collection discovery
+[SELECTED] FormsAndObjects as strongest form metadata candidate
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] discover tenant collections whose names contain Form
+[NEXT] read FormsAndObjects property metadata
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -114,8 +118,8 @@ SLInvSequences_IDS             : same lexical false-positive mechanism
 
 ### Planned
 
-- Discover tenant `IdoCollections` whose names contain `Form`.
-- Select a relevant form metadata candidate from tenant evidence before reading its property contract or rows.
+- Read `FormsAndObjects` IDOInfo property metadata.
+- Load or filter form rows only after searchable tenant-published properties are confirmed.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
