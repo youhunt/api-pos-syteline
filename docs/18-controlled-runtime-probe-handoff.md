@@ -19,7 +19,8 @@ Script metadata discovery                        : NO USEFUL APP SCRIPT CANDIDAT
 Form metadata discovery                          : COMPLETED
 Selected form candidate                          : FormsAndObjects
 FormsAndObjects properties                       : CONFIRMED
-Next step                                        : FormsAndObjects method metadata/list
+FormsAndObjects IDOInfo Methods section           : NOT EXPOSED
+Next step                                        : IdoMethods rows for FormsAndObjects
 ```
 
 ## Confirmed Runtime Contract
@@ -118,6 +119,32 @@ Parameters
 
 Do not filter `FormsAndObjects` directly for `CreateCoAndLines`, and do not assume `DerXMLData` or `DerBinaryData` contains form source.
 
+## FormsAndObjects Method Discovery Route
+
+The tenant rechecked `idoinfo/FormsAndObjects`. The response exposed only the `Properties` array and no `Methods` section.
+
+This means:
+
+```text
+Repeating idoinfo/FormsAndObjects : not useful for method discovery
+FormsAndObjects has no methods     : NOT established
+Correct metadata source            : IdoMethods
+```
+
+The tenant-confirmed `IdoMethods` property contract includes:
+
+```text
+CollectionName
+MethodName
+BaseCollectionName
+MethodDesc
+MethodType
+TxnFlag
+StoredProcName
+DerOutriggerProfile
+DerSpMethodsAllowed
+```
+
 Evidence:
 
 ```text
@@ -129,6 +156,8 @@ tests/evidence/2026-07-30-script-named-metadata-collections.md
 tests/evidence/2026-07-30-script-description-metadata-collections.md
 tests/evidence/2026-07-30-form-named-metadata-collections.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
+tests/evidence/2026-07-30-formsandobjects-idoinfo-no-methods-section.md
+tests/evidence/2026-07-30-idomethods-idoinfo-properties.md
 ```
 
 ## Decision History
@@ -142,6 +171,10 @@ The stored-procedure option remains deferred and unimplemented.
 
 ## Next Step Only
 
-Obtain the tenant-published method list/metadata for `FormsAndObjects`. Identify method names and classifications only.
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethods/adv?props=CollectionName,MethodName,BaseCollectionName,MethodDesc,MethodType,TxnFlag,StoredProcName,DerOutriggerProfile,DerSpMethodsAllowed&filter=CollectionName%20%3D%20%27FormsAndObjects%27
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
 
 Do not invoke a `FormsAndObjects` method, load a form object, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL.
