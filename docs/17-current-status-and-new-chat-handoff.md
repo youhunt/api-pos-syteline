@@ -56,10 +56,11 @@ Do not create a separate `site_ref`; standard `SiteRef` fulfills both the source
 [COMPLETED] dbo.SMK069ValidateCustomerSp created
 [COMPLETED] ue_SMK069ValidateCustomerSp persisted as transactional standard method
 [COMPLETED] generated parameter review: SiteRef, CoNum, Infobar
-[COMPLETED] invalid customer test case confirmed: TEST000002 / TST0002 NOT FOUND
-[COMPLETED] direct stored-procedure invalid-customer logic test
-[NEXT]      invoke ue_SMK069ValidateCustomerSp through Mongoose IDO REST layer
-[NOT STARTED] valid-customer validation test
+[COMPLETED] invalid customer test case: TEST000002 / TST0002 NOT FOUND
+[COMPLETED] direct stored-procedure invalid-customer test
+[COMPLETED] Mongoose IDO REST invalid-customer invocation test
+[NEXT]      select one real DEFAULT-site customer for valid-customer testing
+[NOT STARTED] valid-customer validation execution test
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -82,7 +83,7 @@ Both blank      → validation message; no unrestricted staging load
 INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)
 ```
 
-The grid displays `New`, `Valid`, `Error`, `Processed`, or `Cancelled`, while the database stores `N`, `V`, `E`, `P`, or `C`. The Status cell is read-only.
+The grid displays descriptive values while the database stores `N`, `V`, `E`, `P`, or `C`. The Status cell is read-only.
 
 ## Customer Validation Object
 
@@ -127,7 +128,7 @@ The procedure reads `customer_mst`, updates only `dbo.ue_SMK069_temp_sales_mst`,
 
 ## Invalid-Customer Evidence
 
-Controlled test case:
+Controlled case:
 
 ```text
 SiteRef       : DEFAULT
@@ -136,7 +137,7 @@ cust_num      : TST0002
 CustomerCheck : NOT FOUND
 ```
 
-Direct SQL execution result:
+Direct SQL execution:
 
 ```text
 ReturnCode     : 0
@@ -145,25 +146,48 @@ process_status : E
 validation_msg : Customer TST0002 tidak ditemukan di customer_mst.
 ```
 
-This proves the stored-procedure logic. It does not yet prove invocation through the IDO or REST layer.
+Mongoose IDO REST response:
+
+```json
+{
+  "Message": null,
+  "MessageCode": 0,
+  "Parameters": [
+    "DEFAULT",
+    "TEST000002",
+    "Customer TST0002 tidak ditemukan di customer_mst."
+  ],
+  "ReturnValue": "0"
+}
+```
+
+This proves that the method is callable through the Mongoose IDO REST layer and returns its output `Infobar` correctly.
+
+Evidence file:
+
+```text
+tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md
+```
 
 ## Immediate Next Step
 
-Invoke the saved IDO method using the existing Mongoose API host and security token:
+Select one real customer from the same site before modifying staging data:
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/ue_SMK069TempSales/ue_SMK069ValidateCustomerSp?parms=DEFAULT,TEST000002,
-Authorization: {{mongooseSecurityToken}}
+```sql
+SELECT TOP (10)
+    c.site_ref,
+    c.cust_num,
+    c.cust_seq,
+    c.name
+FROM dbo.customer_mst AS c
+WHERE c.site_ref = N'DEFAULT'
+  AND c.cust_seq = 0
+ORDER BY c.cust_num;
 ```
 
-Expected:
+Choose one returned `cust_num` for the controlled valid-customer test.
 
-```text
-ReturnValue = 0
-Infobar     = Customer TST0002 tidak ditemukan di customer_mst.
-```
-
-Do not test a valid customer in the same step.
+Do not update `TEST000001` or invoke the validation method during this same step.
 
 ## API Direction
 
@@ -176,16 +200,16 @@ POS / Postman / sample CSV
 → co_mst + coitem_mst
 ```
 
-Direct REST writes to the staging entity IDO are not the intended final architecture. Direct SQL insertion into standard Customer Order tables is prohibited.
+The successful validation-method REST call is an important API-layer proof, but it is not the final external POS receive endpoint. Direct REST writes to the staging entity IDO are not the intended final architecture. Direct SQL insertion into standard Customer Order tables is prohibited.
 
 ## Development Rules
 
 1. Work one small step at a time.
-2. Adapt instructions to the controls actually visible in tenant screenshots.
+2. Adapt instructions to controls actually visible in tenant screenshots.
 3. Distinguish metadata names from physical Cloud SQL names.
-4. Custom IDO/form names use `ue_`; stored procedures follow the confirmed tenant rule without manually adding `ue_`.
+4. Custom IDO/form names use `ue_`; stored procedures do not manually use `ue_` in this tenant.
 5. Never mark a step completed until tenant evidence confirms it.
-6. Keep validation and later processing reusable by form, CSV, and REST API paths.
+6. Keep validation and processing reusable by form, CSV, and REST API paths.
 7. Item mapping and broader item validation remain postponed.
 
 ## Repository Documents to Read First
@@ -198,6 +222,7 @@ database/stored-procedures/SMK069ValidateCustomerSp.sql
 implementation/11-create-SMK069-temp-sales-table.md
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 implementation/13-create-SMK069-customer-validation.md
+tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md
 CHANGELOG.md
 ```
 
@@ -211,12 +236,12 @@ Status saat ini:
 - dbo.SMK069ValidateCustomerSp selesai;
 - ue_SMK069ValidateCustomerSp tersimpan sebagai transactional Stored Procedure Standard Method;
 - parameter SiteRef, CoNum, Infobar terverifikasi;
-- direct SQL invalid-customer test untuk DEFAULT + TEST000002 berhasil: ReturnCode 0, status E, validation_msg terisi;
-- IDO/REST invocation test belum dilakukan;
+- direct SQL invalid-customer test berhasil;
+- IDO REST invalid-customer test berhasil dengan ReturnValue 0 dan output Infobar pada parameter ketiga;
 - valid-customer test, Process, Customer Order creation, controlled service receive method, dan final API ingestion belum dimulai.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Langkah berikutnya hanya panggil ue_SMK069ValidateCustomerSp melalui Mongoose InvokeMethod REST API dengan parameter DEFAULT, TEST000002, dan output Infobar kosong. Jangan lanjut ke valid customer atau Process sebelum hasil IDO invocation terkonfirmasi.
+Langkah berikutnya hanya pilih satu customer nyata untuk SiteRef DEFAULT dari customer_mst. Jangan update staging atau invoke method pada langkah yang sama.
 ```
