@@ -1,20 +1,18 @@
 # 18 — Controlled CreateCoAndLines Runtime Probe Handoff
 
-## Environment and Method
+## Final Status of This Path
 
 ```text
 Environment                        : DEV
-Disposable Customer Order testing : ALLOWED
-IDO                                : SL.SLCos
-Method                             : CreateCoAndLines
-Implementation                     : Customer.SLCos
-Assembly                           : Customer — Binary Only
-Transactional                      : false
-```
-
-```text
-CoAndLineInfoJson : input-only
-CoResult          : input/output + message
+Method                             : SL.SLCos.CreateCoAndLines
+Controlled probes                  : COMPLETED
+Post-probe co_mst checks           : COMPLETED — ZERO ROWS
+Runtime transport                  : Base64
+Decoded payload                    : JSON object / JObject
+Exact business JSON schema         : NOT CONFIRMED
+Metadata call-site discovery       : STOPPED
+Further revision discovery         : CANCELLED
+Reason                             : user-approved pivot to prior SP approach
 ```
 
 ## Confirmed Runtime Contract
@@ -28,7 +26,16 @@ CoAndLineInfoJson
 → Customer Order and line processing
 ```
 
-Completed probes:
+Business result handling:
+
+```text
+- MessageCode = 0 is framework success only.
+- Parse CoResult as a JSON-array string.
+- Evaluate Status for business success/failure.
+- ErrrorMessage is optional and misspelled with three r characters when present.
+```
+
+## Completed Probes
 
 ```text
 Probe 1 : raw {                         → invalid Base64
@@ -37,83 +44,47 @@ Probe 3 : e30=                          → decoded {} → blank order input
 Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
 ```
 
-All four post-probe `dbo.co_mst` checks returned zero rows with no SQL error. Payload-property guessing is stopped.
+All four read-only `dbo.co_mst` checks returned zero rows and no SQL error.
 
-## Business Result Rules
+## Completed Metadata Searches
 
 ```text
-- MessageCode = 0 is not business success.
-- Parse CoResult as a JSON-array string.
-- Evaluate Status.
-- Failure records may or may not include ErrrorMessage.
-- Some failure branches preserve input properties and add Status and Message.
+EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'             : zero rows
+EventActions.Parameters LIKE '%CreateCoAndLines%'                 : zero rows
+EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'         : zero rows
+EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'      : zero rows
 ```
 
-## Standard Call-Site Discovery
+## User-Approved Pivot
 
-Confirmed current searches:
+On 30 July 2026, the user confirmed a previous successful integration used a stored procedure with direct inserts into:
 
 ```text
-EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'              : zero rows
-EventActions.Parameters LIKE '%CreateCoAndLines%'                  : zero rows
-EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'          : zero rows
-EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'       : zero rows
+dbo.co_mst
+dbo.coitem_mst
 ```
 
-The current `EventActions` path is exhausted. These zero-row results do not prove that no standard call site exists. Remaining paths include:
+The project therefore stops further reverse-engineering of `CreateCoAndLines` and moves to:
 
 ```text
-EventActionRevisions
-EventHandlerRevisions
-form metadata
-form or global scripts
-another metadata object
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-event-handler-metadata-collections.md
-tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
-tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
-tests/evidence/2026-07-30-event-action-metadata-collections.md
-tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
-tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
-tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
-tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no-match.md
+implementation/19-controlled-sp-direct-order-processing.md
 ```
 
 ## Next Step Only
 
-Read the published property metadata for `EventActionRevisions`:
+Obtain the previous working stored procedure and review it before drafting or executing any SQL.
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventActionRevisions
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
-```
-
-Send the complete JSON response, especially the `Properties` list.
-
-Do not load revision rows, inspect `EventHandlerRevisions`, invoke `CreateCoAndLines`, guess business-schema properties, or edit metadata in the same step.
-
-## Status
+Required review areas:
 
 ```text
-Four controlled probes                    : COMPLETED
-Four no-order checks                      : COMPLETED — ZERO ROWS
-Payload property guessing                 : STOPPED
-Event metadata collections                : CONFIRMED
-EventHandlers property metadata           : CONFIRMED
-Parent MethodToCall search                : COMPLETED — ZERO ROWS
-Event-action collections                  : CONFIRMED
-EventActions property metadata            : CONFIRMED
-Raw Parameters search                     : COMPLETED — ZERO ROWS
-ExpandedParameters search                 : COMPLETED — ZERO ROWS
-SubstitutedParameters search              : COMPLETED — ZERO ROWS
-EventActionRevisions property discovery   : NEXT
-Exact decoded JSON schema                 : PENDING
-Process/Reprocess                         : NOT STARTED
-Customer Order creation                   : NOT STARTED
-Controlled receive API                    : NOT STARTED
+- input parameters
+- order number generation
+- required header and line columns
+- defaults, site, warehouse, currency, tax, and dates
+- customer and item validation
+- transaction/rollback behavior
+- duplicate and reprocess protection
+- staging status and error updates
 ```
+
+No direct-insert procedure is considered approved merely because the earlier version worked. It must first be adapted to the current tenant and current `SMK069` staging design.
