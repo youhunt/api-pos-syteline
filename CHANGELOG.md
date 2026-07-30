@@ -15,6 +15,7 @@ All notable changes to this repository will be documented in this file.
 - Evidence for valid-customer Mongoose REST response and persisted Valid staging result.
 - `implementation/14-discover-standard-customer-order-processing.md` for tenant-specific standard Customer Order discovery.
 - `tests/evidence/2026-07-30-standard-customer-order-header-ido.md` confirming the standard Customer Order header IDO.
+- `tests/evidence/2026-07-30-standard-customer-order-line-ido.md` confirming the standard Customer Order line IDO.
 
 ### Changed
 
@@ -27,16 +28,16 @@ All notable changes to this repository will be documented in this file.
 - Completed invalid-customer SQL and Mongoose REST validation tests.
 - Completed valid-customer Mongoose REST and persisted staging tests.
 - Marked the first mandatory customer validation requirement fully completed.
-- Recorded that `SL.SLCustomers / oCustomers` belongs to the Customers form and is not the Customer Order header IDO.
-- Confirmed the correct standard Customer Orders form primary IDO as:
+- Recorded that `SL.SLCustomers / oCustomers` belongs to the Customers form and is not a Customer Order IDO.
+- Confirmed the standard Customer Order entity IDOs from tenant evidence:
 
 ```text
-Primary Collection : SL.SLCos
-Collection          : SL.SLCos
-Collection Name     : blank / not assigned
+Header : SL.SLCos
+Lines  : SL.SLCoitems
 ```
 
-- Advanced discovery to identifying the standard Customer Order line secondary collection before inspecting business methods.
+- Confirmed that Collection Name is blank/not assigned on both inspected standard forms.
+- Advanced discovery from object identity to the available standard method/business-process review, starting with `SL.SLCos`.
 
 ### Current SMK069 Status
 
@@ -51,7 +52,8 @@ Collection Name     : blank / not assigned
 [COMPLETED] valid-customer Mongoose REST and persisted staging tests
 [COMPLETED] mandatory customer validation requirement
 [CONFIRMED] standard Customer Order header IDO = SL.SLCos
-[IN PROGRESS] standard Customer Order line IDO/business-process discovery
+[CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
+[IN PROGRESS] standard Customer Order method/business-process discovery
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -60,8 +62,9 @@ Collection Name     : blank / not assigned
 
 ### Planned
 
-- Inspect secondary collections on the standard Customer Orders form and confirm the exact line IDO from tenant evidence.
-- Inspect supported standard Customer Order methods after the line IDO is confirmed.
+- Inspect the available standard method names on `SL.SLCos` without modifying or executing them.
+- Inspect `SL.SLCoitems` methods separately after the header-method review.
+- Identify supported order-number generation, header creation, line creation, and save processing.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts to standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Create Customer Order header and lines using supported SyteLine business processing.
