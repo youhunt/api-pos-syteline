@@ -59,7 +59,8 @@ Do not create a separate `site_ref`; standard `SiteRef` fulfills both the source
 [COMPLETED] invalid customer test case: TEST000002 / TST0002 NOT FOUND
 [COMPLETED] direct stored-procedure invalid-customer test
 [COMPLETED] Mongoose IDO REST invalid-customer invocation test
-[NEXT]      select one real DEFAULT-site customer for valid-customer testing
+[CONFIRMED] parameter 2 is CoNum, not cust_num
+[NEXT]      verify C000001 exists as a real DEFAULT-site customer
 [NOT STARTED] valid-customer validation execution test
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
@@ -124,7 +125,7 @@ Persisted parameters:
 3. Infobar : VARIANT : output
 ```
 
-The procedure reads `customer_mst`, updates only `dbo.ue_SMK069_temp_sales_mst`, and does not update `co_mst` or `coitem_mst`.
+The procedure reads `cust_num` from staging. `cust_num` is not passed directly as a method argument.
 
 ## Invalid-Customer Evidence
 
@@ -169,25 +170,63 @@ Evidence file:
 tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md
 ```
 
+## Parameter Semantics Correction
+
+An attempted valid-customer request used:
+
+```text
+DEFAULT, C000001, <blank Infobar>
+```
+
+Response:
+
+```json
+{
+  "Message": null,
+  "MessageCode": 0,
+  "Parameters": [
+    "DEFAULT",
+    "C000001",
+    "Data staging tidak ditemukan untuk SiteRef DEFAULT dan CO Number C000001."
+  ],
+  "ReturnValue": "16"
+}
+```
+
+This is expected because parameter 2 is `CoNum`. The method searched for a staged order with `co_num = C000001` and found none.
+
+Correct valid-customer test pattern:
+
+```text
+staging TEST000001.cust_num = C000001
+REST parms = DEFAULT, TEST000001, <blank Infobar>
+```
+
+The stored procedure will then read `C000001` from the `TEST000001` staging rows.
+
 ## Immediate Next Step
 
-Select one real customer from the same site before modifying staging data:
+Verify only that candidate customer `C000001` exists:
 
 ```sql
-SELECT TOP (10)
+SELECT
     c.site_ref,
     c.cust_num,
     c.cust_seq,
     c.name
 FROM dbo.customer_mst AS c
 WHERE c.site_ref = N'DEFAULT'
-  AND c.cust_seq = 0
-ORDER BY c.cust_num;
+  AND c.cust_num = N'C000001'
+  AND c.cust_seq = 0;
 ```
 
-Choose one returned `cust_num` for the controlled valid-customer test.
+Expected:
 
-Do not update `TEST000001` or invoke the validation method during this same step.
+```text
+One row for DEFAULT / C000001 / cust_seq 0
+```
+
+Do not update staging or invoke the method in this same step.
 
 ## API Direction
 
@@ -236,12 +275,14 @@ Status saat ini:
 - dbo.SMK069ValidateCustomerSp selesai;
 - ue_SMK069ValidateCustomerSp tersimpan sebagai transactional Stored Procedure Standard Method;
 - parameter SiteRef, CoNum, Infobar terverifikasi;
-- direct SQL invalid-customer test berhasil;
-- IDO REST invalid-customer test berhasil dengan ReturnValue 0 dan output Infobar pada parameter ketiga;
+- direct SQL dan IDO REST invalid-customer tests berhasil;
+- parameter kedua method adalah CoNum, bukan cust_num;
+- pemanggilan DEFAULT,C000001 menghasilkan ReturnValue 16 karena tidak ada staging co_num C000001;
+- C000001 baru kandidat customer valid dan keberadaannya belum dikonfirmasi;
 - valid-customer test, Process, Customer Order creation, controlled service receive method, dan final API ingestion belum dimulai.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Langkah berikutnya hanya pilih satu customer nyata untuk SiteRef DEFAULT dari customer_mst. Jangan update staging atau invoke method pada langkah yang sama.
+Langkah berikutnya hanya verifikasi bahwa customer C000001 ada pada customer_mst untuk SiteRef DEFAULT dan cust_seq 0. Jangan update staging atau invoke method pada langkah yang sama.
 ```
