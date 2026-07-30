@@ -13,6 +13,8 @@ All notable changes to this repository will be documented in this file.
 - `dbo.SMK069ValidateCustomerSp` and `ue_SMK069ValidateCustomerSp` implementation documentation.
 - Evidence for invalid-customer direct SQL and Mongoose IDO REST tests.
 - Evidence file `tests/evidence/2026-07-30-smk069-valid-customer-ido-rest-response.md` for the successful valid-customer API response.
+- Evidence file `tests/evidence/2026-07-30-smk069-valid-customer-staging-result.md` confirming the persisted Valid result.
+- `implementation/14-discover-standard-customer-order-processing.md` for tenant-specific standard Customer Order IDO and method discovery.
 
 ### Changed
 
@@ -20,7 +22,7 @@ All notable changes to this repository will be documented in this file.
 - `cost` removed from staging; cost will be obtained from `item_mst` during Customer Order processing.
 - One standard `SiteRef` is used; no duplicate `site_ref` column.
 - Confirmed tenant naming: stored procedure without `ue_`, custom IDO method with automatic `ue_`.
-- Confirmed method parameters: `SiteRef`, `CoNum`, and output `Infobar`.
+- Confirmed validation method parameters: `SiteRef`, `CoNum`, and output `Infobar`.
 - Clarified that `cust_num` is read from staging and is not passed as method parameter 2.
 - Completed invalid-customer SQL and IDO REST validation tests.
 - Updated staging test customers to real customer values:
@@ -46,7 +48,19 @@ DEFAULT | TEST000002 | C000002 | line 1
 }
 ```
 
-- Advanced validation testing to direct staging verification for `process_status = V` and `validation_msg = NULL`.
+- Verified the persisted valid-customer staging result:
+
+```text
+SiteRef        : DEFAULT
+co_num         : TEST000002
+co_line        : 1
+cust_num       : C000002
+process_status : V
+validation_msg : NULL
+```
+
+- Marked the first mandatory customer validation requirement fully completed for both valid and invalid branches.
+- Advanced development to tenant-specific discovery of the standard Customer Order IDO and supported business process before creating custom Process/Reprocess logic.
 
 ### Current SMK069 Status
 
@@ -61,8 +75,10 @@ DEFAULT | TEST000002 | C000002 | line 1
 [COMPLETED] invalid-customer direct SQL test
 [COMPLETED] invalid-customer Mongoose IDO REST test
 [COMPLETED] valid-customer Mongoose IDO REST response
-[NEXT]      verify TEST000002 process_status = V and validation_msg = NULL
-[PENDING]   Process/reprocess method
+[COMPLETED] valid-customer persisted staging result
+[COMPLETED] mandatory customer validation requirement
+[IN PROGRESS] standard Customer Order IDO/business-process discovery
+[PENDING]   custom Process/reprocess method
 [PENDING]   controlled service IDO receive method
 [PENDING]   final external POS REST API contract
 [PENDING]   Customer Order header and line creation
@@ -70,9 +86,9 @@ DEFAULT | TEST000002 | C000002 | line 1
 
 ### Planned
 
-- Verify the `TEST000002` staging row after the successful valid-customer API response.
-- Mark customer validation fully completed only after the row contains `process_status = V` and `validation_msg = NULL`.
-- Add controlled Process/Reprocess logic for `SiteRef + co_num`.
+- Open the standard Customer Orders form in Design Mode and identify its exact primary collection IDO in this tenant.
+- Inspect supported standard Customer Order methods after the tenant IDO is confirmed.
+- Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts to standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Create Customer Order header and lines using supported SyteLine business processing.
 - Prepare sample CSV import, final API documentation, Postman collection, and deployment runbook.
