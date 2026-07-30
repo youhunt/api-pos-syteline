@@ -18,7 +18,8 @@ EventActionRevisions.ExpandedParameters filter    : FAILED — ILLEGAL FILTER
 EventHandlerRevisions property discovery          : COMPLETED
 Direct handler-revision text search               : NOT AVAILABLE
 Script-name collection discovery                  : COMPLETED — NO USEFUL APP SCRIPT CANDIDATE
-Script-description collection discovery           : NEXT
+Script-description collection discovery           : COMPLETED — NO USEFUL APP SCRIPT CANDIDATE
+Form metadata collection discovery                : NEXT
 ```
 
 ## Confirmed Runtime Findings
@@ -66,32 +67,11 @@ EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 
 The current `EventActions` path is exhausted. This does not prove that no standard call site exists.
 
-## Decision History
+## Revision Metadata Findings
 
-```text
-30 July 2026 — metadata discovery was temporarily stopped for a possible stored-procedure path.
-30 July 2026 — user explicitly requested metadata discovery to continue.
-```
+`EventActionRevisions` publishes raw `Parameters` plus derived/read-only `ExpandedParameters`.
 
-The stored-procedure option remains documented in `implementation/19-controlled-sp-direct-order-processing.md`, but it is deferred and is not the active path.
-
-## EventActionRevisions Limitation
-
-Tenant IDOInfo confirmed:
-
-```text
-ExpandedParameters      : String(4000), read-only
-ActionType              : Byte
-Description             : String(40)
-EventHandlerRowPointer  : GUID
-Parameters              : String(3800)
-Sequence                : Short Integer
-RowPointer              : GUID, read-only
-```
-
-The raw `Parameters` search returned zero rows.
-
-The `ExpandedParameters` filter returned:
+The raw search returned zero rows. Filtering the derived field returned:
 
 ```text
 Message        : Error processing LoadCollection request: IllegalFilterException
@@ -103,72 +83,71 @@ MoreRowsExists : false
 
 This was a rejected filter, not a zero-row result. Do not retry the same filter syntax.
 
+`EventHandlerRevisions` exposes handler context and child `EventActionRevisions`/`EventActions`, but no direct call-site text property comparable to `MethodToCall` or `Parameters`.
+
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
-```
-
-## EventHandlerRevisions Conclusion
-
-`EventHandlerRevisions` publishes handler context and child collections `EventActionRevisions` and `EventActions`, but no direct call-site text property comparable to `MethodToCall` or `Parameters`.
-
-A direct `CreateCoAndLines` filter on `EventHandlerRevisions` is therefore not supported by the tenant-published property contract.
-
-Evidence:
-
-```text
 tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 ```
 
-## Completed Step — Discover Collections Named Script
+## Script Metadata Discovery
 
-Read-only tenant discovery returned:
+### CollectionName contains Script
 
-| CollectionName | Description | ServerName | AccessAs |
-| --- | --- | --- | --- |
-| `BuildApplicationMessagesScript` | Temp IDO that will hold the Derived Binary Value for the script generation | `MGCore` | `Core` |
-| `UTScripts` | NULL | `UnitTesting` | `BaseSyteLine` |
-| `UTScriptSelections` | NULL | `UnitTesting` | `BaseSyteLine` |
-
-Confirmed interpretation:
+The tenant returned:
 
 ```text
 BuildApplicationMessagesScript : temporary application-message script-generation IDO
-UTScripts                      : unit-testing collection
-UTScriptSelections             : unit-testing selection collection
+UTScripts                      : UnitTesting collection
+UTScriptSelections             : UnitTesting selection collection
 ```
 
-No obvious production form-script or global-script metadata collection was found by `CollectionName LIKE '%Script%'`.
+No obvious production form/global script metadata collection was identified.
+
+### CollectionDesc contains script
+
+The tenant returned:
+
+```text
+BuildApplicationMessagesScript : temporary application-message script-generation IDO
+Deployment                     : deployment script/XML processing
+SLInvSequences                 : false positive from substring "script" inside "description"
+SLInvSequences_IDS             : same false-positive mechanism
+```
+
+`Deployment` concerns applet deployment scripts/XML, not application form/global script metadata. The two invoice-sequence rows are lexical false positives because the word `description` contains the substring `script`.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-script-named-metadata-collections.md
+tests/evidence/2026-07-30-script-description-metadata-collections.md
 ```
 
-## Current Small Step — Search Collection Descriptions
+## Decision History
 
-A relevant metadata collection may not contain `Script` in its name. Search the published description instead:
+```text
+30 July 2026 — metadata discovery was temporarily stopped for a possible stored-procedure path.
+30 July 2026 — user explicitly requested metadata discovery to continue.
+```
+
+The stored-procedure option remains documented in `implementation/19-controlled-sp-direct-order-processing.md`, but it is deferred and is not the active path.
+
+## Current Small Step — Discover Form Metadata Collections
+
+Search actual tenant-published collection names rather than guessing a form metadata IDO:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionDesc%20LIKE%20%27%25script%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25Form%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete JSON response, including an empty result.
-
-## Interpretation Rules
-
-```text
-- A returned collection is only a candidate metadata source.
-- Do not infer its property contract from its name, caption, or description.
-- Do not load rows from a candidate collection in the same step.
-- Do not search form metadata separately in the same step.
-```
+Capture the complete JSON response, including `MoreRowsExists`. If many rows return, do not open any candidate collection yet; the next step will select one tenant-confirmed form metadata candidate.
 
 ## Safety Boundary
 
@@ -176,6 +155,7 @@ Capture the complete JSON response, including an empty result.
 - Read metadata only.
 - Do not invoke CreateCoAndLines.
 - Do not guess Customer Order JSON properties.
-- Do not edit revisions, actions, handlers, scripts, events, or metadata.
+- Do not edit revisions, actions, handlers, scripts, forms, events, or metadata.
+- Do not load form rows in the same step.
 - Do not implement Process/Reprocess or direct table inserts yet.
 ```
