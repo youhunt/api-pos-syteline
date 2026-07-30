@@ -15,7 +15,8 @@ Standard call-site discovery              : STARTED — READ-ONLY
 EventHandlers.MethodToCall search          : COMPLETED — ZERO ROWS
 EventActions.Parameters search             : COMPLETED — ZERO ROWS
 EventActions.ExpandedParameters search     : COMPLETED — ZERO ROWS
-EventActions.SubstitutedParameters search  : NEXT
+EventActions.SubstitutedParameters search  : COMPLETED — ZERO ROWS
+EventActionRevisions property discovery    : NEXT
 ```
 
 ## Confirmed Runtime Boundary
@@ -59,7 +60,7 @@ EventActionStates
 EventActionVariableAccess
 ```
 
-`EventActions` is the primary current child-action metadata source.
+`EventActions` is the primary current child-action metadata source. `EventActionRevisions` is the next revision metadata source to inspect.
 
 ## Confirmed EventActions Properties
 
@@ -80,6 +81,12 @@ DerAccessAs                    : String(50)
 EventActionVariableAccess      : CONTAINS
 IsEventActionRevision          : Byte
 EventHandlerRevisionRowPointer : GUID, read-only
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
 ```
 
 ## Completed Call-Site Searches
@@ -129,34 +136,59 @@ Evidence:
 tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
 ```
 
-The absence of matches in these three fields does not rule out a standard call site. Remaining paths include `SubstitutedParameters`, action revisions, handler revisions, form metadata, scripts, or another metadata object.
+### Derived EventActions.SubstitutedParameters
 
-## Current Small Step — Filter EventActions.SubstitutedParameters
+```text
+Filter          : SubstitutedParameters LIKE '%CreateCoAndLines%'
+Rows returned   : 0
+Message         : Success
+MessageCode     : 0
+MoreRowsExists  : false
+Conclusion      : no current SubstitutedParameters reference found
+```
 
-Run this read-only REST v1 request:
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no-match.md
+```
+
+## Current EventActions Conclusion
+
+The current action fields checked are exhausted:
+
+```text
+Parameters             : zero rows
+ExpandedParameters     : zero rows
+SubstitutedParameters  : zero rows
+```
+
+This does not prove that no standard call site exists. Remaining paths include event-action revisions, event-handler revisions, form metadata, scripts, or another metadata object.
+
+## Current Small Step — Read EventActionRevisions Property Metadata
+
+Before filtering revision rows, inspect the tenant-published property contract:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=SubstitutedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventActionRevisions
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete JSON response, including an empty result.
+Capture the complete JSON response, especially the `Properties` list.
 
 ## Interpretation Rules
 
 ```text
-- A returned row proves only that SubstitutedParameters contains CreateCoAndLines.
-- Do not infer ActionType meaning from its number alone.
-- Do not execute the action.
-- Do not inspect revision metadata in the same step.
-- If zero rows return, revision metadata becomes a later separate path.
+- Read metadata only.
+- Do not assume EventActionRevisions uses the same property names as EventActions.
+- Do not load or filter revision rows until the actual property contract is confirmed.
+- Do not inspect EventHandlerRevisions in the same step.
 ```
 
 ## Safety Boundary
 
 ```text
-- Read metadata only.
 - Do not invoke CreateCoAndLines again.
 - Do not guess a Customer Order JSON property.
 - Do not edit event actions, handlers, scripts, events, or metadata.
