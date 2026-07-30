@@ -16,6 +16,7 @@ All notable changes to this repository will be documented in this file.
 - `implementation/14-discover-standard-customer-order-processing.md` for tenant-specific standard Customer Order discovery.
 - `tests/evidence/2026-07-30-standard-customer-order-header-ido.md` confirming the standard Customer Order header IDO.
 - `tests/evidence/2026-07-30-standard-customer-order-line-ido.md` confirming the standard Customer Order line IDO.
+- `tests/evidence/2026-07-30-slcoss-header-method-list.md` recording relevant standard header-method candidates.
 
 ### Changed
 
@@ -37,7 +38,23 @@ Lines  : SL.SLCoitems
 ```
 
 - Confirmed that Collection Name is blank/not assigned on both inspected standard forms.
-- Advanced discovery from object identity to the available standard method/business-process review, starting with `SL.SLCos`.
+- Reviewed the tenant method-name list for `SL.SLCos` without modifying or executing any standard method.
+- Identified the primary creation-related candidates:
+
+```text
+CreateCoAndLines
+NewCustomerOrderValidSp
+CreateCoColSp
+CoCustomerValidSp
+CoCustomerValid2Sp
+CoCustSeqValidSp
+VerifyCoCustNumSp
+CoNextKeyDelSp
+SumCoSp
+```
+
+- Selected `CreateCoAndLines` as the next method for parameter inspection because its name explicitly references both Customer Order header and lines.
+- Kept the supported Customer Order creation sequence unconfirmed until method parameters and behavior are reviewed.
 
 ### Current SMK069 Status
 
@@ -53,7 +70,8 @@ Lines  : SL.SLCoitems
 [COMPLETED] mandatory customer validation requirement
 [CONFIRMED] standard Customer Order header IDO = SL.SLCos
 [CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
-[IN PROGRESS] standard Customer Order method/business-process discovery
+[REVIEWED] SL.SLCos method-name list
+[NEXT] inspect CreateCoAndLines parameter contract
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -62,9 +80,10 @@ Lines  : SL.SLCoitems
 
 ### Planned
 
-- Inspect the available standard method names on `SL.SLCos` without modifying or executing them.
-- Inspect `SL.SLCoitems` methods separately after the header-method review.
-- Identify supported order-number generation, header creation, line creation, and save processing.
+- Inspect `CreateCoAndLines` Method Attributes and complete parameter list without modifying or executing it.
+- Determine whether `CreateCoAndLines` is a supported combined header-and-line creation boundary.
+- Inspect `NewCustomerOrderValidSp` only after `CreateCoAndLines` has been evaluated.
+- Inspect `SL.SLCoitems` methods separately after header-method review.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts to standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Create Customer Order header and lines using supported SyteLine business processing.
