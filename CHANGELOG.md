@@ -21,6 +21,7 @@ implementation/19-controlled-sp-direct-order-processing.md
 
 ```text
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
+tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
 ```
 
 ### Changed
@@ -55,6 +56,7 @@ EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
 EventActions.Parameters LIKE '%CreateCoAndLines%'
 EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
 EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
+EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 ```
 
 - Decision history on 30 July 2026:
@@ -78,6 +80,9 @@ Sequence                : Short Integer
 RowPointer              : GUID, read-only
 ```
 
+- Confirmed `EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'` completed successfully with zero rows.
+- Selected `EventActionRevisions.ExpandedParameters` as the next separate read-only fallback.
+
 ### Current SMK069 Status
 
 ```text
@@ -90,9 +95,10 @@ RowPointer              : GUID, read-only
 [COMPLETED] controlled CreateCoAndLines probes and no-order checks
 [COMPLETED] current event-handler/action call-site searches = zero rows
 [CONFIRMED] EventActionRevisions property metadata
+[COMPLETED] EventActionRevisions.Parameters search = zero rows
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] filter EventActionRevisions.Parameters for CreateCoAndLines
+[NEXT] filter EventActionRevisions.ExpandedParameters for CreateCoAndLines
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -102,8 +108,8 @@ RowPointer              : GUID, read-only
 
 ### Planned
 
-- Filter `EventActionRevisions.Parameters` for `CreateCoAndLines` using a read-only REST v1 load.
-- Search revision `ExpandedParameters`, handler revisions, form metadata, or scripts only as later separate steps when required by tenant evidence.
+- Filter `EventActionRevisions.ExpandedParameters` for `CreateCoAndLines` using a read-only REST v1 load.
+- Search handler revisions, form metadata, or scripts only as later separate steps when required by tenant evidence.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
