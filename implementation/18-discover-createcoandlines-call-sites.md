@@ -17,7 +17,8 @@ EventActionRevisions.Parameters search            : COMPLETED — ZERO ROWS
 EventActionRevisions.ExpandedParameters filter    : FAILED — ILLEGAL FILTER
 EventHandlerRevisions property discovery          : COMPLETED
 Direct handler-revision text search               : NOT AVAILABLE
-Script metadata collection discovery              : NEXT
+Script-name collection discovery                  : COMPLETED — NO USEFUL APP SCRIPT CANDIDATE
+Script-description collection discovery           : NEXT
 ```
 
 ## Confirmed Runtime Findings
@@ -51,7 +52,7 @@ Business-result rules:
 - Failure records may or may not include ErrrorMessage.
 ```
 
-## Completed Current-Metadata Searches
+## Completed Direct Metadata Searches
 
 These searches completed successfully and returned zero rows:
 
@@ -74,7 +75,7 @@ The current `EventActions` path is exhausted. This does not prove that no standa
 
 The stored-procedure option remains documented in `implementation/19-controlled-sp-direct-order-processing.md`, but it is deferred and is not the active path.
 
-## Confirmed EventActionRevisions Properties
+## EventActionRevisions Limitation
 
 Tenant IDOInfo confirmed:
 
@@ -88,32 +89,9 @@ Sequence                : Short Integer
 RowPointer              : GUID, read-only
 ```
 
-Evidence:
+The raw `Parameters` search returned zero rows.
 
-```text
-tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
-```
-
-## Completed Step — Raw EventActionRevisions.Parameters
-
-```text
-Filter          : Parameters LIKE '%CreateCoAndLines%'
-Message         : Success
-MessageCode     : 0
-Rows returned   : 0
-MoreRowsExists  : false
-Conclusion      : no raw revision Parameters reference found
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
-```
-
-## Failed Step — EventActionRevisions.ExpandedParameters Filter
-
-Tenant result:
+The `ExpandedParameters` filter returned:
 
 ```text
 Message        : Error processing LoadCollection request: IllegalFilterException
@@ -123,52 +101,21 @@ Bookmark       : null
 MoreRowsExists : false
 ```
 
-Interpretation:
-
-```text
-- The request did not execute a valid search.
-- This is not a zero-row result.
-- ExpandedParameters cannot be relied on as a server-side filter in this path.
-- Do not retry the same filter syntax.
-```
+This was a rejected filter, not a zero-row result. Do not retry the same filter syntax.
 
 Evidence:
 
 ```text
+tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
+tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
 ```
 
-## Confirmed EventHandlerRevisions Properties
+## EventHandlerRevisions Conclusion
 
-Tenant IDOInfo confirmed these relevant properties:
+`EventHandlerRevisions` publishes handler context and child collections `EventActionRevisions` and `EventActions`, but no direct call-site text property comparable to `MethodToCall` or `Parameters`.
 
-```text
-EventActionRevisions          : CONTAINS
-EventActions                  : CONTAINS
-AccessAs                      : String(50)
-AppliesToInitiators           : String(255)
-AppliesToObjects              : String(255)
-AppliesToSites                : String(255)
-Description                   : String(40)
-EventInitialStateRowPointer   : GUID, read-only
-InitialEventActionRowPointer  : GUID, read-only
-EventName                     : String(50), read-only
-EventRevision                 : Long Integer, read-only
-EventRevisionRowPointer       : GUID, read-only
-InitialStateName              : String(50), read-only
-InitialActionSequence         : Short Integer, read-only
-Sequence                      : Short Integer
-IgnoreFailure                 : Byte
-InWorkflow                    : Byte
-Suspend                       : Byte
-Synchronous                   : Byte
-Transactional                 : Byte
-RowPointer                    : GUID, read-only
-```
-
-`EventHandlerRevisions` does not expose a direct text property comparable to `MethodToCall` or `Parameters`. Its call-bearing content is represented through the child collections `EventActionRevisions` and `EventActions`, whose relevant paths have already been tested.
-
-Therefore, no direct `CreateCoAndLines` filter is authorized on `EventHandlerRevisions` itself.
+A direct `CreateCoAndLines` filter on `EventHandlerRevisions` is therefore not supported by the tenant-published property contract.
 
 Evidence:
 
@@ -176,12 +123,38 @@ Evidence:
 tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 ```
 
-## Current Small Step — Discover Script Metadata Collections
+## Completed Step — Discover Collections Named Script
 
-Use tenant collection metadata rather than guessing script IDO names:
+Read-only tenant discovery returned:
+
+| CollectionName | Description | ServerName | AccessAs |
+| --- | --- | --- | --- |
+| `BuildApplicationMessagesScript` | Temp IDO that will hold the Derived Binary Value for the script generation | `MGCore` | `Core` |
+| `UTScripts` | NULL | `UnitTesting` | `BaseSyteLine` |
+| `UTScriptSelections` | NULL | `UnitTesting` | `BaseSyteLine` |
+
+Confirmed interpretation:
+
+```text
+BuildApplicationMessagesScript : temporary application-message script-generation IDO
+UTScripts                      : unit-testing collection
+UTScriptSelections             : unit-testing selection collection
+```
+
+No obvious production form-script or global-script metadata collection was found by `CollectionName LIKE '%Script%'`.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-script-named-metadata-collections.md
+```
+
+## Current Small Step — Search Collection Descriptions
+
+A relevant metadata collection may not contain `Script` in its name. Search the published description instead:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25Script%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionDesc%20LIKE%20%27%25script%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
@@ -192,9 +165,9 @@ Capture the complete JSON response, including an empty result.
 
 ```text
 - A returned collection is only a candidate metadata source.
-- Do not infer its property contract from its name.
-- Do not load script rows until the actual candidate collection is selected.
-- Do not search form metadata in the same step.
+- Do not infer its property contract from its name, caption, or description.
+- Do not load rows from a candidate collection in the same step.
+- Do not search form metadata separately in the same step.
 ```
 
 ## Safety Boundary
