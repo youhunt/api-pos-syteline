@@ -14,7 +14,9 @@ Metadata call-site discovery                     : RESUMED
 Current EventActions searches                    : COMPLETED — ZERO ROWS
 EventActionRevisions.Parameters search           : COMPLETED — ZERO ROWS
 EventActionRevisions.ExpandedParameters filter   : FAILED — ILLEGAL FILTER
-Next step                                        : EventHandlerRevisions IDOInfo
+EventHandlerRevisions IDOInfo                    : CONFIRMED
+Direct handler-revision text search              : NOT AVAILABLE
+Next step                                        : discover Script metadata collections
 ```
 
 ## Confirmed Runtime Contract
@@ -58,7 +60,7 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'            : zero r
 EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'                : zero rows
 ```
 
-## EventActionRevisions Contract
+## EventActionRevisions Contract and Filter Limitation
 
 ```text
 ExpandedParameters      : String(4000), read-only
@@ -70,9 +72,7 @@ Sequence                : Short Integer
 RowPointer              : GUID, read-only
 ```
 
-## Illegal ExpandedParameters Filter
-
-The read-only filter:
+The filter:
 
 ```text
 EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'
@@ -88,7 +88,31 @@ Bookmark       : null
 MoreRowsExists : false
 ```
 
-This is not a zero-row search. The filter was rejected before a result set was produced. Do not retry the same filter syntax.
+This is not a zero-row search. The filter was rejected before a result set was produced.
+
+## EventHandlerRevisions Contract
+
+Relevant tenant-published properties:
+
+```text
+EventActionRevisions          : CONTAINS
+EventActions                  : CONTAINS
+AccessAs                      : String(50)
+AppliesToInitiators           : String(255)
+AppliesToObjects              : String(255)
+AppliesToSites                : String(255)
+Description                   : String(40)
+EventName                     : String(50), read-only
+EventRevision                 : Long Integer, read-only
+EventRevisionRowPointer       : GUID, read-only
+InitialActionSequence         : Short Integer, read-only
+Sequence                      : Short Integer
+Synchronous                   : Byte
+Transactional                 : Byte
+RowPointer                    : GUID, read-only
+```
+
+No direct call-site text property such as `MethodToCall` or `Parameters` is exposed. The child action collections are the call-bearing path and have already been investigated as far as the tenant permits through direct filtering.
 
 Evidence:
 
@@ -104,6 +128,7 @@ tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
+tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 ```
 
 ## Decision History
@@ -117,14 +142,14 @@ The stored-procedure option remains deferred and unimplemented.
 
 ## Next Step Only
 
-Read the property metadata for `EventHandlerRevisions`:
+Discover actual tenant metadata collections whose names contain `Script`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventHandlerRevisions
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25Script%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete JSON response, especially `Properties`.
+Send the complete JSON response, including an empty result.
 
-Do not filter handler revisions, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
+Do not load script rows, search form metadata, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
