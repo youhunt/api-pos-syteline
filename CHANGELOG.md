@@ -28,6 +28,7 @@ tests/evidence/2026-07-30-script-description-metadata-collections.md
 tests/evidence/2026-07-30-form-named-metadata-collections.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-no-methods-section.md
+tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
 ```
 
 ### Changed
@@ -85,8 +86,27 @@ WSFormExtensionHints   : MGCore/Core
 - Confirmed no obvious direct persistent form-definition property is published for `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
 - Direct filtering of `FormsAndObjects` for `CreateCoAndLines` is therefore not authorized from the property contract alone.
 - Tenant rechecked `idoinfo/FormsAndObjects`; the response exposed `Properties` but no `Methods` section.
-- This does not prove `FormsAndObjects` has no methods; it confirms only that the IDOInfo response does not publish them in a `Methods` array.
-- Selected the tenant-confirmed `IdoMethods` collection as the correct read-only method-discovery path.
+- Used `IdoMethods` as the correct method-discovery source and confirmed:
+
+```text
+Rows returned  : 37
+MethodType 2   : 17
+MethodType 3   : 20
+TxnFlag 0      : 37
+StoredProcName : NULL for all rows
+```
+
+- Identified the strongest current metadata candidates:
+
+```text
+UtilitiesListNames
+UtilitiesLoadObjects / UtilitiesLoadObjects2
+UtilitiesGeneratePseudoCode / UtilitiesGeneratePseudoCode2
+GetUtilitiesOutput
+```
+
+- The possible list → load → generate pseudo-code → retrieve-output sequence remains an inference and has not been invoked.
+- Selected read-only comparison of `UtilitiesGeneratePseudoCode` and `UtilitiesGeneratePseudoCode2` parameter metadata as the next step.
 - Decision history on 30 July 2026:
 
 ```text
@@ -116,9 +136,11 @@ WSFormExtensionHints   : MGCore/Core
 [CONFIRMED] FormsAndObjects property metadata
 [NOT AUTHORIZED] direct FormsAndObjects text search
 [NOT EXPOSED] FormsAndObjects Methods array in IDOInfo response
+[COMPLETED] FormsAndObjects method metadata = 37 methods
+[SELECTED] UtilitiesGeneratePseudoCode and UtilitiesGeneratePseudoCode2 for parameter comparison
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] load IdoMethods scalar rows for FormsAndObjects
+[NEXT] read pseudo-code method parameter metadata
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -128,8 +150,9 @@ WSFormExtensionHints   : MGCore/Core
 
 ### Planned
 
-- Load `IdoMethods` scalar rows where `CollectionName = 'FormsAndObjects'` without invoking any method.
-- Select a read/export/get-object candidate only after its actual method and parameter contract is known.
+- Load parameter metadata for `FormsAndObjects.UtilitiesGeneratePseudoCode%` without invoking either method.
+- Select a pseudo-code method only after the tenant-published parameter contracts are compared.
+- Inspect `GetUtilitiesOutput` parameters later as a separate step when the generation contract supports that flow.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
