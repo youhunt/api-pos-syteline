@@ -21,7 +21,7 @@ All notable changes to this repository will be documented in this file.
 - `SMK069_temp_sales_mst` implementation documentation aligned to the revised sales requirement.
 - Six SMK069 process-control fields: `process_status`, `validation_msg`, `error_msg`, `retry_count`, `processed_date`, and `processed_by`.
 - `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with completed form and Preview evidence.
-- `implementation/13-create-SMK069-customer-validation.md` with method configuration, persistence evidence, SQL test, and IDO REST test results.
+- `implementation/13-create-SMK069-customer-validation.md` with method configuration, persistence evidence, SQL test, IDO REST test, and parameter-semantics correction.
 - `database/stored-procedures/SMK069ValidateCustomerSp.sql` implementation for reusable customer validation.
 - `docs/17-current-status-and-new-chat-handoff.md` with current progress and API direction.
 - Tenant evidence for completed Preview behavior and read-only `process_status` display mapping.
@@ -31,6 +31,7 @@ All notable changes to this repository will be documented in this file.
 - Successful direct execution evidence for `dbo.SMK069ValidateCustomerSp`: ReturnCode `0`, `process_status = E`, and customer-not-found Infobar/validation message.
 - Successful Mongoose IDO REST invocation evidence with `MessageCode = 0`, `ReturnValue = 0`, and the returned customer-not-found Infobar.
 - `tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md` containing the IDO REST response and verification result.
+- Recorded the expected `ReturnValue = 16` response when `C000001` was supplied as parameter 2 and interpreted as a non-existent staging `CoNum`.
 
 ### Changed
 
@@ -47,7 +48,9 @@ All notable changes to this repository will be documented in this file.
 - Defined customer-not-found as a business validation result (`process_status = E`) rather than a technical execution failure.
 - Completed generated parameter review and method persistence verification.
 - Completed both direct stored-procedure and Mongoose IDO REST invalid-customer tests.
-- Advanced the current task to selecting one real `DEFAULT`-site customer for the valid-customer test.
+- Clarified that method parameter 2 is `CoNum`, not `cust_num`; the procedure reads `cust_num` from the selected staging rows.
+- Updated the valid-customer test pattern to assign a real customer to `TEST000001`, then invoke the method with `DEFAULT, TEST000001, <blank Infobar>`.
+- Advanced the current task to verifying candidate customer `C000001` exists for site `DEFAULT` and `cust_seq = 0`.
 
 ### Current SMK069 Status
 
@@ -63,7 +66,8 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] invalid-customer test case confirmation
 [COMPLETED] direct stored-procedure invalid-customer execution test
 [COMPLETED] invalid-customer Mongoose IDO REST invocation test
-[NEXT]      select one real DEFAULT-site customer
+[CONFIRMED] parameter 2 is CoNum, not cust_num
+[NEXT]      verify DEFAULT / C000001 / cust_seq 0 exists
 [PENDING]   valid-customer validation execution test
 [PENDING]   Process/reprocess method
 [PENDING]   controlled service IDO receive method
@@ -73,8 +77,9 @@ All notable changes to this repository will be documented in this file.
 
 ### Planned
 
-- Select one real customer from `customer_mst` where `site_ref = DEFAULT` and `cust_seq = 0`.
-- Prepare and execute a valid-customer validation test separately.
+- Verify `C000001` exists in `customer_mst` for `site_ref = DEFAULT` and `cust_seq = 0`.
+- Assign the verified customer temporarily to the `TEST000001` staging rows and reset their validation state.
+- Invoke `ue_SMK069ValidateCustomerSp` with `DEFAULT, TEST000001, <blank Infobar>` and verify the Valid result.
 - Add controlled Process/Reprocess logic for `SiteRef + co_num`.
 - Design and implement the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Create Customer Order header and lines using supported SyteLine processing.
