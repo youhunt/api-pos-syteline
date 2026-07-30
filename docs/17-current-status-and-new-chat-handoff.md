@@ -21,7 +21,7 @@ POS sample CSV / REST payload
 → co_mst + coitem_mst
 ```
 
-The official POS payload/file format is not yet available. Development remains incremental, but the final target is a controlled API integration.
+The official POS payload/file format is not yet available. The final target remains controlled API integration.
 
 ## Confirmed Requirement Corrections
 
@@ -30,7 +30,7 @@ Header total = SUM(unit_price * qty_ordered)
 Cost         = obtained from item_mst
 ```
 
-`cost` is not stored in the staging table.
+`cost` is not stored in staging. Standard `SiteRef` is used; no separate `site_ref` column is created.
 
 ## Current Objects
 
@@ -46,8 +46,6 @@ Standard Customer Order line IDO   : SL.SLCoitems
 Primary key                        : SiteRef + co_num + co_line
 ```
 
-Do not create a separate `site_ref`; standard `SiteRef` fulfills the source requirement and Mongoose site context.
-
 ## Current Progress
 
 ```text
@@ -59,12 +57,13 @@ Do not create a separate `site_ref`; standard `SiteRef` fulfills the source requ
 [COMPLETED] ue_SMK069ValidateCustomerSp transactional IDO method
 [COMPLETED] invalid-customer SQL and Mongoose REST tests
 [COMPLETED] valid-customer Mongoose REST and persisted staging tests
-[COMPLETED] first mandatory customer validation requirement
+[COMPLETED] mandatory customer validation requirement
 [CONFIRMED] standard Customer Order header IDO = SL.SLCos
 [CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
 [REVIEWED]  SL.SLCos method-name list
-[CONFIRMED] CreateCoAndLines = Extension Class - Standard Method, not Stored Procedure
-[NEXT]      inspect CreateCoAndLines parameter rows
+[CONFIRMED] CreateCoAndLines is Extension Class - Standard Method, not SP
+[CONFIRMED] CreateCoAndLines parameters = CoAndLineInfoJson, CoResult
+[NEXT]      inspect read-only IdoMethodParameters metadata properties
 [NOT STARTED] custom Process/Reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -80,41 +79,24 @@ Method Type   : Stored Procedure - Standard Method
 Stored Proc.  : SMK069ValidateCustomerSp
 Method Name   : ue_SMK069ValidateCustomerSp
 Transactional : checked
+Parameters    : SiteRef, CoNum, Infobar
 ```
 
-Parameters:
-
-```text
-1. SiteRef : input
-2. CoNum   : input
-3. Infobar : output
-```
-
-Verified branches:
+Verified outcomes:
 
 ```text
 Invalid customer → process_status E + validation_msg
 Valid customer   → process_status V + validation_msg NULL
 ```
 
-Customer validation is fully completed and reusable by the form, CSV/import path, controlled API receive method, and Process/Reprocess action.
+The method is reusable by the form, CSV/import path, controlled API receive method, and Process/Reprocess action.
 
 ## Standard Customer Order Entity Discovery
 
-### Header
-
 ```text
-Primary Collection : SL.SLCos
-Collection          : SL.SLCos
-Collection Name     : blank / not assigned
-```
-
-### Lines
-
-```text
-Primary Collection : SL.SLCoitems
-Collection          : SL.SLCoitems
-Collection Name     : blank / not assigned
+Header primary collection : SL.SLCos
+Line primary collection   : SL.SLCoitems
+Collection Name           : blank / not assigned on both forms
 ```
 
 Evidence:
@@ -124,11 +106,11 @@ tests/evidence/2026-07-30-standard-customer-order-header-ido.md
 tests/evidence/2026-07-30-standard-customer-order-line-ido.md
 ```
 
+The earlier `SL.SLCustomers / oCustomers` screenshot belonged to the Customers form and is not a Customer Order IDO.
+
 ## SL.SLCos Method Discovery
 
-The tenant method-name list was reviewed without modifying or executing any standard method.
-
-Most relevant candidates:
+Creation-related candidates found in tenant metadata:
 
 ```text
 CreateCoAndLines
@@ -142,16 +124,7 @@ CoNextKeyDelSp
 SumCoSp
 ```
 
-Current assessment:
-
-```text
-CreateCoAndLines          : strongest combined header-and-line candidate
-NewCustomerOrderValidSp   : validates a new order and may return default co_num
-CreateCoColSp             : possible header/collection creation method
-CoCustomerValidSp         : customer validation and default population
-```
-
-These are candidates only. The supported creation sequence is still not confirmed because parameter contracts have not been reviewed.
+`CreateCoAndLines` was selected for first contract inspection because its name explicitly references both header and lines.
 
 Evidence:
 
@@ -159,47 +132,55 @@ Evidence:
 tests/evidence/2026-07-30-slcoss-header-method-list.md
 ```
 
-## Confirmed `CreateCoAndLines` Attributes
+## Confirmed `CreateCoAndLines` Metadata
 
 ```text
 IDO Name      : SLCos
 Method Name   : CreateCoAndLines
 Method Type   : Extension Class - Standard Method
-Transactional : false / not enabled according to the method list
-Stored Proc.  : not applicable
+Transactional : unchecked / false
+Stored Proc.  : not applicable / blank
 ```
 
-`CreateCoAndLines` is implemented in the standard `SL.SLCos` extension class. It is not a Stored Procedure method, so there is no Stored Procedure name to capture or configure.
+Parameters:
 
-The method's public parameter contract still needs to be inspected before deciding whether it is suitable for SMK069.
+| Sequence | Parameter | Tenant Type |
+| ---: | --- | --- |
+| 1 | `CoAndLineInfoJson` | `VARIANT` |
+| 2 | `CoResult` | `VARIANT` |
+
+Custom Load Method Output Properties is blank because this is a standard method.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-create-co-and-lines-parameters.md
+```
+
+Current inference, not yet final contract:
+
+```text
+CoAndLineInfoJson : likely JSON input for header and lines
+CoResult          : likely result/status output
+```
+
+The visible tenant grid does not expose parameter direction. The exact JSON schema and creation behavior remain unconfirmed.
 
 ## Immediate Next Step
 
-Stay on method:
+Perform only this read-only metadata request:
 
-```text
-IDO         : SL.SLCos
-Method Name : CreateCoAndLines
-Method Type : Extension Class - Standard Method
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/ido/info/IdoMethodParameters
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
 ```
 
-Capture only its parameter metadata:
+Send the response, or at least the property names under `Properties`.
 
-```text
-Parameter Name
-Sequence
-User Data Type
-Input/output direction, if visible
-Custom Load Method Output Properties, if populated
-```
+This does not execute `CreateCoAndLines` and cannot create a Customer Order. The following step will use the confirmed metadata property names to load the rows for `SLCos / CreateCoAndLines` and look for an output/by-reference flag.
 
-Do not look for or supply a Stored Procedure name.
-
-Do not edit, resync, save, or execute the standard method.
-
-Do not inspect another method or `SL.SLCoitems` in the same step.
-
-Do not create Process, Customer Orders, CSV import, or the controlled API receive method during this step.
+Do not invoke another method, create Process logic, create Customer Orders, import CSV, or create the receive API method in this step.
 
 ## API Direction
 
@@ -218,13 +199,13 @@ Direct SQL insertion into `co_mst` or `coitem_mst` remains prohibited.
 ## Development Rules
 
 1. Work one small step at a time.
-2. Use tenant screenshots and actual options as the authority.
+2. Use tenant screenshots and actual metadata as authority.
 3. Distinguish metadata object names from physical SQL names.
 4. Do not mark a step completed until tenant evidence confirms it.
 5. Keep validation and processing reusable by form, CSV, and REST API paths.
-6. Do not perform direct SQL insert into `co_mst` or `coitem_mst`.
+6. Never direct-insert into `co_mst` or `coitem_mst`.
 7. Item mapping and broader item validation remain postponed.
-8. Distinguish Stored Procedure methods from Extension Class methods; `CreateCoAndLines` is an Extension Class method.
+8. Distinguish Stored Procedure methods from Extension Class methods.
 
 ## Repository Documents to Read First
 
@@ -240,6 +221,7 @@ implementation/14-discover-standard-customer-order-processing.md
 tests/evidence/2026-07-30-standard-customer-order-header-ido.md
 tests/evidence/2026-07-30-standard-customer-order-line-ido.md
 tests/evidence/2026-07-30-slcoss-header-method-list.md
+tests/evidence/2026-07-30-create-co-and-lines-parameters.md
 CHANGELOG.md
 ```
 
@@ -249,12 +231,13 @@ CHANGELOG.md
 Lanjutkan repository private youhunt/api-pos-syteline sebagai source of truth.
 
 Current status:
-- staging table, IDO, Error Processing form, Preview, process_status mapping, and customer validation are complete;
-- standard Customer Order header IDO is SL.SLCos;
-- standard Customer Order line IDO is SL.SLCoitems;
+- staging, IDO, Error Processing form, Preview, process_status mapping, and customer validation are complete;
+- standard Customer Order header IDO = SL.SLCos;
+- standard Customer Order line IDO = SL.SLCoitems;
 - SL.SLCos method list has been reviewed;
-- CreateCoAndLines is confirmed as Extension Class - Standard Method, not a Stored Procedure method;
-- relevant candidates also include NewCustomerOrderValidSp, CreateCoColSp, and CoCustomerValidSp;
+- CreateCoAndLines is an Extension Class - Standard Method, Transactional unchecked, and is not a Stored Procedure;
+- CreateCoAndLines parameters are CoAndLineInfoJson sequence 1 VARIANT and CoResult sequence 2 VARIANT;
+- parameter direction and exact JSON schema are not yet confirmed;
 - no standard method has been modified or executed;
 - custom Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not complete.
 
@@ -262,5 +245,5 @@ Target remains:
 POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
 
 Next step only:
-Stay on SL.SLCos method CreateCoAndLines and provide its complete parameter rows: Parameter Name, Sequence, User Data Type, direction if visible, and output properties if populated. Do not look for a Stored Procedure because this is an Extension Class method. Do not modify, resync, save, or execute it, and do not inspect another method or SL.SLCoitems in the same step.
+Call the read-only endpoint /IDORequestService/ido/info/IdoMethodParameters and provide the property names from the response. Do not invoke CreateCoAndLines or create any Customer Order.
 ```
