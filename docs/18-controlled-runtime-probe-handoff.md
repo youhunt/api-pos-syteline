@@ -1,13 +1,11 @@
 # 18 — Controlled CreateCoAndLines Runtime Probe Handoff
 
-## Confirmed Safety Boundary
+## Safety Boundary
 
 ```text
 Environment                        : DEV
 Disposable Customer Order testing : ALLOWED
 ```
-
-The environment gate for controlled runtime probing is passed.
 
 ## Confirmed Method
 
@@ -27,13 +25,15 @@ CoAndLineInfoJson : input-only
 CoResult          : input/output + message parameter
 ```
 
-## Completed First Runtime Probe
+## Completed Probe Results
 
-Submitted values:
+Probe 1 submitted raw `{` and confirmed that `CoAndLineInfoJson` must be Base64-encoded.
+
+Probe 2 submitted:
 
 ```text
-CoAndLineInfoJson : {
-CoResult          : blank
+Base64         : ew==
+Decoded content: {
 ```
 
 Tenant response:
@@ -43,123 +43,67 @@ Tenant response:
   "Message": null,
   "MessageCode": 0,
   "Parameters": [
-    "{",
-    "[{\"ErrrorMessage\":\"The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters. \",\"Status\":\"Fail\",\"Message\":\"Error occurred during customer order/line creation\"}]"
+    "ew==",
+    "[{\"ErrrorMessage\":\"Error reading JObject from JsonReader. Path '', line 1, position 1.\",\"Status\":\"Fail\",\"Message\":\"Error occurred during customer order/line creation\"}]"
   ],
   "ReturnValue": null
 }
 ```
 
-Confirmed discovery:
+## Confirmed Contract
 
 ```text
-CoAndLineInfoJson must contain Base64-encoded content.
+CoAndLineInfoJson
+→ Base64-encoded content
+→ decoded content parsed as JSON object / JObject
+→ schema validation and Customer Order processing
 ```
 
-`MessageCode = 0` does not establish business success. Read the returned `CoResult` string and parse its JSON-array content.
-
-Observed failure keys:
-
-```text
-Status        : Fail
-Message       : Error occurred during customer order/line creation
-Error key     : ErrrorMessage
-```
-
-The exact key `ErrrorMessage` contains three consecutive `r` characters.
+`MessageCode = 0` does not establish business success. Read and parse `CoResult`. The failure branch remains a string containing a JSON array with `Status = Fail` and exact key `ErrrorMessage`.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
-```
-
-## Completed No-Order Verification
-
-A read-only query checked `dbo.co_mst` for orders created or changed in the previous 30 minutes.
-
-Result:
-
-```text
-SQL error                         : none
-Rows returned                    : 0
-Unexpected recent Customer Order : not found
-```
-
-The raw malformed probe therefore did not create a Customer Order within the checked window.
-
-Evidence:
-
-```text
 tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
+tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
 ```
 
 ## Current Unknowns
 
 ```text
-- decoded JSON property names and nesting
-- required and optional header fields
-- required and optional line fields
+- exact JSON property names and nesting
+- required header and line fields
 - co_num generation behavior
 - success CoResult shape
-- deeper JSON parsing or validation errors
-- atomicity of header and line creation
+- atomicity
 ```
 
 ## Next Step Only
 
-Send Base64 for the deliberately malformed decoded content `{`:
+Repeat the same read-only `dbo.co_mst` query used after probe 1 and send the complete result, including an empty result.
+
+Do not invoke `CreateCoAndLines` again during this step.
+
+The empty-object probe is prepared but not yet authorized:
 
 ```text
-Raw content : {
-Base64      : ew==
+Raw decoded content : {}
+Base64              : e30=
 ```
-
-Postman request:
-
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/SLCos/CreateCoAndLines
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
-```
-
-Postman Params:
-
-```text
-parms = ew==,
-```
-
-The trailing comma supplies the blank initial value for `CoResult`.
-
-Expected URL fragment:
-
-```text
-?parms=ew%3D%3D,
-```
-
-Capture the complete HTTP status and JSON response. Do not submit another payload during the same step.
 
 ## Status
 
 ```text
-Environment gate              : PASSED
-Raw JSON malformed probe      : COMPLETED
-Base64 requirement            : CONFIRMED
-No-order read-only check      : COMPLETED — ZERO ROWS
-Base64 malformed-content test : AUTHORIZED — NOT YET RUN
-Valid order probe             : NOT READY
-Process/Reprocess              : NOT STARTED
-Customer Order creation        : NOT STARTED
-Controlled receive API         : NOT STARTED
-```
-
-## Safety Boundary
-
-```text
-- Use exactly ew== as parameter 1.
-- Keep the trailing comma for blank parameter 2.
-- Do not use real Customer Order values.
-- Do not guess schema property names.
-- Do not retry with another payload in the same step.
-- Re-run a separate read-only Customer Order check after the response.
+Raw malformed probe              : COMPLETED
+Base64 requirement               : CONFIRMED
+First no-order check             : COMPLETED — ZERO ROWS
+Base64 malformed JSON probe      : COMPLETED
+JSON object / JObject requirement: CONFIRMED
+Second no-order check            : PENDING
+Empty-object probe               : NOT YET AUTHORIZED
+Valid order probe                : NOT READY
+Process/Reprocess                : NOT STARTED
+Customer Order creation          : NOT STARTED
+Controlled receive API           : NOT STARTED
 ```
