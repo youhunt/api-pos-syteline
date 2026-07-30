@@ -3,39 +3,32 @@
 ## Current Status
 
 ```text
-Customer validation              : FULLY COMPLETED
-Process/Reprocess design          : STARTED — DISCOVERY ONLY
-Standard Customer Order IDO       : CONFIRMED — SL.SLCos
-Standard Customer Order line IDO  : CONFIRMED — SL.SLCoitems
-SL.SLCos method list              : REVIEWED
-CreateCoAndLines method attributes: PARTIALLY CONFIRMED
-CreateCoAndLines parameters       : NOT YET REVIEWED
-Standard header creation process  : NOT YET CONFIRMED
-Standard line creation process    : NOT YET CONFIRMED
-Customer Order creation           : NOT STARTED
-Form Process button               : NOT STARTED
-Controlled API receive method     : NOT STARTED
+Customer validation               : FULLY COMPLETED
+Process/Reprocess design           : STARTED — DISCOVERY ONLY
+Standard Customer Order header IDO : CONFIRMED — SL.SLCos
+Standard Customer Order line IDO   : CONFIRMED — SL.SLCoitems
+SL.SLCos method list               : REVIEWED
+CreateCoAndLines attributes        : CONFIRMED
+CreateCoAndLines parameter names   : CONFIRMED
+Parameter directions / JSON schema : NOT YET CONFIRMED
+Standard creation process          : NOT YET CONFIRMED
+Customer Order creation            : NOT STARTED
+Form Process button                : NOT STARTED
+Controlled API receive method      : NOT STARTED
 ```
 
 ## Objective
 
 Identify the exact standard Customer Order IDOs and supported business process available in the user's SyteLine tenant before creating the custom Process/Reprocess method.
 
-The final custom processor must create:
-
-```text
-Customer Order Header
-Customer Order Lines
-```
-
-with the intended result stored by standard SyteLine processing in:
+The final custom processor must create Customer Order Header and Customer Order Lines through supported SyteLine processing, with the final records stored in:
 
 ```text
 co_mst
 coitem_mst
 ```
 
-Direct SQL insertion into those tables is prohibited.
+Direct SQL insertion into those standard tables is prohibited.
 
 ## Reusable Architecture
 
@@ -55,36 +48,17 @@ co_mst + coitem_mst
 
 The form and future API must call the same processing core.
 
-## Processing Scope
-
-One call processes one staged order group:
+One processing call handles one staged order group:
 
 ```text
 SiteRef + co_num
 ```
 
-All staging lines belonging to that group must be handled together.
+All staging lines for that group must be processed together.
 
-## Discovery Attempt 1 — Customers Form
+## Confirmed Standard Entity IDOs
 
-The first screenshot displayed:
-
-```text
-Primary Collection : SL.SLCustomers
-Collection Name    : oCustomers
-```
-
-This belongs to the standard **Customers** form and is not a Customer Order IDO.
-
-```text
-SL.SLCustomers = customer-master IDO only
-```
-
-No standard object was modified.
-
-## Confirmed Customer Order Header IDO
-
-The correct standard **Customer Orders** form displayed:
+### Customer Order Header
 
 ```text
 Primary Collection : SL.SLCos
@@ -92,21 +66,7 @@ Collection          : SL.SLCos
 Collection Name     : blank / not assigned
 ```
 
-Decision:
-
-```text
-Standard Customer Order header IDO : SL.SLCos
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-standard-customer-order-header-ido.md
-```
-
-## Confirmed Customer Order Line IDO
-
-The standard **Customer Order Lines** form displayed:
+### Customer Order Lines
 
 ```text
 Primary Collection : SL.SLCoitems
@@ -117,41 +77,34 @@ Collection Name     : blank / not assigned
 Decision:
 
 ```text
-Standard Customer Order line IDO : SL.SLCoitems
-```
-
-The tenant's standard entity IDOs are therefore:
-
-```text
-Header : SL.SLCos
-Lines  : SL.SLCoitems
+Header IDO : SL.SLCos
+Line IDO   : SL.SLCoitems
 ```
 
 Evidence:
 
 ```text
+tests/evidence/2026-07-30-standard-customer-order-header-ido.md
 tests/evidence/2026-07-30-standard-customer-order-line-ido.md
 ```
 
-No standard form, collection, IDO, property, or method was modified during discovery.
+The earlier `SL.SLCustomers / oCustomers` screenshot belonged to the Customers form and is customer-master metadata only.
 
-## SL.SLCos Header Method Discovery
+## SL.SLCos Method Discovery
 
-The available method list for `SL.SLCos` was reviewed from tenant metadata.
-
-The list contains many inquiry, status, copy, validation, reporting, and processing methods. The creation-related candidates are:
+The tenant method list includes several creation and validation candidates:
 
 | Method | Method Type | Transactional | Initial Assessment |
 | --- | --- | ---: | --- |
-| `CreateCoAndLines` | Extension Class - Standard Method | No | Strongest combined header-and-line candidate; parameter contract not yet inspected |
+| `CreateCoAndLines` | Extension Class - Standard Method | No | Strongest combined header-and-line candidate |
 | `NewCustomerOrderValidSp` | Extension Class - Standard Method | Yes | Validates a new order and may return a default `co_num` |
 | `CreateCoColSp` | Extension Class - Standard Method | Yes | Candidate header/collection creation method |
 | `CoCustomerValidSp` | Extension Class - Standard Method | Yes | Customer validation and downstream default population |
-| `CoCustomerValid2Sp` | Extension Class - Standard Method | No | Additional customer validation candidate |
+| `CoCustomerValid2Sp` | Extension Class - Standard Method | No | Additional customer-validation candidate |
 | `CoCustSeqValidSp` | Extension Class - Standard Method | Yes | Customer ship-to validation candidate |
 | `VerifyCoCustNumSp` | Extension Class - Standard Method | Yes | Customer/order verification candidate |
-| `CoNextKeyDelSp` | Extension Class - Standard Method | Yes | Possibly related to order-key handling; purpose not assumed |
-| `SumCoSp` | Extension Class - Standard Method | Yes | Likely recalculation/summary after creation |
+| `CoNextKeyDelSp` | Extension Class - Standard Method | Yes | Purpose not yet assumed |
+| `SumCoSp` | Extension Class - Standard Method | Yes | Possible recalculation/summary method |
 
 Evidence:
 
@@ -159,7 +112,7 @@ Evidence:
 tests/evidence/2026-07-30-slcoss-header-method-list.md
 ```
 
-## Confirmed `CreateCoAndLines` Method Attributes
+## Confirmed `CreateCoAndLines` Attributes
 
 Tenant metadata confirms:
 
@@ -167,78 +120,70 @@ Tenant metadata confirms:
 IDO Name      : SLCos
 Method Name   : CreateCoAndLines
 Method Type   : Extension Class - Standard Method
-Transactional : not enabled / false according to the method list
-Stored Proc.  : not applicable; this is not a Stored Procedure method
+Transactional : unchecked / false
+Stored Proc.  : not applicable / blank
 ```
 
-Important distinction:
+`CreateCoAndLines` is implemented by the standard `SL.SLCos` extension class. It is not a Stored Procedure method and there is no Stored Procedure name to configure.
+
+## Confirmed `CreateCoAndLines` Parameter Metadata
+
+The tenant displays two parameters:
+
+| Sequence | Parameter Name | User Data Type |
+| ---: | --- | --- |
+| 1 | `CoAndLineInfoJson` | `VARIANT` |
+| 2 | `CoResult` | `VARIANT` |
+
+The **Custom Load Method Output Properties** area is blank, which is expected for a standard method rather than a custom load method.
+
+Evidence:
 
 ```text
-CreateCoAndLines is implemented by the standard SL.SLCos extension class.
-It must not be documented or configured as a Stored Procedure method.
-There is no Stored Procedure name to capture for this method.
+tests/evidence/2026-07-30-create-co-and-lines-parameters.md
 ```
 
-The implementation-class source code is not exposed by the IDO Methods screen. The supported public contract is represented by the method name, method type, transactional setting, and generated parameter metadata.
+## Current Interpretation — Not Yet Final Contract
 
-## Discovery Decision
+The parameter names strongly suggest:
 
-The tenant clearly provides dedicated Customer Order business methods. However, method names and method type alone do not prove the supported SMK069 creation sequence.
+```text
+CoAndLineInfoJson : JSON payload containing Customer Order header and line information
+CoResult          : returned result/status payload
+```
+
+This is an inference from the parameter names, not yet a confirmed direction or JSON contract.
 
 Still unknown:
 
 ```text
-- CreateCoAndLines parameter contract
-- whether CreateCoAndLines accepts serialized data, XML, JSON, IDO datasets, or scalar values
-- whether it creates both SL.SLCos and SL.SLCoitems records atomically
-- how Customer Order numbering is generated or accepted
-- minimum required header and line values
-- whether NewCustomerOrderValidSp must be called first
-- whether CoCustomerValidSp must populate default values before creation
-- whether UpdateCollection is still required
-- expected return values and Infobar behavior
+- whether CoResult is output-only or input/output
+- the exact JSON property names and nesting
+- required versus optional header fields
+- required versus optional line fields
+- how co_num is generated or accepted
+- success and failure response shape
+- whether the extension method creates header and lines atomically
+- whether NewCustomerOrderValidSp or CoCustomerValidSp must be called first
+- whether UpdateCollection participates in the process
 ```
 
-Do not implement the custom Process/Reprocess method until these tenant-specific details are confirmed.
+Do not implement Process/Reprocess until these tenant-specific details are verified.
 
-## Current Small Step — Inspect Only the Parameters
+## Current Small Step — Read Metadata IDO Properties
 
-Remain on `SL.SLCos` method `CreateCoAndLines` and perform only this discovery step:
+Use a read-only metadata request to identify the properties exposed by the standard metadata IDO `IdoMethodParameters`.
 
-1. do not edit, resync, save, or execute the method;
-2. capture all parameter rows;
-3. include parameter name, sequence, and user data type;
-4. include parameter direction if the tenant screen exposes it;
-5. include any output-property area if populated;
-6. send the screenshot or copy the parameter table.
-
-Required evidence:
-
-```text
-Parameter Name
-Sequence
-User Data Type
-Input/output direction, if visible
-Custom Load Method Output Properties, if any
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/ido/info/IdoMethodParameters
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
 ```
 
-Do not look for a Stored Procedure field or value; it is not applicable to this Extension Class method.
+This call reads IDO metadata only. It does not invoke `CreateCoAndLines` and cannot create a Customer Order.
 
-Do not inspect another method in the same step.
+Send the response, or at minimum the property names listed under `Properties`.
 
-Do not inspect `SL.SLCoitems` methods yet.
+The next step will use those confirmed property names to load only the two parameter rows for `SLCos / CreateCoAndLines` and determine whether an output/by-reference flag is exposed.
 
-Do not create the custom Process method, Process button, Customer Order, CSV import, or API receive method yet.
-
-## Next Step After `CreateCoAndLines` Parameters
-
-After the complete parameter contract is visible:
-
-```text
-- determine whether the method is suitable for SMK069;
-- map staging fields to its required inputs;
-- decide whether NewCustomerOrderValidSp is also required;
-- only then inspect the next relevant method or SL.SLCoitems methods.
-```
-
-Each discovery action will be performed one small step at a time.
+Do not invoke `CreateCoAndLines`, inspect another business method, create Process logic, or create Customer Orders during this step.
