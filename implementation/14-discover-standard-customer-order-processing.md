@@ -6,7 +6,7 @@
 Customer validation             : FULLY COMPLETED
 Process/Reprocess design        : STARTED — DISCOVERY ONLY
 Standard Customer Order IDO     : CONFIRMED — SL.SLCos
-Standard line IDO/collection    : NOT YET CONFIRMED
+Standard Customer Order line IDO: CONFIRMED — SL.SLCoitems
 Standard header method/process  : NOT YET CONFIRMED
 Standard line method/process    : NOT YET CONFIRMED
 Customer Order creation         : NOT STARTED
@@ -32,7 +32,7 @@ co_mst
 coitem_mst
 ```
 
-Direct SQL insertion into those standard tables is prohibited.
+Direct SQL insertion into those tables is prohibited.
 
 ## Reusable Architecture
 
@@ -54,7 +54,7 @@ The form and future API must call the same processing core.
 
 ## Processing Scope
 
-One call will process one staged order group:
+One call processes one staged order group:
 
 ```text
 SiteRef + co_num
@@ -71,7 +71,7 @@ Primary Collection : SL.SLCustomers
 Collection Name    : oCustomers
 ```
 
-This belongs to the standard **Customers** form and is not the Customer Order header IDO.
+This belongs to the standard **Customers** form and is not a Customer Order IDO.
 
 ```text
 SL.SLCustomers = customer-master IDO only
@@ -81,7 +81,7 @@ No standard object was modified.
 
 ## Confirmed Customer Order Header IDO
 
-A subsequent screenshot from the correct standard **Customer Orders** form displayed:
+The correct standard **Customer Orders** form displayed:
 
 ```text
 Primary Collection : SL.SLCos
@@ -92,10 +92,8 @@ Collection Name     : blank / not assigned
 Decision:
 
 ```text
-Standard Customer Order header IDO : SL.SLCos — CONFIRMED
+Standard Customer Order header IDO : SL.SLCos
 ```
-
-The empty Collection Name is acceptable; the authoritative collection/IDO value shown by the tenant is `SL.SLCos`.
 
 Evidence:
 
@@ -103,54 +101,81 @@ Evidence:
 tests/evidence/2026-07-30-standard-customer-order-header-ido.md
 ```
 
-No standard form, collection, IDO, or method was modified during this discovery.
+## Confirmed Customer Order Line IDO
 
-## Current Small Step — Identify the Customer Order Line Collection
-
-Stay in the standard **Customer Orders** form Design Mode and perform only this discovery step:
-
-1. inspect the secondary collections listed under Collections;
-2. select collections one at a time without changing them;
-3. find the collection whose property list contains line-level fields such as:
+The standard **Customer Order Lines** form displayed:
 
 ```text
-CoNum
-CoLine
-Item
-QtyOrdered
-UM
-Price
-DueDate
-Whse
+Primary Collection : SL.SLCoitems
+Collection          : SL.SLCoitems
+Collection Name     : blank / not assigned
 ```
 
-4. capture a screenshot showing:
+Decision:
 
 ```text
-Secondary Collection label
-Collection / IDO name
-Collection Name
-several visible line-level properties
+Standard Customer Order line IDO : SL.SLCoitems
 ```
 
-5. send the screenshot.
-
-Do not assume the line IDO name from another tenant.
-
-Do not modify or save the standard form or collection.
-
-Do not create a custom stored procedure, IDO method, Process button, Customer Order, or API receive method during this step.
-
-## Next Step After Line IDO Confirmation
-
-After the exact Customer Order line collection is confirmed:
+The line form and its collection are separate from the header form, but together they confirm the tenant's standard header and line entity IDOs:
 
 ```text
-- inspect available standard methods on SL.SLCos;
-- inspect available methods on the confirmed line IDO;
-- identify the supported header-number generation and save process;
-- identify required header and line properties;
-- design the custom Process/Reprocess wrapper without direct standard-table inserts.
+Header : SL.SLCos
+Lines  : SL.SLCoitems
 ```
 
-These actions will be performed one small step at a time.
+Evidence:
+
+```text
+tests/evidence/2026-07-30-standard-customer-order-line-ido.md
+```
+
+No standard form, collection, IDO, property, or method was modified during discovery.
+
+## Important Limitation
+
+Confirming the entity IDOs does not yet prove the supported creation process.
+
+Still unknown:
+
+```text
+- standard header methods available on SL.SLCos
+- standard line methods available on SL.SLCoitems
+- Customer Order number generation method
+- minimum required properties for header insertion
+- minimum required properties for line insertion
+- whether the tenant expects UpdateCollection, a standard method, or another supported process
+```
+
+Do not implement the custom processor until these tenant-specific details are confirmed.
+
+## Current Small Step — Inspect Header Methods
+
+Perform only this discovery step:
+
+1. exit Design Mode without saving changes to the standard forms;
+2. open **IDO Methods**;
+3. select IDO `SL.SLCos`;
+4. do not create, edit, resync, or save any method;
+5. capture a screenshot showing the method-name list available for `SL.SLCos`;
+6. if one method must be selected to display the list, select it without changing any field;
+7. send the screenshot.
+
+Do not execute a method during this step.
+
+Do not inspect `SL.SLCoitems` methods in the same step.
+
+Do not create the custom Process method, Process button, Customer Order, CSV import, or API receive method yet.
+
+## Next Step After Header Method List
+
+After the tenant method list for `SL.SLCos` is visible:
+
+```text
+- identify methods related to order-number generation or initialization;
+- inspect one relevant method's parameters;
+- determine whether standard entity updates or a dedicated business method should create the header;
+- then inspect SL.SLCoitems separately.
+```
+
+Each discovery action will be performed one small step at a time.
