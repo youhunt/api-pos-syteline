@@ -22,6 +22,7 @@ Lines  : SL.SLCoitems
 tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
 tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
+tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
 ```
 
 ### Changed
@@ -80,7 +81,9 @@ Base64 decode
 
 - Confirmed again that `MessageCode = 0` does not establish business success; `CoResult` returned `Status = Fail`.
 - Recorded the exact returned failure key `ErrrorMessage`.
-- Added a second read-only no-order verification gate before the empty-object `{}` probe.
+- Completed the second read-only recent-order verification after the `ew==` probe.
+- Confirmed the second verification returned zero rows with no SQL error, so no unexpected Customer Order was found in the checked 30-minute window.
+- Authorized the next controlled probe using Base64 `e30=`, which decodes to empty JSON object `{}`; no valid order values or guessed schema properties are authorized.
 
 ### Current SMK069 Status
 
@@ -101,7 +104,8 @@ Base64 decode
 [COMPLETED] first no-order verification = zero rows
 [COMPLETED] malformed decoded JSON probe
 [CONFIRMED] decoded payload must be JSON object / JObject
-[NEXT] second read-only no-order verification
+[COMPLETED] second no-order verification = zero rows
+[NEXT] empty JSON object probe using Base64 e30=
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled receive API method
@@ -111,8 +115,8 @@ Base64 decode
 
 ### Planned
 
-- Repeat the read-only recent-order check after the `ew==` probe.
-- Only after a zero-row result, submit Base64 `e30=` for the empty JSON object `{}` to reach schema validation without guessing property names.
+- Submit only Base64 `e30=`, which decodes to `{}`, to reach schema validation without customer, item, site, order, date, quantity, or price values.
+- Capture the complete tenant response and perform another separate read-only Customer Order check.
 - Determine exact JSON property names, required header/line fields, `co_num` behavior, and success `CoResult` shape.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
