@@ -40,7 +40,7 @@ CoAndLineInfoJson = {
 CoResult          = blank
 ```
 
-This malformed value is selected to force a JSON parsing or validation failure before a valid Customer Order payload can be processed.
+This malformed value is expected to trigger a JSON parsing or validation failure before a valid Customer Order payload can be processed. The actual tenant response remains the authority.
 
 ## Request
 
