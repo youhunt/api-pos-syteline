@@ -5,7 +5,7 @@
 ```text
 Repository : youhunt/api-pos-syteline
 Project    : Pizza Hut POS / SMK069 Sales Integration to Infor SyteLine Mongoose
-Date       : 29 July 2026
+Date       : 30 July 2026
 ```
 
 ## Agreed Phase-1 Flow
@@ -60,9 +60,10 @@ Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement an
 [COMPLETED] dbo.SMK069ValidateCustomerSp created
 [COMPLETED] ue_SMK069ValidateCustomerSp method persisted
 [COMPLETED] generated method parameter review
-[NEXT]      confirm TEST000002 customer is invalid
-[NOT STARTED] invalid-customer method execution test
-[NOT STARTED] valid-customer method execution test
+[COMPLETED] TEST000002 / TST0002 confirmed absent from customer_mst
+[NEXT]      execute invalid-customer validation logic once
+[NOT STARTED] IDO-layer invalid-customer invocation test
+[NOT STARTED] valid-customer validation test
 [NOT STARTED] Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -72,8 +73,6 @@ Do not add a separate `site_ref`; standard `SiteRef` fulfills the requirement an
 ```
 
 ## Verified Form Behavior
-
-Preview behavior:
 
 ```text
 Order Date only → order_date
@@ -153,39 +152,59 @@ implementation/13-create-SMK069-customer-validation.md
 
 The procedure reads `customer_mst` and updates only `dbo.ue_SMK069_temp_sales_mst`. It does not create or update Customer Orders.
 
-## Immediate Next Step
+## Invalid Customer Test Evidence
 
-Confirm that `TEST000002` is an invalid-customer test case before invoking the method:
-
-```sql
-SELECT
-    s.SiteRef,
-    s.co_num,
-    s.cust_num,
-    CASE
-        WHEN EXISTS
-        (
-            SELECT 1
-            FROM dbo.customer_mst AS c
-            WHERE c.site_ref = s.SiteRef
-              AND c.cust_num = s.cust_num
-              AND c.cust_seq = 0
-        )
-        THEN N'EXISTS'
-        ELSE N'NOT FOUND'
-    END AS CustomerCheck
-FROM dbo.ue_SMK069_temp_sales_mst AS s
-WHERE s.SiteRef = N'DEFAULT'
-  AND s.co_num = N'TEST000002';
-```
-
-Expected result:
+The controlled staging row was checked against `customer_mst`:
 
 ```text
-TEST000002 | TST0002 | NOT FOUND
+SiteRef       : DEFAULT
+co_num        : TEST000002
+cust_num      : TST0002
+CustomerCheck : NOT FOUND
 ```
 
-Do not execute the method in the same step. If the customer exists, prepare a different deliberately invalid test customer.
+This is the first invalid-customer test case.
+
+## Immediate Next Step
+
+Execute only the stored-procedure logic test:
+
+```sql
+DECLARE
+    @ReturnCode int,
+    @Infobar dbo.InfobarType;
+
+EXEC @ReturnCode = dbo.SMK069ValidateCustomerSp
+    @SiteRef = N'DEFAULT',
+    @CoNum   = N'TEST000002',
+    @Infobar = @Infobar OUTPUT;
+
+SELECT
+    @ReturnCode AS ReturnCode,
+    @Infobar AS Infobar;
+
+SELECT
+    SiteRef,
+    co_num,
+    co_line,
+    cust_num,
+    process_status,
+    validation_msg
+FROM dbo.ue_SMK069_temp_sales_mst
+WHERE SiteRef = N'DEFAULT'
+  AND co_num = N'TEST000002'
+ORDER BY co_line;
+```
+
+Expected:
+
+```text
+ReturnCode     = 0
+process_status = E
+validation_msg = Customer TST0002 tidak ditemukan di customer_mst.
+```
+
+This isolates the validation logic before testing the same method through the IDO/API layer.
 
 ## API Direction
 
@@ -234,11 +253,12 @@ Status:
 - Stored procedure dbo.SMK069ValidateCustomerSp sudah dibuat.
 - IDO method ue_SMK069ValidateCustomerSp sudah tersimpan, Transactional checked.
 - Parameter method sudah terverifikasi: SiteRef, CoNum, Infobar.
+- TEST000002 / TST0002 sudah dikonfirmasi NOT FOUND di customer_mst.
 - Customer validation belum pernah dieksekusi.
 - Process, Customer Order creation, controlled service IDO receive method, dan REST API ingestion belum dimulai.
 
 Target akhirnya tetap API:
 POS/Postman/sample CSV → controlled service IDO → staging → validation → standard Customer Order processing.
 
-Langkah berikutnya hanya memastikan customer TEST000002/TST0002 tidak ada di customer_mst. Jangan menjalankan method pada langkah yang sama.
+Langkah berikutnya hanya menjalankan dbo.SMK069ValidateCustomerSp untuk DEFAULT + TEST000002 dan memeriksa ReturnCode, Infobar, process_status, serta validation_msg. Jangan lanjut ke IDO/API invocation atau Process sebelum hasil SQL logic test dikonfirmasi.
 ```
