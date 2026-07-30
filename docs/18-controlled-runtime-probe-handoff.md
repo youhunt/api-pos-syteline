@@ -16,8 +16,9 @@ EventActionRevisions.Parameters search           : COMPLETED — ZERO ROWS
 EventActionRevisions.ExpandedParameters filter   : FAILED — ILLEGAL FILTER
 EventHandlerRevisions IDOInfo                    : CONFIRMED
 Direct handler-revision text search              : NOT AVAILABLE
-Script-name collection discovery                 : COMPLETED — NO USEFUL APP SCRIPT CANDIDATE
-Next step                                        : search CollectionDesc for script
+Script-name discovery                            : NO USEFUL APP SCRIPT CANDIDATE
+Script-description discovery                     : NO USEFUL APP SCRIPT CANDIDATE
+Next step                                        : discover Form metadata collections
 ```
 
 ## Confirmed Runtime Contract
@@ -61,31 +62,30 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'            : zero r
 EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'                : zero rows
 ```
 
-## Revision Metadata Findings
+`EventActionRevisions.ExpandedParameters` could not be evaluated because the tenant rejected the server-side filter with `IllegalFilterException`, `MessageCode = 450`, and `Items = null`. This is not a zero-row result.
 
-`EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'` returned `IllegalFilterException`, `MessageCode = 450`, and `Items = null`.
+`EventHandlerRevisions` exposes handler context and child action collections but no direct call-site text field.
 
-This was a rejected filter, not a zero-row search.
+## Script Metadata Discovery
 
-`EventHandlerRevisions` exposes handler context and child `EventActionRevisions`/`EventActions`, but no direct text property such as `MethodToCall` or `Parameters`.
-
-## Script Collection Discovery
-
-The read-only search:
+Name search returned only:
 
 ```text
-CollectionName LIKE '%Script%'
+BuildApplicationMessagesScript : temporary application-message script generation
+UTScripts                      : UnitTesting
+UTScriptSelections             : UnitTesting
 ```
 
-returned three collections:
+Description search returned:
 
 ```text
-BuildApplicationMessagesScript : MGCore/Core temporary application-message script-generation IDO
-UTScripts                      : UnitTesting/BaseSyteLine
-UTScriptSelections             : UnitTesting/BaseSyteLine
+BuildApplicationMessagesScript : temporary application-message script generation
+Deployment                     : deployment scripts/XML for applet deployment
+SLInvSequences                 : false positive; "description" contains substring "script"
+SLInvSequences_IDS             : same false-positive mechanism
 ```
 
-No obvious production form-script or global-script metadata collection was identified by name.
+No production form/global script metadata source has been identified through the script-name or script-description paths.
 
 Evidence:
 
@@ -95,6 +95,7 @@ tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-ma
 tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
 tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-script-named-metadata-collections.md
+tests/evidence/2026-07-30-script-description-metadata-collections.md
 ```
 
 ## Decision History
@@ -108,14 +109,14 @@ The stored-procedure option remains deferred and unimplemented.
 
 ## Next Step Only
 
-Search tenant collection descriptions for `script`:
+Discover tenant collections whose names contain `Form`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionDesc%20LIKE%20%27%25script%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25Form%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete JSON response, including an empty result.
+Send the complete JSON response, including `MoreRowsExists`.
 
-Do not load candidate collection rows, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
+Do not load rows from any returned form collection, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
