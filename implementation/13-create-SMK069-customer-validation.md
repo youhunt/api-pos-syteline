@@ -5,13 +5,14 @@
 ```text
 Base form and Preview             : COMPLETED
 process_status display/read-only  : VERIFIED
-Customer validation stored proc   : CREATED IN TENANT
-Customer validation IDO method    : PERSISTED
+Customer validation stored proc   : COMPLETED
+Customer validation IDO method    : COMPLETED
 Generated parameters              : VERIFIED
 Invalid-customer SQL test         : VERIFIED
 Invalid-customer IDO REST test    : VERIFIED
 Valid-customer IDO REST response  : VERIFIED
-Valid-customer staging result     : VERIFICATION PENDING
+Valid-customer staging result     : VERIFIED
+Customer validation requirement   : FULLY COMPLETED
 Process/Reprocess                  : NOT STARTED
 Customer Order creation           : NOT STARTED
 Controlled API receive method      : NOT STARTED
@@ -136,9 +137,9 @@ DEFAULT, C000001, <blank>
 
 This correctly returned `16`, because Mongoose interpreted `C000001` as `CoNum` and no staged order existed with that number.
 
-## Valid-Customer Staging Data
+## Valid-Customer Evidence
 
-The user updated the staging customer values to real customers from `customer_mst`:
+The staging customer values were changed to real customers from `customer_mst`:
 
 ```text
 DEFAULT | TEST000001 | C000001 | line 1
@@ -146,7 +147,7 @@ DEFAULT | TEST000001 | C000001 | line 2
 DEFAULT | TEST000002 | C000002 | line 1
 ```
 
-The method was then invoked through the Mongoose IDO REST layer for:
+The method was invoked through the Mongoose IDO REST layer for:
 
 ```text
 SiteRef : DEFAULT
@@ -168,60 +169,72 @@ Observed response:
 }
 ```
 
-Interpretation:
+Observed staging result:
 
 ```text
-MessageCode = 0
-ReturnValue = 0
-Infobar     = blank
+SiteRef        : DEFAULT
+co_num         : TEST000002
+co_line        : 1
+cust_num       : C000002
+process_status : V
+validation_msg : NULL
 ```
 
-This is the expected API response for a valid customer and proves the IDO method completed without returning a customer-validation error. It does not yet prove the final values stored on the staging row.
+This proves both the Mongoose IDO invocation and the persisted valid-customer business result.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-smk069-valid-customer-ido-rest-response.md
+tests/evidence/2026-07-30-smk069-valid-customer-staging-result.md
 ```
 
-## Current Small Step — Verify Staging Result
+## Completion Decision
 
-Run only this query:
-
-```sql
-SELECT
-    SiteRef,
-    co_num,
-    co_line,
-    cust_num,
-    process_status,
-    validation_msg
-FROM dbo.ue_SMK069_temp_sales_mst
-WHERE SiteRef = N'DEFAULT'
-  AND co_num = N'TEST000002'
-ORDER BY co_line;
-```
-
-Expected:
+Customer validation is fully completed because both required branches were verified:
 
 ```text
-cust_num         = C000002
-process_status   = V
-validation_msg   = NULL
+Invalid customer → E + validation message
+Valid customer   → V + NULL validation message
 ```
 
-Do not create Process logic, Customer Orders, CSV import, or the controlled POS receive API method during this verification step.
+The same reusable server-side method is callable through Mongoose REST and can later be used by:
+
+```text
+Error Processing form
+CSV import
+controlled POS receive API
+Process/Reprocess action
+```
+
+## Next Development Object
+
+The next object is the controlled **Process/Reprocess** server-side method for one staged order group:
+
+```text
+SiteRef + co_num
+```
+
+The processing method must:
+
+```text
+1. reuse customer validation;
+2. reject invalid or incomplete staging groups;
+3. create Customer Order header and lines using supported SyteLine IDO/business processing;
+4. never direct-insert into co_mst or coitem_mst;
+5. be reusable by the form and the future controlled API service.
+```
+
+Before implementation, identify the exact standard Customer Order IDO and method available in the tenant. Do not assume object names from another SyteLine version.
 
 ## Architecture Direction
-
-The completed validation method is reusable by the future integration flow:
 
 ```text
 POS / Postman / CSV
 → controlled service IDO receive method
 → dbo.ue_SMK069_temp_sales_mst
 → ue_SMK069ValidateCustomerSp
-→ Error Processing / Process-Reprocess
+→ Process/Reprocess reusable server method
 → supported Customer Order business process
 → co_mst + coitem_mst
 ```
