@@ -15,17 +15,15 @@ Metadata call-site discovery                      : RESUMED BY USER
 Current EventActions fields                       : EXHAUSTED — ZERO ROWS
 EventActionRevisions.Parameters search            : COMPLETED — ZERO ROWS
 EventActionRevisions.ExpandedParameters filter    : FAILED — ILLEGAL FILTER
-EventHandlerRevisions property discovery          : COMPLETED
-Direct handler-revision text search               : NOT AVAILABLE
+EventHandlerRevisions direct text search          : NOT AVAILABLE
 Script metadata discovery                         : NO USEFUL APP SCRIPT CANDIDATE
 Form metadata collection discovery                : COMPLETED
 Selected form metadata candidate                  : FormsAndObjects
-FormsAndObjects property discovery                : COMPLETED
-Direct FormsAndObjects text search                : NOT AUTHORIZED
-FormsAndObjects IDOInfo Methods section           : NOT EXPOSED
-IdoMethods rows for FormsAndObjects               : COMPLETED — 37 METHODS
-Pseudo-code method candidates                     : CONFIRMED
-Pseudo-code parameter metadata                    : NEXT
+FormsAndObjects properties                        : CONFIRMED
+FormsAndObjects IDOInfo Methods section            : NOT EXPOSED
+FormsAndObjects IdoMethods rows                   : COMPLETED — 37 METHODS
+Pseudo-code parameter comparison                  : COMPLETED
+GetUtilitiesOutput parameter discovery            : NEXT
 ```
 
 ## Confirmed Runtime Contract
@@ -62,38 +60,15 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 ```
 
-`EventActionRevisions.ExpandedParameters` could not be evaluated because the tenant rejected the filter with:
+`EventActionRevisions.ExpandedParameters` could not be evaluated because the tenant rejected the filter with `IllegalFilterException`, `MessageCode = 450`, and `Items = null`. This is a rejected filter, not a zero-row result.
 
-```text
-MessageCode : 450
-Exception   : IllegalFilterException
-Items       : null
-```
+`EventHandlerRevisions` exposes handler context and child action collections, but no direct call-site text property comparable to `MethodToCall` or `Parameters`.
 
-This is a rejected filter, not a zero-row result.
-
-`EventHandlerRevisions` exposes handler context and child `EventActionRevisions`/`EventActions`, but no direct call-site text property comparable to `MethodToCall` or `Parameters`.
-
-## Script Metadata Discovery
+## Script and Form Metadata Discovery
 
 Searching collection names and descriptions for `Script` did not identify a production form/global-script metadata source.
 
-Confirmed non-candidates:
-
-```text
-BuildApplicationMessagesScript : temporary application-message script generation
-UTScripts                      : UnitTesting
-UTScriptSelections             : UnitTesting
-Deployment                     : applet deployment script/XML processing
-SLInvSequences                 : lexical false positive from "description"
-SLInvSequences_IDS             : same false-positive mechanism
-```
-
-## Form Metadata Discovery
-
-The broad tenant search for `CollectionName LIKE '%Form%'` completed successfully. Many results were lexical false positives from words such as `Performance`, `Formula`, `Information`, `Format`, and `ProForma`.
-
-Relevant tenant-published candidates:
+The broad tenant search for collection names containing `Form` produced many lexical false positives. Relevant tenant-published candidates were:
 
 | CollectionName | CollectionDesc | ServerName | AccessAs |
 | --- | --- | --- | --- |
@@ -103,73 +78,23 @@ Relevant tenant-published candidates:
 | `DocTypeFormProperties` | NULL | `MGCore` | `Core` |
 | `WSFormExtensionHints` | NULL | `MGCore` | `Core` |
 
-`FormsAndObjects` was selected as the strongest tenant-confirmed candidate because its description directly references `FormControl` and `FormSync`.
+`FormsAndObjects` was selected as the strongest tenant-confirmed candidate.
 
-## FormsAndObjects Property Contract
-
-Tenant IDOInfo confirms a wrapper/utility-style contract including:
-
-```text
-DerObjectName
-DerObjectType
-DerObjectTypeStr
-DerRefObjName
-DerRefObjType
-DerSecondaryObjectName
-DerTertiaryObjectName
-DerScopeNameStr
-DerScopeType
-DerScopeTypeStr
-DerCurrentConfiguration
-DerSourceConfiguration
-DerTargetConfiguration
-DerAction
-DerProcessInformation
-DerXMLData
-DerBinaryData
-Upload
-Download
-DerOutputText
-DerCommandLinks
-DerExplanation
-DerInstruction
-LicenseDocument
-RowPointer
-```
-
-The collection does **not** expose an obvious persistent form-definition property such as:
-
-```text
-FormName
-Script
-EventName
-MethodToCall
-Parameters
-```
+Its IDOInfo response exposes utility-style properties including object selectors, type/scope/configuration fields, action/process controls, XML/binary transfer fields, and output/diagnostic fields. It does not expose an obvious persistent field named `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
 
 Therefore:
 
 ```text
 - do not filter FormsAndObjects directly for CreateCoAndLines;
 - do not assume DerXMLData or DerBinaryData contains form source;
-- inspect tenant-published FormsAndObjects method metadata before loading or invoking anything.
+- discover its method contracts through IdoMethods and IdoMethodParameters.
 ```
 
-## IDOInfo Methods Limitation
+## FormsAndObjects Method Discovery
 
-The tenant rechecked:
+The tenant's `idoinfo/FormsAndObjects` response exposes `Properties` but no `Methods` array. Method discovery therefore used `IdoMethods`.
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/FormsAndObjects
-```
-
-The response exposed `Properties` but no `Methods` section. Repeating this endpoint is therefore not useful for method discovery.
-
-This does **not** prove that `FormsAndObjects` has no methods. It means only that the tenant's IDOInfo response does not expose them in a `Methods` array.
-
-## FormsAndObjects Method Metadata
-
-The tenant successfully loaded `IdoMethods` rows for `FormsAndObjects`:
+Tenant result:
 
 ```text
 Message        : Success
@@ -182,21 +107,21 @@ TxnFlag 0      : 37
 StoredProcName : NULL for all rows
 ```
 
-The most relevant discovery methods are:
+Most relevant methods:
 
-| Method | Tenant description |
-| --- | --- |
-| `FormControlListCustomLoad` | Load drop down lists of forms or objects |
-| `FormReferencedObjects` | Load referenced objects based on form |
-| `TreeLoadObjects` | Load individual objects for Utilities tree |
-| `UtilitiesListNames` | Get names of objects for drop down lists on Utilities tab |
-| `UtilitiesLoadObjects` | Load objects for utilities form |
-| `UtilitiesLoadObjects2` | Load objects for utilities form |
-| `UtilitiesGeneratePseudoCode` | Generate pseudo code for object(s) and store output in SQL temp table |
-| `UtilitiesGeneratePseudoCode2` | Generate pseudo code for object(s) and store output in SQL temp table |
-| `GetUtilitiesOutput` | No tenant description published |
+```text
+FormControlListCustomLoad   : Load drop down lists of forms or objects
+FormReferencedObjects       : Load referenced objects based on form
+TreeLoadObjects             : Load individual objects for Utilities tree
+UtilitiesListNames          : Get names of objects for Utilities drop downs
+UtilitiesLoadObjects        : Load objects for utilities form
+UtilitiesLoadObjects2       : Load objects for utilities form
+UtilitiesGeneratePseudoCode : Generate pseudo code and store output in SQL temp table
+UtilitiesGeneratePseudoCode2: Generate pseudo code and store output in SQL temp table
+GetUtilitiesOutput          : no tenant description published
+```
 
-The method names and descriptions suggest this possible workflow:
+Possible inferred flow:
 
 ```text
 UtilitiesListNames
@@ -205,9 +130,38 @@ UtilitiesListNames
 → GetUtilitiesOutput
 ```
 
-This is an inference only. No invocation sequence is confirmed.
+This flow is not confirmed. No method has been invoked.
 
-The pseudo-code generators are the strongest current candidates for obtaining readable object/form representations that may expose a `CreateCoAndLines` reference. Their parameter contracts must be inspected before either method is selected or invoked.
+## Pseudo-Code Generator Parameter Contracts
+
+Both methods expose 12 `VARIANT` parameters.
+
+Common sequence:
+
+| Sequence | Parameter | Direction |
+| ---: | --- | --- |
+| 0 | `SessionID` | input |
+| 1 | `SourceConfig` | input |
+| 2 | `TargetConfig` | input |
+| 3 | `Source` | input |
+| 4 | `DatabaseName` | input |
+| 5 | `Type` | input |
+| 6 | `Scope` | input |
+| 8 | `ObjectList` | input |
+| 9 | `Version` | input |
+| 10 | `SegmentCount` | input/output |
+| 11 | `CompareIncludeSettings` | input |
+
+Only sequence 7 differs:
+
+```text
+UtilitiesGeneratePseudoCode  : RelativePosition
+UtilitiesGeneratePseudoCode2 : Options
+```
+
+No parameter is marked as a message parameter. The valid values and serialization formats for the `VARIANT` inputs are still unknown.
+
+The method descriptions state that generated pseudo-code is stored in a SQL temporary table. `GetUtilitiesOutput` is therefore the strongest current candidate for retrieving it, but this remains an inference until its parameter contract is inspected.
 
 Evidence:
 
@@ -215,8 +169,8 @@ Evidence:
 tests/evidence/2026-07-30-form-named-metadata-collections.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-no-methods-section.md
-tests/evidence/2026-07-30-idomethods-idoinfo-properties.md
 tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
+tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
 ```
 
 ## Decision History
@@ -230,12 +184,12 @@ The stored-procedure option remains documented in `implementation/19-controlled-
 
 ## Current Small Step
 
-Load parameter metadata for both pseudo-code candidates without invoking them:
+Read only the parameter metadata for `GetUtilitiesOutput`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethodParameters/adv?props=CollectionName,MethodName,ParameterName,Sequence,DataType,InputFlag,OutputFlag,MessageFlag&filter=CollectionName%20%3D%20%27FormsAndObjects%27%20AND%20MethodName%20LIKE%20%27UtilitiesGeneratePseudoCode%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethodParameters/adv?props=CollectionName,MethodName,ParameterName,Sequence,DataType,InputFlag,OutputFlag,MessageFlag&filter=CollectionName%20%3D%20%27FormsAndObjects%27%20AND%20MethodName%20%3D%20%27GetUtilitiesOutput%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Do not invoke a `FormsAndObjects` method, generate pseudo code, load a form object, invoke `CreateCoAndLines`, guess Customer Order JSON properties, edit metadata, or execute SQL.
+Do not invoke a `FormsAndObjects` method, generate pseudo-code, create a SQL temporary table, load a form object, invoke `CreateCoAndLines`, edit metadata, guess Customer Order JSON properties, or execute SQL.
