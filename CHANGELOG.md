@@ -7,14 +7,6 @@ All notable changes to this repository will be documented in this file.
 ### Added
 
 - Staging-table, IDO, Error Processing form, validation, Customer Order discovery, and controlled runtime-probe documentation.
-- Evidence confirming standard Customer Order IDOs:
-
-```text
-Header : SL.SLCos
-Lines  : SL.SLCoitems
-```
-
-- Evidence confirming `CreateCoAndLines` metadata, parameters, directions, collection hierarchy, extension owner, and binary-only assembly.
 - Controlled discovery documents:
 
 ```text
@@ -23,7 +15,7 @@ implementation/17-createcoandlines-nonbusiness-marker-probe.md
 implementation/18-discover-createcoandlines-call-sites.md
 ```
 
-- Runtime and metadata evidence:
+- Runtime and metadata evidence including:
 
 ```text
 tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
@@ -40,6 +32,7 @@ tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.m
 tests/evidence/2026-07-30-event-action-metadata-collections.md
 tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
+tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
 ```
 
 ### Changed
@@ -48,39 +41,27 @@ tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
 - Cost remains outside staging and is obtained from `item_mst` during Customer Order processing.
 - Standard `SiteRef` is used; no duplicate `site_ref` column.
 - Customer validation is complete for valid and invalid branches.
-- Confirmed standard Customer Order entity IDOs:
+- Confirmed standard Customer Order IDOs:
 
 ```text
 Header : SL.SLCos
 Lines  : SL.SLCoitems
 ```
 
-- Confirmed `CreateCoAndLines` classification and parameter contract:
+- Confirmed `CreateCoAndLines` contract:
 
 ```text
-IDO Name      : SLCos
-Method Name   : CreateCoAndLines
-Method Type   : Extension Class - Standard Method
-Transactional : false
-Stored Proc.  : not applicable
-
-CoAndLineInfoJson : input-only
-CoResult          : input/output + message parameter
+IDO Name             : SLCos
+Method Name          : CreateCoAndLines
+Method Type          : Extension Class - Standard Method
+Transactional        : false
+Implementation owner : Customer.SLCos
+Assembly             : Customer — Binary Only
+CoAndLineInfoJson    : input-only
+CoResult             : input/output + message parameter
 ```
 
-- Confirmed collection hierarchy and implementation owner:
-
-```text
-SLCos
-├── SLCos_FT extends SLCos
-└── ZIT_SLCos extends SLCos
-
-Extension owner : Customer.SLCos
-Assembly        : Customer — Binary Only
-```
-
-- Confirmed runtime environment as DEV and disposable testing as allowed.
-- Confirmed public input processing sequence:
+- Confirmed runtime processing sequence:
 
 ```text
 Base64 decode
@@ -90,15 +71,19 @@ Base64 decode
 → Customer Order and line processing
 ```
 
-- Confirmed `MessageCode = 0` does not establish business success; parse `CoResult` and evaluate `Status`.
-- Confirmed `CoResult` is a JSON-array string and failure records may or may not contain `ErrrorMessage`.
-- Completed four controlled probes and four post-probe read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
-- Stopped guessing business-schema property names and pivoted to read-only discovery of standard form/event/script metadata.
-- Confirmed tenant event-handler and event-action metadata collections.
-- Completed the read-only `EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'` search; it returned zero rows.
-- Confirmed `EventActions` call-site-relevant properties including `Parameters`, `ExpandedParameters`, and `SubstitutedParameters`.
-- Completed the read-only `EventActions.Parameters LIKE '%CreateCoAndLines%'` search; it returned zero rows.
-- Selected `EventActions.ExpandedParameters` as the next separate read-only fallback. `SubstitutedParameters` and revision metadata remain later paths.
+- Completed four controlled probes and four read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
+- Confirmed `MessageCode = 0` is not business success; parse `CoResult` and evaluate `Status`.
+- Stopped guessing business-schema property names and pivoted to read-only metadata call-site discovery.
+- Confirmed event-handler and event-action metadata collections and their relevant properties.
+- Completed these read-only searches, all with zero rows:
+
+```text
+EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
+EventActions.Parameters LIKE '%CreateCoAndLines%'
+EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
+```
+
+- Selected `EventActions.SubstitutedParameters` as the next separate fallback. Revision metadata remains a later path.
 
 ### Current SMK069 Status
 
@@ -109,23 +94,15 @@ Base64 decode
 [COMPLETED] customer validation and tests
 [CONFIRMED] Customer Order header IDO = SL.SLCos
 [CONFIRMED] Customer Order line IDO = SL.SLCoitems
-[CONFIRMED] CreateCoAndLines = Extension Class - Standard Method
-[CONFIRMED] CoAndLineInfoJson = input-only
-[CONFIRMED] CoResult = input/output + message
+[CONFIRMED] CreateCoAndLines method metadata and parameter contract
 [CONFIRMED] implementation owner = Customer.SLCos
 [CONFIRMED] assembly Customer = Binary Only
 [COMPLETED] four controlled malformed/non-business probes
-[CONFIRMED] input transport = Base64
-[CONFIRMED] decoded payload = JSON object / JObject
-[CONFIRMED] specific order structure is required
 [COMPLETED] four no-order checks = zero rows
-[CONFIRMED] candidate event metadata IDOs
-[CONFIRMED] EventHandlers property metadata
 [COMPLETED] parent MethodToCall search = zero rows
-[CONFIRMED] event-action metadata collections
-[CONFIRMED] EventActions property metadata
 [COMPLETED] raw EventActions.Parameters search = zero rows
-[NEXT] filter EventActions.ExpandedParameters for CreateCoAndLines
+[COMPLETED] EventActions.ExpandedParameters search = zero rows
+[NEXT] filter EventActions.SubstitutedParameters for CreateCoAndLines
 [PENDING] locate exact standard CreateCoAndLines call site
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
@@ -136,8 +113,8 @@ Base64 decode
 
 ### Planned
 
-- Filter `EventActions.ExpandedParameters` for `CreateCoAndLines` using a read-only REST v1 load.
-- Search `SubstitutedParameters`, revisions, form metadata, or scripts only as later separate steps if the expanded search returns no match.
+- Filter `EventActions.SubstitutedParameters` for `CreateCoAndLines` using a read-only REST v1 load.
+- Inspect revision, form, or script metadata only as later separate steps if the substituted search returns no match.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
