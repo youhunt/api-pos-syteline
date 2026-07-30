@@ -27,6 +27,7 @@ tests/evidence/2026-07-30-script-named-metadata-collections.md
 tests/evidence/2026-07-30-script-description-metadata-collections.md
 tests/evidence/2026-07-30-form-named-metadata-collections.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
+tests/evidence/2026-07-30-formsandobjects-idoinfo-no-methods-section.md
 ```
 
 ### Changed
@@ -83,7 +84,9 @@ WSFormExtensionHints   : MGCore/Core
 - Confirmed `FormsAndObjects` exposes a wrapper/utility contract including object selectors, scope/configuration properties, action/process controls, XML/binary transfer fields, and output/diagnostic fields.
 - Confirmed no obvious direct persistent form-definition property is published for `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
 - Direct filtering of `FormsAndObjects` for `CreateCoAndLines` is therefore not authorized from the property contract alone.
-- Selected read-only discovery of the `FormsAndObjects` method list/metadata as the next step.
+- Tenant rechecked `idoinfo/FormsAndObjects`; the response exposed `Properties` but no `Methods` section.
+- This does not prove `FormsAndObjects` has no methods; it confirms only that the IDOInfo response does not publish them in a `Methods` array.
+- Selected the tenant-confirmed `IdoMethods` collection as the correct read-only method-discovery path.
 - Decision history on 30 July 2026:
 
 ```text
@@ -112,9 +115,10 @@ WSFormExtensionHints   : MGCore/Core
 [SELECTED] FormsAndObjects as strongest form metadata candidate
 [CONFIRMED] FormsAndObjects property metadata
 [NOT AUTHORIZED] direct FormsAndObjects text search
+[NOT EXPOSED] FormsAndObjects Methods array in IDOInfo response
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] read FormsAndObjects method list/metadata
+[NEXT] load IdoMethods scalar rows for FormsAndObjects
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -124,7 +128,7 @@ WSFormExtensionHints   : MGCore/Core
 
 ### Planned
 
-- Read the tenant-published `FormsAndObjects` method list/metadata without invoking any method.
+- Load `IdoMethods` scalar rows where `CollectionName = 'FormsAndObjects'` without invoking any method.
 - Select a read/export/get-object candidate only after its actual method and parameter contract is known.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
