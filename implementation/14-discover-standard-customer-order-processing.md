@@ -61,18 +61,41 @@ SiteRef + co_num
 
 All staging lines belonging to that group must be handled together.
 
-## Current Small Step — Identify the Standard Header IDO
+## Discovery Attempt Evidence
+
+The first screenshot submitted for this discovery displayed:
+
+```text
+Primary Collection : SL.SLCustomers
+Collection Name    : oCustomers
+```
+
+This is the standard **Customers** form/collection, not the standard **Customer Orders** form.
+
+Therefore:
+
+```text
+SL.SLCustomers is confirmed only as the customer-master IDO.
+SL.SLCustomers must not be treated as the Customer Order header IDO.
+The standard Customer Order header IDO remains unconfirmed.
+```
+
+No standard object was modified during this attempt.
+
+## Current Small Step — Open the Correct Customer Orders Form
 
 Do only this tenant discovery step:
 
-1. open the standard **Customer Orders** form;
-2. enter Design Mode;
-3. open the form's Collections configuration;
-4. select the primary collection used by the form;
-5. capture the exact standard IDO name and collection name shown by the tenant;
-6. send a screenshot.
+1. close or exit Design Mode for the current **Customers** form without modifying it;
+2. open the standard form whose caption is **Customer Orders**;
+3. verify the form contains Customer Order header fields such as Order, Customer, Order Date, or Status—not customer-master address fields;
+4. enter Design Mode;
+5. open the form's Collections configuration;
+6. select the primary collection;
+7. capture the exact IDO name and Collection Name shown by the tenant;
+8. send a screenshot.
 
-Do not modify the standard form or collection.
+Do not modify or save the standard form or collection.
 
 Do not create a custom stored procedure, IDO method, Process button, Customer Order, or API method during this step.
 
