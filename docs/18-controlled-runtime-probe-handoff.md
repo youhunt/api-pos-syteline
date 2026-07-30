@@ -1,6 +1,6 @@
 # 18 — Controlled CreateCoAndLines Runtime Probe Handoff
 
-## Final Status of This Path
+## Current Status
 
 ```text
 Environment                        : DEV
@@ -10,9 +10,10 @@ Post-probe co_mst checks           : COMPLETED — ZERO ROWS
 Runtime transport                  : Base64
 Decoded payload                    : JSON object / JObject
 Exact business JSON schema         : NOT CONFIRMED
-Metadata call-site discovery       : STOPPED
-Further revision discovery         : CANCELLED
-Reason                             : user-approved pivot to prior SP approach
+Metadata call-site discovery       : RESUMED
+Current EventActions searches      : COMPLETED — ZERO ROWS
+EventActionRevisions IDOInfo       : CONFIRMED
+Next search                        : EventActionRevisions.Parameters
 ```
 
 ## Confirmed Runtime Contract
@@ -55,36 +56,45 @@ EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'         : zero rows
 EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'      : zero rows
 ```
 
-## User-Approved Pivot
-
-On 30 July 2026, the user confirmed a previous successful integration used a stored procedure with direct inserts into:
+## Decision History
 
 ```text
-dbo.co_mst
-dbo.coitem_mst
+30 July 2026 — user temporarily approved pivoting to a previous stored-procedure approach.
+30 July 2026 — user explicitly instructed the project to continue CreateCoAndLines metadata discovery.
 ```
 
-The project therefore stops further reverse-engineering of `CreateCoAndLines` and moves to:
+The stored-procedure option is deferred, not implemented, and remains documented only as an alternative.
+
+## EventActionRevisions Property Contract
+
+Relevant tenant-published fields:
 
 ```text
-implementation/19-controlled-sp-direct-order-processing.md
+ExpandedParameters      : String(4000), read-only
+ActionType              : Byte
+Description             : String(40)
+EventHandlerRowPointer  : GUID
+Parameters              : String(3800)
+Sequence                : Short Integer
+RowPointer              : GUID, read-only
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 ```
 
 ## Next Step Only
 
-Obtain the previous working stored procedure and review it before drafting or executing any SQL.
+Run:
 
-Required review areas:
-
-```text
-- input parameters
-- order number generation
-- required header and line columns
-- defaults, site, warehouse, currency, tax, and dates
-- customer and item validation
-- transaction/rollback behavior
-- duplicate and reprocess protection
-- staging status and error updates
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
 ```
 
-No direct-insert procedure is considered approved merely because the earlier version worked. It must first be adapted to the current tenant and current `SMK069` staging design.
+Send the complete JSON response, including an empty result.
+
+Do not search `ExpandedParameters`, inspect `EventHandlerRevisions`, invoke `CreateCoAndLines`, or edit metadata in the same step.
