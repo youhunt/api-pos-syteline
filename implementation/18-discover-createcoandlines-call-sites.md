@@ -13,9 +13,9 @@ Exact business JSON schema                        : NOT CONFIRMED
 Business-property guessing                        : STOPPED
 Metadata call-site discovery                      : RESUMED BY USER
 Current EventActions fields                       : EXHAUSTED — ZERO ROWS
-EventActionRevisions property discovery           : COMPLETED
 EventActionRevisions.Parameters search            : COMPLETED — ZERO ROWS
-EventActionRevisions.ExpandedParameters search    : NEXT
+EventActionRevisions.ExpandedParameters filter    : FAILED — ILLEGAL FILTER
+EventHandlerRevisions property discovery          : NEXT
 ```
 
 ## Confirmed Runtime Findings
@@ -40,7 +40,7 @@ Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank orde
 
 All four post-probe `dbo.co_mst` checks returned zero rows with no SQL error.
 
-Business-result rules discovered:
+Business-result rules:
 
 ```text
 - MessageCode = 0 does not establish business success.
@@ -51,13 +51,14 @@ Business-result rules discovered:
 
 ## Completed Current-Metadata Searches
 
-All searches below succeeded technically and returned zero rows:
+These searches completed successfully and returned zero rows:
 
 ```text
 EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
 EventActions.Parameters LIKE '%CreateCoAndLines%'
 EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
 EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
+EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 ```
 
 The current `EventActions` path is exhausted. This does not prove that no standard call site exists.
@@ -69,11 +70,11 @@ The current `EventActions` path is exhausted. This does not prove that no standa
 30 July 2026 — user explicitly requested metadata discovery to continue.
 ```
 
-The stored-procedure option remains documented in `implementation/19-controlled-sp-direct-order-processing.md`, but it is deferred and is not the active next step.
+The stored-procedure option remains documented in `implementation/19-controlled-sp-direct-order-processing.md`, but it is deferred and is not the active path.
 
 ## Confirmed EventActionRevisions Properties
 
-Tenant IDOInfo confirmed the following relevant fields:
+Tenant IDOInfo confirmed:
 
 ```text
 ExpandedParameters      : String(4000), read-only
@@ -91,29 +92,15 @@ Evidence:
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 ```
 
-## Completed Step — Filter EventActionRevisions.Parameters
-
-Read-only request:
-
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
-```
-
-Tenant result:
+## Completed Step — Raw EventActionRevisions.Parameters
 
 ```text
-Message        : Success
-MessageCode    : 0
-Items          : zero rows
-MoreRowsExists : false
-```
-
-Confirmed conclusion:
-
-```text
-No EventActionRevisions row stores CreateCoAndLines in raw Parameters.
+Filter          : Parameters LIKE '%CreateCoAndLines%'
+Message         : Success
+MessageCode     : 0
+Rows returned   : 0
+MoreRowsExists  : false
+Conclusion      : no raw revision Parameters reference found
 ```
 
 Evidence:
@@ -122,9 +109,9 @@ Evidence:
 tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
 ```
 
-## Current Small Step
+## Failed Step — EventActionRevisions.ExpandedParameters Filter
 
-Search the derived/read-only revision field:
+Request:
 
 ```http
 GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=ExpandedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
@@ -132,7 +119,42 @@ Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete JSON response, including an empty result.
+Tenant result:
+
+```text
+Message        : Error processing LoadCollection request: IllegalFilterException
+MessageCode    : 450
+Items          : null
+Bookmark       : null
+MoreRowsExists : false
+```
+
+Interpretation:
+
+```text
+- The request did not execute a valid search.
+- This is not a zero-row result.
+- ExpandedParameters cannot be relied on as a server-side filter in this path.
+- Do not retry the same filter syntax.
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
+```
+
+## Current Small Step — Read EventHandlerRevisions Property Metadata
+
+Before filtering handler revisions, inspect the tenant-published property contract:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventHandlerRevisions
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Capture the complete JSON response, especially `Properties`.
 
 ## Safety Boundary
 
@@ -141,6 +163,6 @@ Capture the complete JSON response, including an empty result.
 - Do not invoke CreateCoAndLines.
 - Do not guess Customer Order JSON properties.
 - Do not edit revisions, actions, handlers, scripts, events, or metadata.
-- Do not inspect EventHandlerRevisions in the same step.
+- Do not filter EventHandlerRevisions until its actual property contract is confirmed.
 - Do not implement Process/Reprocess or direct table inserts yet.
 ```
