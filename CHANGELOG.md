@@ -22,10 +22,11 @@ Lines  : SL.SLCoitems
 
 - `tests/evidence/2026-07-30-slcoss-header-method-list.md` recording relevant standard header-method candidates.
 - `tests/evidence/2026-07-30-create-co-and-lines-parameters.md` recording the standard extension-method parameter names.
-- `implementation/15-idomethodparameters-metadata-fallback.md` documenting the failed legacy metadata route and successful REST v1 fallback.
+- `implementation/15-idomethodparameters-metadata-fallback.md` documenting metadata-route discovery and REST v1 fallbacks.
 - `tests/evidence/2026-07-30-idomethodparameters-info-endpoint-500.md` recording the generic HTTP 500 response.
-- `tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md` confirming published metadata properties.
+- `tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md` confirming published parameter metadata properties.
 - `tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md` confirming `InputFlag`, `OutputFlag`, and `MessageFlag` for both parameters.
+- `tests/evidence/2026-07-30-idomethods-idoinfo-properties.md` confirming the published method-level metadata properties.
 
 ### Changed
 
@@ -74,9 +75,11 @@ CoResult          : VARIANT, InputFlag=1, OutputFlag=1, MessageFlag=1
 
 - Confirmed that `CoAndLineInfoJson` is input-only.
 - Confirmed that `CoResult` is input/output and is the framework message parameter.
-- Replaced the failed `/ido/info/IdoMethodParameters` route with the successful REST v1 IDOInfo fallback.
+- Replaced the failed `/ido/info/IdoMethodParameters` route with successful REST v1 metadata calls.
+- Confirmed that `IdoMethods` exposes `MethodDesc`, `MethodType`, `TxnFlag`, `StoredProcName`, `BaseCollectionName`, `DerOutriggerProfile`, `DerSpMethodsAllowed`, `MethodParameters`, and `MethodResultSets`.
+- Confirmed that the published `IdoMethods` property list does not directly expose an extension class, assembly, source code, help URL, or JSON-schema field.
 - Kept the supported Customer Order creation sequence unconfirmed until the exact JSON schema and runtime result behavior are verified.
-- Advanced the next step to a read-only `IdoMethods` metadata inspection; no business method execution is required.
+- Advanced the next step to a read-only filtered load of the single `SLCos / CreateCoAndLines` method row.
 
 ### Current SMK069 Status
 
@@ -95,7 +98,8 @@ CoResult          : VARIANT, InputFlag=1, OutputFlag=1, MessageFlag=1
 [CONFIRMED] CreateCoAndLines is Extension Class - Standard Method
 [CONFIRMED] CoAndLineInfoJson = input-only
 [CONFIRMED] CoResult = input/output + message parameter
-[NEXT] discover exact CreateCoAndLines JSON schema
+[CONFIRMED] IdoMethods published property metadata
+[NEXT] load the SLCos / CreateCoAndLines method metadata row
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -104,7 +108,7 @@ CoResult          : VARIANT, InputFlag=1, OutputFlag=1, MessageFlag=1
 
 ### Planned
 
-- Read `IdoMethods` property metadata and identify any implementation-class, assembly, source, help, or description fields.
+- Load only the `IdoMethods` row for `SLCos / CreateCoAndLines` and inspect `MethodDesc`, `MethodType`, `TxnFlag`, `StoredProcName`, `BaseCollectionName`, `DerOutriggerProfile`, and `DerSpMethodsAllowed`.
 - Determine the exact `CoAndLineInfoJson` schema and `CoResult` behavior without risking standard-table inserts.
 - Inspect `NewCustomerOrderValidSp` or `SL.SLCoitems` methods only after `CreateCoAndLines` has been evaluated.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
