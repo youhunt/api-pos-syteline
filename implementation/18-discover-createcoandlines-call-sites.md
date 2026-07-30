@@ -11,9 +11,10 @@ Decoded payload type                     : JSON object / JObject
 Specific order structure required         : CONFIRMED
 Exact business JSON schema                : NOT CONFIRMED
 Business-property guessing                : STOPPED
-Metadata call-site discovery              : STOPPED BY USER-APPROVED PIVOT
-Further EventAction revision discovery    : CANCELLED
-Replacement implementation path           : implementation/19-controlled-sp-direct-order-processing.md
+Metadata call-site discovery              : RESUMED BY USER
+Current EventActions fields               : EXHAUSTED — ZERO ROWS
+EventActionRevisions property discovery   : COMPLETED
+EventActionRevisions.Parameters search    : NEXT
 ```
 
 ## Confirmed Runtime Findings
@@ -47,7 +48,7 @@ Business-result rules discovered:
 - Failure records may or may not include ErrrorMessage.
 ```
 
-## Completed Metadata Searches
+## Completed Current-Metadata Searches
 
 All searches below succeeded technically and returned zero rows:
 
@@ -58,23 +59,58 @@ EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
 EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 ```
 
-This did not prove that no standard call site existed. Remaining revision/form/script paths were available, but the user approved stopping this investigation because a previous working integration used a stored procedure with direct inserts into `co_mst` and `coitem_mst`.
+The current `EventActions` path is exhausted. This does not prove that no standard call site exists.
 
-## Decision Closure
-
-```text
-Decision date          : 30 July 2026
-User approval          : CONFIRMED
-CreateCoAndLines path  : CLOSED
-Next path              : controlled stored procedure review and adaptation
-SQL implemented        : NO
-SQL executed           : NO
-```
-
-Continue with:
+## Decision History
 
 ```text
-implementation/19-controlled-sp-direct-order-processing.md
+30 July 2026 — metadata discovery was temporarily stopped for a possible stored-procedure path.
+30 July 2026 — user explicitly requested metadata discovery to continue.
 ```
 
-The previous working stored procedure must be reviewed before a replacement or adaptation is written.
+The stored-procedure option remains documented in `implementation/19-controlled-sp-direct-order-processing.md`, but it is deferred and is not the active next step.
+
+## Confirmed EventActionRevisions Properties
+
+Tenant IDOInfo confirmed the following relevant fields:
+
+```text
+ExpandedParameters      : String(4000), read-only
+ActionType              : Byte
+Description             : String(40)
+EventHandlerRowPointer  : GUID
+Parameters              : String(3800)
+Sequence                : Short Integer
+RowPointer              : GUID, read-only
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
+```
+
+The first revision search field is raw `Parameters`. `ExpandedParameters` remains a later separate fallback.
+
+## Current Small Step
+
+Run this read-only REST v1 request:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Capture the complete JSON response, including an empty result.
+
+## Safety Boundary
+
+```text
+- Read metadata only.
+- Do not invoke CreateCoAndLines.
+- Do not guess Customer Order JSON properties.
+- Do not edit revisions, actions, handlers, scripts, events, or metadata.
+- Do not search ExpandedParameters or EventHandlerRevisions in the same step.
+- Do not implement Process/Reprocess or direct table inserts yet.
+```
