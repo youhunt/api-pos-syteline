@@ -62,7 +62,8 @@ Do not create a separate `site_ref`; standard `SiteRef` fulfills the source requ
 [COMPLETED] first mandatory customer validation requirement
 [CONFIRMED] standard Customer Order header IDO = SL.SLCos
 [CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
-[IN PROGRESS] standard Customer Order method/business-process discovery
+[REVIEWED]  SL.SLCos method-name list
+[NEXT]      inspect CreateCoAndLines parameters
 [NOT STARTED] custom Process/Reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -97,19 +98,9 @@ Valid customer   → process_status V + validation_msg NULL
 
 Customer validation is fully completed and reusable by the form, CSV/import path, controlled API receive method, and Process/Reprocess action.
 
-## Standard Customer Order Discovery
+## Standard Customer Order Entity Discovery
 
-### Incorrect first attempt
-
-```text
-SL.SLCustomers / oCustomers
-```
-
-This belongs to the standard Customers form and is only the customer-master IDO.
-
-### Confirmed header IDO
-
-The standard **Customer Orders** form primary collection shows:
+### Header
 
 ```text
 Primary Collection : SL.SLCos
@@ -117,21 +108,7 @@ Collection          : SL.SLCos
 Collection Name     : blank / not assigned
 ```
 
-Decision:
-
-```text
-Standard Customer Order header IDO = SL.SLCos
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-standard-customer-order-header-ido.md
-```
-
-### Confirmed line IDO
-
-The standard **Customer Order Lines** form primary collection shows:
+### Lines
 
 ```text
 Primary Collection : SL.SLCoitems
@@ -139,34 +116,72 @@ Collection          : SL.SLCoitems
 Collection Name     : blank / not assigned
 ```
 
-Decision:
+Evidence:
 
 ```text
-Standard Customer Order line IDO = SL.SLCoitems
+tests/evidence/2026-07-30-standard-customer-order-header-ido.md
+tests/evidence/2026-07-30-standard-customer-order-line-ido.md
 ```
+
+## SL.SLCos Method Discovery
+
+The tenant method-name list was reviewed without modifying or executing any standard method.
+
+Most relevant candidates:
+
+```text
+CreateCoAndLines
+NewCustomerOrderValidSp
+CreateCoColSp
+CoCustomerValidSp
+CoCustomerValid2Sp
+CoCustSeqValidSp
+VerifyCoCustNumSp
+CoNextKeyDelSp
+SumCoSp
+```
+
+Current assessment:
+
+```text
+CreateCoAndLines          : strongest combined header-and-line candidate
+NewCustomerOrderValidSp   : validates a new order and may return default co_num
+CreateCoColSp             : possible header/collection creation method
+CoCustomerValidSp         : customer validation and default population
+```
+
+These are candidates only. The supported creation sequence is still not confirmed because parameter contracts have not been reviewed.
 
 Evidence:
 
 ```text
-tests/evidence/2026-07-30-standard-customer-order-line-ido.md
+tests/evidence/2026-07-30-slcoss-header-method-list.md
 ```
-
-The IDO names are confirmed, but the supported creation process and relevant standard methods are not yet confirmed.
 
 ## Immediate Next Step
 
-Perform only this discovery action:
+Inspect only method `CreateCoAndLines`:
 
 ```text
-1. Exit Design Mode without saving standard-form changes
-2. Open IDO Methods
-3. Select IDO SL.SLCos
-4. Do not create, edit, resync, execute, or save methods
-5. Capture the visible method-name list for SL.SLCos
-6. Send a screenshot
+IDO         : SL.SLCos
+Method Name : CreateCoAndLines
 ```
 
-Do not inspect `SL.SLCoitems` methods in the same step.
+Capture:
+
+```text
+Method Type
+Transactional setting
+Stored Procedure / implementation reference
+all Parameter Names
+Sequence
+User Data Type
+Custom Load Method Output Properties, if populated
+```
+
+Do not edit, resync, save, or execute the standard method.
+
+Do not inspect another method or `SL.SLCoitems` in the same step.
 
 Do not create Process, Customer Orders, CSV import, or the controlled API receive method during this step.
 
@@ -207,6 +222,7 @@ implementation/13-create-SMK069-customer-validation.md
 implementation/14-discover-standard-customer-order-processing.md
 tests/evidence/2026-07-30-standard-customer-order-header-ido.md
 tests/evidence/2026-07-30-standard-customer-order-line-ido.md
+tests/evidence/2026-07-30-slcoss-header-method-list.md
 CHANGELOG.md
 ```
 
@@ -217,14 +233,16 @@ Lanjutkan repository private youhunt/api-pos-syteline sebagai source of truth.
 
 Current status:
 - staging table, IDO, Error Processing form, Preview, process_status mapping, and customer validation are complete;
-- standard Customer Order header IDO is confirmed as SL.SLCos;
-- standard Customer Order line IDO is confirmed as SL.SLCoitems;
-- Collection Name is blank/not assigned on both standard forms;
-- standard methods, custom Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not complete.
+- standard Customer Order header IDO is SL.SLCos;
+- standard Customer Order line IDO is SL.SLCoitems;
+- SL.SLCos method list has been reviewed;
+- relevant candidates include CreateCoAndLines, NewCustomerOrderValidSp, CreateCoColSp, and CoCustomerValidSp;
+- no standard method has been modified or executed;
+- custom Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not complete.
 
 Target remains:
 POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
 
 Next step only:
-Open IDO Methods for SL.SLCos and provide a screenshot of the available method-name list. Do not create, modify, execute, resync, or save any standard method, and do not inspect SL.SLCoitems in the same step.
+Open IDO Methods for SL.SLCos, select CreateCoAndLines, and provide its complete Method Attributes and parameter list. Do not modify, resync, save, or execute it. Do not inspect another method or SL.SLCoitems in the same step.
 ```
