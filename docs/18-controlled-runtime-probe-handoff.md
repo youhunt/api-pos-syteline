@@ -16,7 +16,8 @@ EventActionRevisions.Parameters search           : COMPLETED — ZERO ROWS
 EventActionRevisions.ExpandedParameters filter   : FAILED — ILLEGAL FILTER
 EventHandlerRevisions IDOInfo                    : CONFIRMED
 Direct handler-revision text search              : NOT AVAILABLE
-Next step                                        : discover Script metadata collections
+Script-name collection discovery                 : COMPLETED — NO USEFUL APP SCRIPT CANDIDATE
+Next step                                        : search CollectionDesc for script
 ```
 
 ## Confirmed Runtime Contract
@@ -60,75 +61,40 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'            : zero r
 EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'                : zero rows
 ```
 
-## EventActionRevisions Contract and Filter Limitation
+## Revision Metadata Findings
+
+`EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'` returned `IllegalFilterException`, `MessageCode = 450`, and `Items = null`.
+
+This was a rejected filter, not a zero-row search.
+
+`EventHandlerRevisions` exposes handler context and child `EventActionRevisions`/`EventActions`, but no direct text property such as `MethodToCall` or `Parameters`.
+
+## Script Collection Discovery
+
+The read-only search:
 
 ```text
-ExpandedParameters      : String(4000), read-only
-ActionType              : Byte
-Description             : String(40)
-EventHandlerRowPointer  : GUID
-Parameters              : String(3800)
-Sequence                : Short Integer
-RowPointer              : GUID, read-only
+CollectionName LIKE '%Script%'
 ```
 
-The filter:
+returned three collections:
 
 ```text
-EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'
+BuildApplicationMessagesScript : MGCore/Core temporary application-message script-generation IDO
+UTScripts                      : UnitTesting/BaseSyteLine
+UTScriptSelections             : UnitTesting/BaseSyteLine
 ```
 
-returned:
-
-```text
-Message        : Error processing LoadCollection request: IllegalFilterException
-MessageCode    : 450
-Items          : null
-Bookmark       : null
-MoreRowsExists : false
-```
-
-This is not a zero-row search. The filter was rejected before a result set was produced.
-
-## EventHandlerRevisions Contract
-
-Relevant tenant-published properties:
-
-```text
-EventActionRevisions          : CONTAINS
-EventActions                  : CONTAINS
-AccessAs                      : String(50)
-AppliesToInitiators           : String(255)
-AppliesToObjects              : String(255)
-AppliesToSites                : String(255)
-Description                   : String(40)
-EventName                     : String(50), read-only
-EventRevision                 : Long Integer, read-only
-EventRevisionRowPointer       : GUID, read-only
-InitialActionSequence         : Short Integer, read-only
-Sequence                      : Short Integer
-Synchronous                   : Byte
-Transactional                 : Byte
-RowPointer                    : GUID, read-only
-```
-
-No direct call-site text property such as `MethodToCall` or `Parameters` is exposed. The child action collections are the call-bearing path and have already been investigated as far as the tenant permits through direct filtering.
+No obvious production form-script or global-script metadata collection was identified by name.
 
 Evidence:
 
 ```text
-tests/evidence/2026-07-30-event-handler-metadata-collections.md
-tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
-tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
-tests/evidence/2026-07-30-event-action-metadata-collections.md
-tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
-tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
-tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
-tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
 tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
+tests/evidence/2026-07-30-script-named-metadata-collections.md
 ```
 
 ## Decision History
@@ -142,14 +108,14 @@ The stored-procedure option remains deferred and unimplemented.
 
 ## Next Step Only
 
-Discover actual tenant metadata collections whose names contain `Script`:
+Search tenant collection descriptions for `script`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25Script%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionDesc%20LIKE%20%27%25script%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
 Send the complete JSON response, including an empty result.
 
-Do not load script rows, search form metadata, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
+Do not load candidate collection rows, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
