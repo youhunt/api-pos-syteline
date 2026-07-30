@@ -5,13 +5,15 @@
 ```text
 Environment                         : DEV
 Controlled malformed probes         : COMPLETED
-All four no-order checks             : COMPLETED — ZERO ROWS
-Base64 input requirement             : CONFIRMED
-Decoded payload type                 : JSON object / JObject
-Specific order structure required    : CONFIRMED
-Exact business JSON schema           : NOT YET CONFIRMED
-Further property-name guessing       : STOPPED
-Standard call-site discovery         : STARTED — READ-ONLY
+All four no-order checks            : COMPLETED — ZERO ROWS
+Base64 input requirement            : CONFIRMED
+Decoded payload type                : JSON object / JObject
+Specific order structure required   : CONFIRMED
+Exact business JSON schema          : NOT YET CONFIRMED
+Further property-name guessing      : STOPPED
+Standard call-site discovery        : STARTED — READ-ONLY
+Candidate event metadata IDOs       : CONFIRMED
+EventHandlers property discovery    : NEXT
 ```
 
 ## Why the Discovery Path Changes
@@ -28,7 +30,7 @@ The completed runtime probes confirmed:
 
 The method therefore expects one or more specific business members or a specific nested order structure. Guessing names such as `Order`, `Header`, `Lines`, `Co`, or similar is not authorized because tenant evidence has not confirmed them.
 
-The next safe path is to locate a standard form event handler, form script, global script, application event action, or another metadata call site that invokes:
+The safe path is to locate a standard form event handler, form script, global script, application event action, or another metadata call site that invokes:
 
 ```text
 SLCos.CreateCoAndLines
@@ -36,21 +38,73 @@ SLCos.CreateCoAndLines
 
 A standard call site may reveal the exact JSON construction and Base64 encoding behavior.
 
-## Current Small Step — Discover Candidate Metadata Collections
+## Completed Step — Candidate Metadata Collections
 
-Use the already confirmed read-only `IdoCollections` REST v1 load to find metadata collections related to form events and event handlers.
+Read-only tenant metadata returned the following collections:
+
+| CollectionName | Description | ServerName | AccessAs |
+| --- | --- | --- | --- |
+| `EventHandlerRevisions` | Event Handler Revisions | `MGCore` | `Core` |
+| `EventHandlers` | Event Handlers | `MGCore` | `Core` |
+| `EventHandlerStates` | Event Handler Status | `MGCore` | `Core` |
+| `IdoEventHandlerAppliesToObjects` | NULL | `MGCore` | `Core` |
+| `IdoEventHandlerAppliesToTasks` | NULL | `MGCore` | `Core` |
+| `QueuedEventHandlers` | Event Queue | `MGCore` | `Core` |
+
+Response status:
+
+```text
+Message        : Success
+MessageCode    : 0
+MoreRowsExists : false
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-event-handler-metadata-collections.md
+```
+
+## Interpretation
+
+The first metadata IDO to inspect is:
+
+```text
+EventHandlers
+```
+
+`EventHandlerRevisions` is also relevant, but it will not be inspected in the same small step. The other discovered IDOs appear to concern status, applicability, task/object association, or queued execution; their exact property contracts remain uninspected.
+
+No handler-content property name is assumed yet.
+
+## Current Small Step — Read EventHandlers Property Metadata
+
+Use REST v1 IDOInfo:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25FormEvent%25%27%20OR%20CollectionName%20LIKE%20%27%25EventHandler%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventHandlers
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete JSON response.
+Capture the complete response, especially the published `Properties` list.
 
-## Purpose
+The property list will determine whether `EventHandlers` exposes fields for:
 
-The result will identify the actual tenant metadata IDO names before attempting any filtered search for `CreateCoAndLines` references.
+```text
+HandlerName
+EventName
+ActionType
+ActionText
+MethodName
+IDOName
+Script
+Parameters
+Description
+Revision
+```
+
+These names are search objectives only, not assumed tenant property names.
 
 ## Safety Boundary
 
@@ -58,6 +112,7 @@ The result will identify the actual tenant metadata IDO names before attempting 
 - Read metadata only.
 - Do not invoke CreateCoAndLines again.
 - Do not guess a Customer Order JSON property.
+- Do not query EventHandlerRevisions in the same step.
 - Do not edit form handlers, scripts, events, or metadata.
 - Do not create Process/Reprocess logic yet.
 - Do not import CSV or create the controlled receive API method.
