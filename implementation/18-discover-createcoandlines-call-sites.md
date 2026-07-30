@@ -9,189 +9,72 @@ All four no-order checks                  : COMPLETED — ZERO ROWS
 Base64 input requirement                  : CONFIRMED
 Decoded payload type                     : JSON object / JObject
 Specific order structure required         : CONFIRMED
-Exact business JSON schema                : NOT YET CONFIRMED
-Further property-name guessing            : STOPPED
-Standard call-site discovery              : STARTED — READ-ONLY
-EventHandlers.MethodToCall search          : COMPLETED — ZERO ROWS
-EventActions.Parameters search             : COMPLETED — ZERO ROWS
-EventActions.ExpandedParameters search     : COMPLETED — ZERO ROWS
-EventActions.SubstitutedParameters search  : COMPLETED — ZERO ROWS
-EventActionRevisions property discovery    : NEXT
+Exact business JSON schema                : NOT CONFIRMED
+Business-property guessing                : STOPPED
+Metadata call-site discovery              : STOPPED BY USER-APPROVED PIVOT
+Further EventAction revision discovery    : CANCELLED
+Replacement implementation path           : implementation/19-controlled-sp-direct-order-processing.md
 ```
 
-## Confirmed Runtime Boundary
-
-Controlled probes established:
+## Confirmed Runtime Findings
 
 ```text
-1. CoAndLineInfoJson must be Base64.
-2. Decoded content must parse as a JSON object / JObject.
-3. An empty object is rejected as blank order input.
-4. An arbitrary non-business property is also rejected as blank order input.
-5. No Customer Order was created by any of the four probes in the checked windows.
+CoAndLineInfoJson
+→ Base64 decode
+→ JSON object / JObject parse
+→ locate expected non-blank order structure
+→ business schema validation
+→ Customer Order and line processing
 ```
 
-Therefore, business-property guessing is stopped. Discovery targets tenant metadata that may call:
+Completed probes:
 
 ```text
-SLCos.CreateCoAndLines
+Probe 1 : raw {                         → invalid Base64
+Probe 2 : ew==                          → decoded { → JObject parser failure
+Probe 3 : e30=                          → decoded {} → blank order input
+Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
 ```
 
-## Confirmed Metadata Sources
+All four post-probe `dbo.co_mst` checks returned zero rows with no SQL error.
 
-Event-handler collections:
+Business-result rules discovered:
 
 ```text
-EventHandlerRevisions
-EventHandlers
-EventHandlerStates
-IdoEventHandlerAppliesToObjects
-IdoEventHandlerAppliesToTasks
-QueuedEventHandlers
+- MessageCode = 0 does not establish business success.
+- CoResult is returned as a JSON-array string.
+- Evaluate business Status independently.
+- Failure records may or may not include ErrrorMessage.
 ```
 
-Event-action collections:
+## Completed Metadata Searches
+
+All searches below succeeded technically and returned zero rows:
 
 ```text
-EventAction_GenericParms
-EventActionRevisions
-EventActions
-EventActionStates
-EventActionVariableAccess
+EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
+EventActions.Parameters LIKE '%CreateCoAndLines%'
+EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
+EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 ```
 
-`EventActions` is the primary current child-action metadata source. `EventActionRevisions` is the next revision metadata source to inspect.
+This did not prove that no standard call site existed. Remaining revision/form/script paths were available, but the user approved stopping this investigation because a previous working integration used a stored procedure with direct inserts into `co_mst` and `coitem_mst`.
 
-## Confirmed EventActions Properties
+## Decision Closure
 
 ```text
-ActionType                     : Byte, required
-DerActionTypeText              : String(50), read-only
-Parameters                     : String(MAX)
-ExpandedParameters             : String(4000), read-only
-SubstitutedParameters          : String(4000), read-only
-EventName                      : String(50), read-only
-EventHandlerSequence           : Short Integer, read-only
-Sequence                       : Short Integer, required
-Description                    : String(40)
-EventHandlerRowPointer         : GUID, required
-RowPointer                     : GUID, read-only
-AccessAs                       : String(50), read-only
-DerAccessAs                    : String(50)
-EventActionVariableAccess      : CONTAINS
-IsEventActionRevision          : Byte
-EventHandlerRevisionRowPointer : GUID, read-only
+Decision date          : 30 July 2026
+User approval          : CONFIRMED
+CreateCoAndLines path  : CLOSED
+Next path              : controlled stored procedure review and adaptation
+SQL implemented        : NO
+SQL executed           : NO
 ```
 
-Evidence:
+Continue with:
 
 ```text
-tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
+implementation/19-controlled-sp-direct-order-processing.md
 ```
 
-## Completed Call-Site Searches
-
-### Parent EventHandlers.MethodToCall
-
-```text
-Filter          : MethodToCall LIKE '%CreateCoAndLines%'
-Rows returned   : 0
-Conclusion      : no direct parent MethodToCall reference found
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
-```
-
-### Raw EventActions.Parameters
-
-```text
-Filter          : Parameters LIKE '%CreateCoAndLines%'
-Rows returned   : 0
-Conclusion      : no current raw Parameters reference found
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
-```
-
-### Derived EventActions.ExpandedParameters
-
-```text
-Filter          : ExpandedParameters LIKE '%CreateCoAndLines%'
-Rows returned   : 0
-Message         : Success
-MessageCode     : 0
-MoreRowsExists  : false
-Conclusion      : no current ExpandedParameters reference found
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
-```
-
-### Derived EventActions.SubstitutedParameters
-
-```text
-Filter          : SubstitutedParameters LIKE '%CreateCoAndLines%'
-Rows returned   : 0
-Message         : Success
-MessageCode     : 0
-MoreRowsExists  : false
-Conclusion      : no current SubstitutedParameters reference found
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no-match.md
-```
-
-## Current EventActions Conclusion
-
-The current action fields checked are exhausted:
-
-```text
-Parameters             : zero rows
-ExpandedParameters     : zero rows
-SubstitutedParameters  : zero rows
-```
-
-This does not prove that no standard call site exists. Remaining paths include event-action revisions, event-handler revisions, form metadata, scripts, or another metadata object.
-
-## Current Small Step — Read EventActionRevisions Property Metadata
-
-Before filtering revision rows, inspect the tenant-published property contract:
-
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventActionRevisions
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
-```
-
-Capture the complete JSON response, especially the `Properties` list.
-
-## Interpretation Rules
-
-```text
-- Read metadata only.
-- Do not assume EventActionRevisions uses the same property names as EventActions.
-- Do not load or filter revision rows until the actual property contract is confirmed.
-- Do not inspect EventHandlerRevisions in the same step.
-```
-
-## Safety Boundary
-
-```text
-- Do not invoke CreateCoAndLines again.
-- Do not guess a Customer Order JSON property.
-- Do not edit event actions, handlers, scripts, events, or metadata.
-- Do not create Process/Reprocess logic yet.
-- Do not import CSV or create the controlled receive API method.
-```
+The previous working stored procedure must be reviewed before a replacement or adaptation is written.
