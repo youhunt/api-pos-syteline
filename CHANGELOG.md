@@ -34,6 +34,7 @@ tests/evidence/2026-07-30-createcoandlines-empty-object-blank-order-failure.md
 tests/evidence/2026-07-30-createcoandlines-empty-object-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failure.md
 tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
+tests/evidence/2026-07-30-event-handler-metadata-collections.md
 ```
 
 ### Changed
@@ -99,6 +100,19 @@ Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank orde
 - Completed four post-probe read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
 - Stopped guessing business-schema property names.
 - Pivoted to read-only discovery of standard form/event/script metadata that calls `SLCos.CreateCoAndLines`.
+- Confirmed tenant event-related metadata IDOs:
+
+```text
+EventHandlerRevisions
+EventHandlers
+EventHandlerStates
+IdoEventHandlerAppliesToObjects
+IdoEventHandlerAppliesToTasks
+QueuedEventHandlers
+```
+
+- Confirmed all six are published from `MGCore` with `AccessAs = Core`.
+- Selected `EventHandlers` as the next IDO for property-metadata inspection; `EventHandlerRevisions` remains a later separate step.
 
 ### Current SMK069 Status
 
@@ -119,7 +133,9 @@ Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank orde
 [CONFIRMED] decoded payload = JSON object / JObject
 [CONFIRMED] specific order structure is required
 [COMPLETED] four no-order checks = zero rows
-[NEXT] discover standard metadata call sites for CreateCoAndLines
+[CONFIRMED] candidate event metadata IDOs
+[NEXT] read EventHandlers property metadata
+[PENDING] locate exact standard CreateCoAndLines call site
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled receive API method
@@ -129,7 +145,7 @@ Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank orde
 
 ### Planned
 
-- Discover metadata collections related to form events and event handlers.
+- Read `EventHandlers` IDOInfo property metadata.
 - Locate standard tenant call sites for `SLCos.CreateCoAndLines` without editing metadata.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
