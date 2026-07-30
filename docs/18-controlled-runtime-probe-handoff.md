@@ -18,7 +18,9 @@ EventHandlerRevisions IDOInfo                    : CONFIRMED
 Direct handler-revision text search              : NOT AVAILABLE
 Script-name discovery                            : NO USEFUL APP SCRIPT CANDIDATE
 Script-description discovery                     : NO USEFUL APP SCRIPT CANDIDATE
-Next step                                        : discover Form metadata collections
+Form metadata discovery                          : COMPLETED
+Selected form metadata candidate                 : FormsAndObjects
+Next step                                        : FormsAndObjects IDOInfo
 ```
 
 ## Confirmed Runtime Contract
@@ -87,6 +89,38 @@ SLInvSequences_IDS             : same false-positive mechanism
 
 No production form/global script metadata source has been identified through the script-name or script-description paths.
 
+## Form Metadata Discovery
+
+The broad tenant search for collection names containing `Form` completed successfully with `MessageCode = 0` and `MoreRowsExists = false`.
+
+Many results were lexical false positives from words such as:
+
+```text
+Performance
+Formula
+Information
+Format
+ProForma
+```
+
+Relevant candidates:
+
+| CollectionName | CollectionDesc | ServerName | AccessAs |
+| --- | --- | --- | --- |
+| `FormsAndObjects` | Wrapper for FormControl and FormSync | `MGCore` | `Core` |
+| `FormAliases` | NULL | `MGCore` | `Core` |
+| `AppForms` | IDO for Widget Forms | `MGCore` | `Core` |
+| `DocTypeFormProperties` | NULL | `MGCore` | `Core` |
+| `WSFormExtensionHints` | NULL | `MGCore` | `Core` |
+
+Selected candidate:
+
+```text
+FormsAndObjects
+```
+
+It is the strongest tenant-confirmed candidate because its description directly references `FormControl` and `FormSync`. This does not yet prove that it exposes script text or contains `CreateCoAndLines`.
+
 Evidence:
 
 ```text
@@ -96,6 +130,7 @@ tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter
 tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-script-named-metadata-collections.md
 tests/evidence/2026-07-30-script-description-metadata-collections.md
+tests/evidence/2026-07-30-form-named-metadata-collections.md
 ```
 
 ## Decision History
@@ -109,14 +144,14 @@ The stored-procedure option remains deferred and unimplemented.
 
 ## Next Step Only
 
-Discover tenant collections whose names contain `Form`:
+Read the property metadata for `FormsAndObjects`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25Form%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/FormsAndObjects
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete JSON response, including `MoreRowsExists`.
+Send the complete JSON response, especially `Properties`.
 
-Do not load rows from any returned form collection, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
+Do not load `FormsAndObjects` rows, inspect another form collection, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
