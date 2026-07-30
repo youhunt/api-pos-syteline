@@ -37,7 +37,7 @@ Probe 3 : e30=                          → decoded {} → blank order input
 Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
 ```
 
-Probe 4 confirmed that an arbitrary non-empty object does not satisfy the method contract. The method requires one or more specific business members or a specific nested order structure. The exact names remain unconfirmed.
+Probe 4 confirmed that an arbitrary non-empty object does not satisfy the method contract. The exact required business member names and nesting remain unconfirmed.
 
 ## Business Result Rules
 
@@ -74,6 +74,47 @@ tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failur
 tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
 ```
 
+## Technical Decision
+
+Payload-property guessing is stopped. Discovery now targets standard tenant metadata that may call:
+
+```text
+SLCos.CreateCoAndLines
+```
+
+## Confirmed Event Metadata Collections
+
+Read-only `IdoCollections` discovery returned:
+
+```text
+EventHandlerRevisions
+EventHandlers
+EventHandlerStates
+IdoEventHandlerAppliesToObjects
+IdoEventHandlerAppliesToTasks
+QueuedEventHandlers
+```
+
+All are published from:
+
+```text
+ServerName : MGCore
+AccessAs   : Core
+```
+
+Strongest initial candidates:
+
+```text
+EventHandlers
+EventHandlerRevisions
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-event-handler-metadata-collections.md
+```
+
 ## Current Unknowns
 
 ```text
@@ -85,35 +126,22 @@ tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
 - whether co_num is supplied or generated
 - success CoResult shape
 - atomicity of header and line creation
+- which standard metadata object calls CreateCoAndLines
 ```
-
-## Technical Decision
-
-Stop guessing payload properties. The next safe discovery path is to locate a standard form event handler, form script, global script, application event action, or other tenant metadata call site that invokes:
-
-```text
-SLCos.CreateCoAndLines
-```
-
-A standard call site may expose the exact JSON-building and Base64-encoding behavior.
 
 ## Next Step Only
 
-Follow:
-
-```text
-implementation/18-discover-createcoandlines-call-sites.md
-```
-
-Run this read-only metadata query:
+Read the published property metadata for `EventHandlers`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25FormEvent%25%27%20OR%20CollectionName%20LIKE%20%27%25EventHandler%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventHandlers
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete JSON response.
+Send the complete JSON response, especially `Properties`.
+
+Do not inspect `EventHandlerRevisions` in the same step.
 
 ## Safety Boundary
 
