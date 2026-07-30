@@ -3,25 +3,26 @@
 ## Current Status
 
 ```text
-Customer validation               : FULLY COMPLETED
-Process/Reprocess design           : STARTED — DISCOVERY ONLY
-Standard Customer Order header IDO : CONFIRMED — SL.SLCos
-Standard Customer Order line IDO   : CONFIRMED — SL.SLCoitems
-SL.SLCos method list               : REVIEWED
-CreateCoAndLines attributes        : CONFIRMED
-CreateCoAndLines parameter names   : CONFIRMED
-Parameter directions / JSON schema : NOT YET CONFIRMED
-Standard creation process          : NOT YET CONFIRMED
-Customer Order creation            : NOT STARTED
-Form Process button                : NOT STARTED
-Controlled API receive method      : NOT STARTED
+Customer validation                : FULLY COMPLETED
+Process/Reprocess design            : DISCOVERY ONLY
+Standard Customer Order header IDO  : CONFIRMED — SL.SLCos
+Standard Customer Order line IDO    : CONFIRMED — SL.SLCoitems
+SL.SLCos method list                : REVIEWED
+CreateCoAndLines attributes         : CONFIRMED
+CreateCoAndLines parameter names    : CONFIRMED
+CreateCoAndLines parameter direction: CONFIRMED
+CreateCoAndLines JSON schema        : NOT YET CONFIRMED
+Standard creation process           : NOT YET CONFIRMED
+Customer Order creation             : NOT STARTED
+Form Process button                 : NOT STARTED
+Controlled API receive method       : NOT STARTED
 ```
 
 ## Objective
 
-Identify the exact standard Customer Order IDOs and supported business process available in the user's SyteLine tenant before creating the custom Process/Reprocess method.
+Identify the exact standard Customer Order IDOs and supported business process available in the user's SyteLine tenant before creating the reusable custom Process/Reprocess method.
 
-The final custom processor must create Customer Order Header and Customer Order Lines through supported SyteLine processing, with the final records stored in:
+The final processor must create Customer Order Header and Customer Order Lines through supported SyteLine processing, with final records stored in:
 
 ```text
 co_mst
@@ -46,39 +47,20 @@ standard SyteLine Customer Order IDO/business process
 co_mst + coitem_mst
 ```
 
-The form and future API must call the same processing core.
-
-One processing call handles one staged order group:
+One processing call handles one staged group:
 
 ```text
 SiteRef + co_num
 ```
 
-All staging lines for that group must be processed together.
+All staging lines in that group must be processed together.
 
 ## Confirmed Standard Entity IDOs
 
-### Customer Order Header
-
 ```text
-Primary Collection : SL.SLCos
-Collection          : SL.SLCos
-Collection Name     : blank / not assigned
-```
-
-### Customer Order Lines
-
-```text
-Primary Collection : SL.SLCoitems
-Collection          : SL.SLCoitems
-Collection Name     : blank / not assigned
-```
-
-Decision:
-
-```text
-Header IDO : SL.SLCos
-Line IDO   : SL.SLCoitems
+Customer Order Header IDO : SL.SLCos
+Customer Order Line IDO   : SL.SLCoitems
+Collection Name           : blank / not assigned on both standard forms
 ```
 
 Evidence:
@@ -92,7 +74,7 @@ The earlier `SL.SLCustomers / oCustomers` screenshot belonged to the Customers f
 
 ## SL.SLCos Method Discovery
 
-The tenant method list includes several creation and validation candidates:
+Creation-related candidates found in the tenant:
 
 | Method | Method Type | Transactional | Initial Assessment |
 | --- | --- | ---: | --- |
@@ -114,8 +96,6 @@ tests/evidence/2026-07-30-slcoss-header-method-list.md
 
 ## Confirmed `CreateCoAndLines` Attributes
 
-Tenant metadata confirms:
-
 ```text
 IDO Name      : SLCos
 Method Name   : CreateCoAndLines
@@ -124,66 +104,58 @@ Transactional : unchecked / false
 Stored Proc.  : not applicable / blank
 ```
 
-`CreateCoAndLines` is implemented by the standard `SL.SLCos` extension class. It is not a Stored Procedure method and there is no Stored Procedure name to configure.
+`CreateCoAndLines` is implemented by the standard `SL.SLCos` extension class. It is not a Stored Procedure method.
 
-## Confirmed `CreateCoAndLines` Parameter Metadata
+## Confirmed Parameter Metadata
 
-The tenant displays two parameters:
+| Sequence | Parameter | Data Type | InputFlag | OutputFlag | MessageFlag |
+| ---: | --- | --- | ---: | ---: | ---: |
+| 1 | `CoAndLineInfoJson` | `VARIANT` | 1 | 0 | 0 |
+| 2 | `CoResult` | `VARIANT` | 1 | 1 | 1 |
 
-| Sequence | Parameter Name | User Data Type |
-| ---: | --- | --- |
-| 1 | `CoAndLineInfoJson` | `VARIANT` |
-| 2 | `CoResult` | `VARIANT` |
+Confirmed direction contract:
 
-The **Custom Load Method Output Properties** area is blank, which is expected for a standard method rather than a custom load method.
+```text
+CoAndLineInfoJson : input-only
+CoResult          : input/output and message parameter
+```
+
+The **Custom Load Method Output Properties** area is blank because this is a standard method.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-create-co-and-lines-parameters.md
+tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
 ```
 
-## Current Interpretation — Not Yet Final Contract
-
-The parameter names strongly suggest:
+## What Is Still Unknown
 
 ```text
-CoAndLineInfoJson : JSON payload containing Customer Order header and line information
-CoResult          : returned result/status payload
-```
-
-This is an inference from the parameter names, not yet a confirmed direction or JSON contract.
-
-Still unknown:
-
-```text
-- whether CoResult is output-only or input/output
-- the exact JSON property names and nesting
-- required versus optional header fields
-- required versus optional line fields
-- how co_num is generated or accepted
-- success and failure response shape
-- whether the extension method creates header and lines atomically
-- whether NewCustomerOrderValidSp or CoCustomerValidSp must be called first
+- exact CoAndLineInfoJson schema
+- required and optional header fields
+- required and optional line fields
+- accepted date and numeric formats
+- whether co_num is generated or supplied
+- success CoResult shape
+- failure CoResult shape
+- whether header and lines are created atomically
+- whether NewCustomerOrderValidSp or CoCustomerValidSp must run first
 - whether UpdateCollection participates in the process
 ```
 
 Do not implement Process/Reprocess until these tenant-specific details are verified.
 
-## Current Small Step — Read Metadata IDO Properties
+## Current Small Step
 
-Use a read-only metadata request to identify the properties exposed by the standard metadata IDO `IdoMethodParameters`.
+Read the published metadata for `IdoMethods` only:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/ido/info/IdoMethodParameters
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/IdoMethods
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-This call reads IDO metadata only. It does not invoke `CreateCoAndLines` and cannot create a Customer Order.
+Send the returned property-name list. We are looking for any extension-class, assembly, implementation-reference, source, help, or description property that can lead to the documented JSON contract.
 
-Send the response, or at minimum the property names listed under `Properties`.
-
-The next step will use those confirmed property names to load only the two parameter rows for `SLCos / CreateCoAndLines` and determine whether an output/by-reference flag is exposed.
-
-Do not invoke `CreateCoAndLines`, inspect another business method, create Process logic, or create Customer Orders during this step.
+This request is metadata-only. Do not invoke `CreateCoAndLines`, inspect another business method, create Process/Reprocess logic, or create a Customer Order during this step.
