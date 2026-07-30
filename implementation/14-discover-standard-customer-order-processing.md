@@ -3,15 +3,17 @@
 ## Current Status
 
 ```text
-Customer validation             : FULLY COMPLETED
-Process/Reprocess design        : STARTED — DISCOVERY ONLY
-Standard Customer Order IDO     : CONFIRMED — SL.SLCos
-Standard Customer Order line IDO: CONFIRMED — SL.SLCoitems
-Standard header method/process  : NOT YET CONFIRMED
-Standard line method/process    : NOT YET CONFIRMED
-Customer Order creation         : NOT STARTED
-Form Process button             : NOT STARTED
-Controlled API receive method   : NOT STARTED
+Customer validation              : FULLY COMPLETED
+Process/Reprocess design         : STARTED — DISCOVERY ONLY
+Standard Customer Order IDO      : CONFIRMED — SL.SLCos
+Standard Customer Order line IDO : CONFIRMED — SL.SLCoitems
+SL.SLCos method list             : REVIEWED
+CreateCoAndLines parameters      : NOT YET REVIEWED
+Standard header creation process : NOT YET CONFIRMED
+Standard line creation process   : NOT YET CONFIRMED
+Customer Order creation          : NOT STARTED
+Form Process button              : NOT STARTED
+Controlled API receive method    : NOT STARTED
 ```
 
 ## Objective
@@ -117,7 +119,7 @@ Decision:
 Standard Customer Order line IDO : SL.SLCoitems
 ```
 
-The line form and its collection are separate from the header form, but together they confirm the tenant's standard header and line entity IDOs:
+The tenant's standard entity IDOs are therefore:
 
 ```text
 Header : SL.SLCos
@@ -132,50 +134,90 @@ tests/evidence/2026-07-30-standard-customer-order-line-ido.md
 
 No standard form, collection, IDO, property, or method was modified during discovery.
 
-## Important Limitation
+## SL.SLCos Header Method Discovery
 
-Confirming the entity IDOs does not yet prove the supported creation process.
+The available method list for `SL.SLCos` was reviewed from tenant metadata.
+
+The list contains many inquiry, status, copy, validation, reporting, and processing methods. The creation-related candidates are:
+
+| Method | Method Type | Transactional | Initial Assessment |
+| --- | --- | ---: | --- |
+| `CreateCoAndLines` | Extension Class - Standard Method | No | Strongest combined header-and-line candidate; parameter contract not yet inspected |
+| `NewCustomerOrderValidSp` | Extension Class - Standard Method | Yes | Validates a new order and may return a default `co_num` |
+| `CreateCoColSp` | Extension Class - Standard Method | Yes | Candidate header/collection creation method |
+| `CoCustomerValidSp` | Extension Class - Standard Method | Yes | Customer validation and downstream default population |
+| `CoCustomerValid2Sp` | Extension Class - Standard Method | No | Additional customer validation candidate |
+| `CoCustSeqValidSp` | Extension Class - Standard Method | Yes | Customer ship-to validation candidate |
+| `VerifyCoCustNumSp` | Extension Class - Standard Method | Yes | Customer/order verification candidate |
+| `CoNextKeyDelSp` | Extension Class - Standard Method | Yes | Possibly related to order-key handling; purpose not assumed |
+| `SumCoSp` | Extension Class - Standard Method | Yes | Likely recalculation/summary after creation |
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-slcoss-header-method-list.md
+```
+
+## Discovery Decision
+
+The tenant clearly provides dedicated Customer Order business methods. However, method names alone do not prove the supported SMK069 creation sequence.
 
 Still unknown:
 
 ```text
-- standard header methods available on SL.SLCos
-- standard line methods available on SL.SLCoitems
-- Customer Order number generation method
-- minimum required properties for header insertion
-- minimum required properties for line insertion
-- whether the tenant expects UpdateCollection, a standard method, or another supported process
+- CreateCoAndLines parameter contract
+- whether CreateCoAndLines accepts a serialized dataset, XML, JSON, or scalar values
+- whether it creates both SL.SLCos and SL.SLCoitems records atomically
+- how Customer Order numbering is generated or accepted
+- minimum required header and line values
+- whether NewCustomerOrderValidSp must be called first
+- whether CoCustomerValidSp must populate default values before creation
+- whether UpdateCollection is still required
+- expected return values and Infobar behavior
 ```
 
-Do not implement the custom processor until these tenant-specific details are confirmed.
+Do not implement the custom Process/Reprocess method until these tenant-specific details are confirmed.
 
-## Current Small Step — Inspect Header Methods
+## Current Small Step — Inspect `CreateCoAndLines`
 
 Perform only this discovery step:
 
-1. exit Design Mode without saving changes to the standard forms;
-2. open **IDO Methods**;
-3. select IDO `SL.SLCos`;
-4. do not create, edit, resync, or save any method;
-5. capture a screenshot showing the method-name list available for `SL.SLCos`;
-6. if one method must be selected to display the list, select it without changing any field;
-7. send the screenshot.
+1. remain in **IDO Methods** for `SL.SLCos`;
+2. select method `CreateCoAndLines`;
+3. do not edit, resync, save, or execute it;
+4. capture the full Method Attributes area;
+5. capture all generated parameter rows, including sequence and user data type;
+6. capture any output-property area if populated;
+7. send the screenshot or copy the parameter table.
 
-Do not execute a method during this step.
+Required evidence:
 
-Do not inspect `SL.SLCoitems` methods in the same step.
+```text
+Method Name
+Method Type
+Transactional setting
+Stored Procedure / implementation reference
+Parameter Name
+Sequence
+User Data Type
+Custom Load Method Output Properties, if any
+```
+
+Do not inspect another method in the same step.
+
+Do not inspect `SL.SLCoitems` methods yet.
 
 Do not create the custom Process method, Process button, Customer Order, CSV import, or API receive method yet.
 
-## Next Step After Header Method List
+## Next Step After `CreateCoAndLines` Parameters
 
-After the tenant method list for `SL.SLCos` is visible:
+After the complete parameter contract is visible:
 
 ```text
-- identify methods related to order-number generation or initialization;
-- inspect one relevant method's parameters;
-- determine whether standard entity updates or a dedicated business method should create the header;
-- then inspect SL.SLCoitems separately.
+- determine whether the method is suitable for SMK069;
+- map staging fields to its required inputs;
+- decide whether NewCustomerOrderValidSp is also required;
+- only then inspect the next relevant method or SL.SLCoitems methods.
 ```
 
 Each discovery action will be performed one small step at a time.
