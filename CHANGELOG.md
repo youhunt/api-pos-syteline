@@ -22,7 +22,7 @@ Lines  : SL.SLCoitems
 
 - `tests/evidence/2026-07-30-slcoss-header-method-list.md` recording relevant standard header-method candidates.
 - `tests/evidence/2026-07-30-create-co-and-lines-parameters.md` recording standard extension-method parameter names.
-- `implementation/15-idomethodparameters-metadata-fallback.md` documenting metadata-route discovery and REST v1 fallbacks.
+- `implementation/15-idomethodparameters-metadata-fallback.md` documenting metadata-route, collection, and assembly discovery.
 - `tests/evidence/2026-07-30-idomethodparameters-info-endpoint-500.md` recording the generic HTTP 500 response.
 - `tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md` confirming published parameter metadata properties.
 - `tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md` confirming `InputFlag`, `OutputFlag`, and `MessageFlag`.
@@ -30,6 +30,7 @@ Lines  : SL.SLCoitems
 - `tests/evidence/2026-07-30-create-co-and-lines-method-row.md` recording effective method contexts for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
 - `tests/evidence/2026-07-30-idocollections-idoinfo-properties.md` confirming collection-level extension and inheritance metadata properties.
 - `tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md` confirming the collection hierarchy and `Customer.SLCos` extension-owner metadata.
+- `tests/evidence/2026-07-30-customer-assembly-binary-only.md` confirming that standard assembly `Customer` is published as Binary Only.
 
 ### Changed
 
@@ -79,17 +80,8 @@ CoResult          : VARIANT, InputFlag=1, OutputFlag=1, MessageFlag=1
 - Confirmed that `CoAndLineInfoJson` is input-only.
 - Confirmed that `CoResult` is input/output and is the framework message parameter.
 - Replaced the failed `/ido/info/IdoMethodParameters` route with successful REST v1 metadata calls.
-- Confirmed that `IdoMethods` exposes `MethodDesc`, `MethodType`, `TxnFlag`, `StoredProcName`, `BaseCollectionName`, `DerOutriggerProfile`, `DerSpMethodsAllowed`, `MethodParameters`, and `MethodResultSets`.
-- Confirmed that published `IdoMethods` metadata does not directly expose an extension class, assembly, source code, help URL, or JSON-schema field.
+- Confirmed that `IdoMethods` exposes method-level metadata but not direct source-code or JSON-schema properties.
 - Completed the filtered `IdoMethods` load for `SLCos / CreateCoAndLines`.
-- Recorded three effective base contexts returned for the same `_ItemId`:
-
-```text
-SLCos
-SLCos_FT
-ZIT_SLCos
-```
-
 - Confirmed the actual collection hierarchy:
 
 ```text
@@ -110,8 +102,21 @@ Runtime identity : Customer.SLCos
 ```
 
 - Confirmed that `SLCos_FT` and `ZIT_SLCos` inherit from `SLCos` and do not publish their own extension class, namespace, or custom assembly.
+- Confirmed the standard `Customer` assembly record:
+
+```text
+Assembly Type    : Binary Only
+Revision Num     : 1
+Revision Date    : 5/12/2026
+Access As        : BaseSyteLine
+Filename         : Customer
+Full Name        : Customer, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+Symbol File Name : Customer.pdb
+```
+
+- Closed the tenant source-code discovery branch because the `Customer` assembly is binary-only and the assembly form does not expose `Customer.SLCos` source code.
 - Kept the supported Customer Order creation sequence unconfirmed until the exact JSON schema and runtime result behavior are verified.
-- Advanced the next step to a read-only inspection of the `Customer` record on the **IDO Extension Class Assemblies** form.
+- Added an environment-safety gate before any controlled malformed/minimal runtime invocation.
 
 ### Current SMK069 Status
 
@@ -132,8 +137,9 @@ Runtime identity : Customer.SLCos
 [CONFIRMED] CoResult = input/output + message parameter
 [CONFIRMED] SLCos is the base collection
 [CONFIRMED] SLCos_FT and ZIT_SLCos extend SLCos
-[CONFIRMED] extension owner metadata = Customer.SLCos, assembly Customer
-[NEXT] inspect Customer assembly type and source availability read-only
+[CONFIRMED] extension owner = Customer.SLCos, assembly Customer
+[CONFIRMED] Customer assembly = Binary Only
+[NEXT] confirm environment and disposable-test permission before runtime probing
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -142,10 +148,10 @@ Runtime identity : Customer.SLCos
 
 ### Planned
 
-- Inspect the `Customer` record on the IDO Extension Class Assemblies form without editing or building it.
-- Determine whether assembly `Customer` is Build From Source or binary-only and whether source code is available read-only.
-- If source is available, locate `Customer.SLCos.CreateCoAndLines` and extract the exact `CoAndLineInfoJson` and `CoResult` contracts.
-- If source is not available, select a controlled non-destructive discovery path before invoking the method.
+- Confirm whether the current environment is DEV, TEST, UAT, or PRODUCTION.
+- Confirm whether a disposable test Customer Order may be created.
+- In non-production only, design one controlled malformed/minimal `CreateCoAndLines` invocation with pre/post verification.
+- In production or where disposable creation is prohibited, request an official method contract/sample from Infor or the solution owner instead of runtime probing.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Prepare sample CSV import, final API documentation, Postman collection, and deployment runbook.
