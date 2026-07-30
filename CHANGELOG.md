@@ -38,6 +38,7 @@ tests/evidence/2026-07-30-event-handler-metadata-collections.md
 tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
 tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
 tests/evidence/2026-07-30-event-action-metadata-collections.md
+tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
 ```
 
 ### Changed
@@ -103,21 +104,8 @@ Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank orde
 - Completed four post-probe read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
 - Stopped guessing business-schema property names.
 - Pivoted to read-only discovery of standard form/event/script metadata that calls `SLCos.CreateCoAndLines`.
-- Confirmed tenant event-related metadata IDOs:
-
-```text
-EventHandlerRevisions
-EventHandlers
-EventHandlerStates
-IdoEventHandlerAppliesToObjects
-IdoEventHandlerAppliesToTasks
-QueuedEventHandlers
-```
-
-- Confirmed all six are published from `MGCore` with `AccessAs = Core`.
-- Confirmed `EventHandlers` publishes call-site-relevant properties including `MethodToCall` and child `EventActions`.
-- Completed the read-only `EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'` search.
-- Confirmed the request succeeded but returned zero rows, so no parent handler stores the target directly in `MethodToCall`.
+- Confirmed tenant event-related metadata IDOs and `EventHandlers` call-site properties.
+- Completed the read-only `EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'` search; it returned zero rows.
 - Confirmed tenant event-action metadata collections:
 
 ```text
@@ -128,8 +116,29 @@ EventActionStates
 EventActionVariableAccess
 ```
 
-- Selected `EventActions` as the primary child-action metadata candidate based on the tenant description `Event Actions`.
-- Kept generic parameters, revisions, state/status, and variable-access collections as separate later paths whose properties remain uninspected.
+- Selected `EventActions` as the primary child-action metadata candidate.
+- Confirmed `EventActions` publishes call-site-relevant properties:
+
+```text
+ActionType
+DerActionTypeText
+Parameters
+ExpandedParameters
+SubstitutedParameters
+EventName
+EventHandlerSequence
+Sequence
+Description
+EventHandlerRowPointer
+RowPointer
+AccessAs
+DerAccessAs
+EventActionVariableAccess
+IsEventActionRevision
+EventHandlerRevisionRowPointer
+```
+
+- Selected raw `Parameters` as the first event-action search field. Derived `ExpandedParameters` and `SubstitutedParameters` remain later fallback paths.
 
 ### Current SMK069 Status
 
@@ -154,7 +163,8 @@ EventActionVariableAccess
 [CONFIRMED] EventHandlers property metadata
 [COMPLETED] parent MethodToCall search = zero rows
 [CONFIRMED] event-action metadata collections
-[NEXT] read EventActions property metadata
+[CONFIRMED] EventActions property metadata
+[NEXT] filter EventActions.Parameters for CreateCoAndLines
 [PENDING] locate exact standard CreateCoAndLines call site
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
@@ -165,9 +175,8 @@ EventActionVariableAccess
 
 ### Planned
 
-- Read `EventActions` IDOInfo property metadata.
-- Locate standard tenant call sites for `SLCos.CreateCoAndLines` without editing metadata.
-- Inspect revision, generic-parameter, form, or script metadata only as later separate steps when tenant evidence requires them.
+- Filter raw `EventActions.Parameters` for `CreateCoAndLines` using a read-only REST v1 load.
+- Search derived parameter fields, revisions, form metadata, or scripts only as later separate steps if the raw search returns no match.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
