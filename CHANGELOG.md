@@ -31,6 +31,8 @@ Lines  : SL.SLCoitems
 - `tests/evidence/2026-07-30-idocollections-idoinfo-properties.md` confirming collection-level extension and inheritance metadata properties.
 - `tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md` confirming the collection hierarchy and `Customer.SLCos` extension-owner metadata.
 - `tests/evidence/2026-07-30-customer-assembly-binary-only.md` confirming that standard assembly `Customer` is published as Binary Only.
+- `implementation/16-controlled-createcoandlines-runtime-probe.md` for the controlled DEV runtime contract probe.
+- `tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md` recording the first `CreateCoAndLines` runtime response and Base64 requirement.
 
 ### Changed
 
@@ -115,8 +117,12 @@ Symbol File Name : Customer.pdb
 ```
 
 - Closed the tenant source-code discovery branch because the `Customer` assembly is binary-only and the assembly form does not expose `Customer.SLCos` source code.
-- Kept the supported Customer Order creation sequence unconfirmed until the exact JSON schema and runtime result behavior are verified.
-- Added an environment-safety gate before any controlled malformed/minimal runtime invocation.
+- Confirmed the runtime environment as DEV and disposable Customer Order testing as allowed.
+- Completed the first deliberately malformed `CreateCoAndLines` probe.
+- Confirmed from the tenant response that `CoAndLineInfoJson` expects Base64-encoded content rather than raw JSON.
+- Confirmed that `MessageCode = 0` does not establish business success; `CoResult` returned `Status = Fail`.
+- Recorded the failure result as a string containing a JSON array with `Status`, `Message`, and the exact key `ErrrorMessage`.
+- Added a separate read-only no-order verification gate before the next Base64 malformed-content probe.
 
 ### Current SMK069 Status
 
@@ -139,7 +145,11 @@ Symbol File Name : Customer.pdb
 [CONFIRMED] SLCos_FT and ZIT_SLCos extend SLCos
 [CONFIRMED] extension owner = Customer.SLCos, assembly Customer
 [CONFIRMED] Customer assembly = Binary Only
-[NEXT] confirm environment and disposable-test permission before runtime probing
+[CONFIRMED] runtime test boundary = DEV, disposable testing allowed
+[COMPLETED] raw malformed CreateCoAndLines probe
+[CONFIRMED] CoAndLineInfoJson transport content must be Base64
+[NEXT] read-only verification that no unexpected Customer Order was created
+[PENDING] decoded JSON schema discovery
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -148,10 +158,9 @@ Symbol File Name : Customer.pdb
 
 ### Planned
 
-- Confirm whether the current environment is DEV, TEST, UAT, or PRODUCTION.
-- Confirm whether a disposable test Customer Order may be created.
-- In non-production only, design one controlled malformed/minimal `CreateCoAndLines` invocation with pre/post verification.
-- In production or where disposable creation is prohibited, request an official method contract/sample from Infor or the solution owner instead of runtime probing.
+- Perform a read-only Customer Order check around the first runtime-probe timestamp.
+- Only after no-order verification, send Base64 `ew==`, which decodes to malformed JSON `{`, to reach the JSON parser without using real order values.
+- Determine the exact decoded JSON schema and `CoResult` behavior without guessed valid order properties.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Prepare sample CSV import, final API documentation, Postman collection, and deployment runbook.
