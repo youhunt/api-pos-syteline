@@ -12,9 +12,9 @@ Decoded payload                                  : JSON object / JObject
 Exact business JSON schema                       : NOT CONFIRMED
 Metadata call-site discovery                     : RESUMED
 Current EventActions searches                    : COMPLETED — ZERO ROWS
-EventActionRevisions IDOInfo                     : CONFIRMED
 EventActionRevisions.Parameters search           : COMPLETED — ZERO ROWS
-Next search                                      : EventActionRevisions.ExpandedParameters
+EventActionRevisions.ExpandedParameters filter   : FAILED — ILLEGAL FILTER
+Next step                                        : EventHandlerRevisions IDOInfo
 ```
 
 ## Confirmed Runtime Contract
@@ -58,18 +58,7 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'            : zero r
 EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'                : zero rows
 ```
 
-## Decision History
-
-```text
-30 July 2026 — user temporarily approved pivoting to a previous stored-procedure approach.
-30 July 2026 — user explicitly instructed the project to continue CreateCoAndLines metadata discovery.
-```
-
-The stored-procedure option is deferred, not implemented, and remains documented only as an alternative.
-
-## EventActionRevisions Property Contract
-
-Relevant tenant-published fields:
+## EventActionRevisions Contract
 
 ```text
 ExpandedParameters      : String(4000), read-only
@@ -81,23 +70,61 @@ Sequence                : Short Integer
 RowPointer              : GUID, read-only
 ```
 
+## Illegal ExpandedParameters Filter
+
+The read-only filter:
+
+```text
+EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'
+```
+
+returned:
+
+```text
+Message        : Error processing LoadCollection request: IllegalFilterException
+MessageCode    : 450
+Items          : null
+Bookmark       : null
+MoreRowsExists : false
+```
+
+This is not a zero-row search. The filter was rejected before a result set was produced. Do not retry the same filter syntax.
+
 Evidence:
 
 ```text
+tests/evidence/2026-07-30-event-handler-metadata-collections.md
+tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
+tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
+tests/evidence/2026-07-30-event-action-metadata-collections.md
+tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
+tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
+tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
+tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
+tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
 ```
+
+## Decision History
+
+```text
+30 July 2026 — user temporarily approved pivoting to a previous stored-procedure approach.
+30 July 2026 — user explicitly instructed the project to continue CreateCoAndLines metadata discovery.
+```
+
+The stored-procedure option remains deferred and unimplemented.
 
 ## Next Step Only
 
-Run:
+Read the property metadata for `EventHandlerRevisions`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=ExpandedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventHandlerRevisions
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete JSON response, including an empty result.
+Send the complete JSON response, especially `Properties`.
 
-Do not inspect `EventHandlerRevisions`, invoke `CreateCoAndLines`, guess business-schema properties, edit metadata, or execute SQL in the same step.
+Do not filter handler revisions, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
