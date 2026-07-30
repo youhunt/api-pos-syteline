@@ -36,6 +36,7 @@ tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failur
 tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
 tests/evidence/2026-07-30-event-handler-metadata-collections.md
 tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
+tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
 ```
 
 ### Changed
@@ -133,8 +134,10 @@ Transactional
 TriggeringProperty
 ```
 
-- Selected `MethodToCall` as the first parent-handler search field for `CreateCoAndLines`.
-- Kept `EventActions` and `EventHandlerRevisions` as later separate discovery steps; their content/property contracts are not guessed.
+- Completed the read-only `EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'` search.
+- Confirmed the request succeeded but returned zero rows, so no parent handler stores the target directly in `MethodToCall`.
+- Preserved child event actions, event-handler revisions, form metadata, and scripts as separate later discovery paths.
+- Selected read-only discovery of the actual event-action collection name as the next step; the `CONTAINS` property name is not assumed to be a loadable IDO name.
 
 ### Current SMK069 Status
 
@@ -157,7 +160,8 @@ TriggeringProperty
 [COMPLETED] four no-order checks = zero rows
 [CONFIRMED] candidate event metadata IDOs
 [CONFIRMED] EventHandlers property metadata
-[NEXT] filter EventHandlers.MethodToCall for CreateCoAndLines
+[COMPLETED] parent MethodToCall search = zero rows
+[NEXT] discover actual event-action metadata collection name
 [PENDING] locate exact standard CreateCoAndLines call site
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
@@ -168,9 +172,9 @@ TriggeringProperty
 
 ### Planned
 
-- Filter `EventHandlers.MethodToCall` for `CreateCoAndLines` using a read-only REST v1 load.
+- Discover tenant metadata collections whose names contain `EventAction`.
+- Inspect the confirmed event-action collection property metadata in a later separate step.
 - Locate standard tenant call sites for `SLCos.CreateCoAndLines` without editing metadata.
-- Inspect `EventActions` or another metadata source only in a later separate step when parent-handler results require it.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
