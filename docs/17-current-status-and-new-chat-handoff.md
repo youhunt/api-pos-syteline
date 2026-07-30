@@ -56,13 +56,11 @@ Do not create a separate `site_ref`; standard `SiteRef` fulfills the source requ
 [COMPLETED] process_status display mapping and read-only verification
 [COMPLETED] dbo.SMK069ValidateCustomerSp
 [COMPLETED] ue_SMK069ValidateCustomerSp transactional IDO method
-[COMPLETED] parameter review: SiteRef, CoNum, Infobar
-[COMPLETED] invalid-customer direct SQL test
-[COMPLETED] invalid-customer Mongoose IDO REST test
-[COMPLETED] valid-customer Mongoose IDO REST test
-[COMPLETED] valid-customer persisted staging result
+[COMPLETED] invalid-customer direct SQL and Mongoose REST tests
+[COMPLETED] valid-customer Mongoose REST and persisted staging tests
 [COMPLETED] first mandatory customer validation requirement
 [IN PROGRESS] standard Customer Order IDO/business-process discovery
+[NOT CONFIRMED] standard Customer Order header IDO
 [NOT STARTED] custom Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -107,71 +105,14 @@ Parameters:
 
 The procedure reads `cust_num` from staging. `cust_num` is not passed directly as a method argument.
 
-## Invalid-Customer Evidence
-
-Controlled case:
+Verified branches:
 
 ```text
-DEFAULT | TEST000002 | TST0002 | NOT FOUND
+Invalid customer → process_status E + validation_msg
+Valid customer   → process_status V + validation_msg NULL
 ```
 
-Verified result:
-
-```text
-ReturnValue     = 0
-process_status  = E
-validation_msg  = Customer TST0002 tidak ditemukan di customer_mst.
-returned Infobar= Customer TST0002 tidak ditemukan di customer_mst.
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md
-```
-
-## Valid-Customer Evidence
-
-Controlled staging case:
-
-```text
-DEFAULT | TEST000002 | line 1 | C000002
-```
-
-Mongoose IDO REST response:
-
-```json
-{
-  "Message": null,
-  "MessageCode": 0,
-  "Parameters": [
-    "DEFAULT",
-    "TEST000002",
-    ""
-  ],
-  "ReturnValue": "0"
-}
-```
-
-Persisted staging result:
-
-```text
-SiteRef        : DEFAULT
-co_num         : TEST000002
-co_line        : 1
-cust_num       : C000002
-process_status : V
-validation_msg : NULL
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-smk069-valid-customer-ido-rest-response.md
-tests/evidence/2026-07-30-smk069-valid-customer-staging-result.md
-```
-
-Customer validation is now fully completed for both valid and invalid branches.
+Customer validation is fully completed and reusable by the form, CSV/import path, controlled API receive method, and Process/Reprocess action.
 
 ## Current Development Object
 
@@ -188,20 +129,41 @@ controlled POS/API service
 
 Before designing it, the exact standard Customer Order IDO and supported business methods must be identified from this tenant.
 
+## Latest Discovery Evidence
+
+The screenshot submitted for Customer Order discovery showed:
+
+```text
+Primary Collection : SL.SLCustomers
+Collection Name    : oCustomers
+```
+
+This is the standard **Customers** form/collection, not the standard **Customer Orders** form.
+
+Therefore:
+
+```text
+SL.SLCustomers = customer-master IDO only
+SL.SLCustomers ≠ Customer Order header IDO
+Customer Order header IDO remains NOT CONFIRMED
+```
+
+No standard form or collection was modified.
+
 ## Immediate Next Step
 
 Do only this discovery action:
 
 ```text
-1. Open the standard Customer Orders form
-2. Enter Design Mode
-3. Open Collections
-4. Select the primary collection
-5. Capture the exact standard IDO name and collection name
-6. Send a screenshot
+1. Close/exit the current Customers form without modifying it
+2. Open the standard Customer Orders form
+3. Confirm the screen contains order-header fields such as Order, Customer, Order Date, or Status
+4. Enter Design Mode
+5. Open Collections
+6. Select the primary collection
+7. Capture the exact IDO name and Collection Name
+8. Send a screenshot
 ```
-
-Do not modify the standard Customer Orders form.
 
 Do not create the custom Process method, Process button, Customer Order, CSV import, or controlled receive API method in this same step.
 
@@ -217,7 +179,7 @@ POS / Postman / CSV
 → co_mst + coitem_mst
 ```
 
-The successful validation-method REST calls prove the Mongoose API layer, but they are not the final external POS receive endpoint. Direct SQL insertion into standard Customer Order tables remains prohibited.
+The validation REST tests prove the Mongoose API layer, but they are not the final external POS receive endpoint. Direct SQL insertion into standard Customer Order tables remains prohibited.
 
 ## Development Rules
 
@@ -253,16 +215,14 @@ Lanjutkan repository private youhunt/api-pos-syteline sebagai source of truth.
 
 Current status:
 - staging table, IDO, Error Processing form, Preview, and process_status mapping are complete;
-- dbo.SMK069ValidateCustomerSp and ue_SMK069ValidateCustomerSp are complete;
-- invalid-customer direct SQL and IDO REST tests passed;
-- valid-customer IDO REST response passed;
-- TEST000002 persisted as C000002 / process_status V / validation_msg NULL;
-- customer validation is fully completed;
-- Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not started.
+- customer validation is fully completed for valid and invalid branches;
+- Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not started;
+- standard Customer Order IDO discovery is in progress;
+- the latest screenshot showed SL.SLCustomers / oCustomers, which belongs to the Customers form and is not the Customer Order header IDO.
 
 Target remains:
 POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
 
 Next step only:
-Open the standard Customer Orders form in Design Mode, inspect its primary collection, and provide a screenshot showing the exact standard IDO and collection name. Do not modify the standard form or create Process logic yet.
+Open the correct standard Customer Orders form in Design Mode and provide a screenshot of its primary collection showing the exact IDO and Collection Name. Do not modify the standard form or create Process logic yet.
 ```
