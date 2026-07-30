@@ -23,7 +23,7 @@ CoResult          : input/output + message
 CoAndLineInfoJson
 → Base64 decode
 → JSON object / JObject parse
-→ non-blank order-input validation
+→ locate expected non-blank order structure
 → business schema validation
 → Customer Order and line processing
 ```
@@ -31,18 +31,37 @@ CoAndLineInfoJson
 ## Completed Probes
 
 ```text
-Probe 1 : raw {  → invalid Base64
-Probe 2 : ew==  → decoded {  → JObject parser failure
-Probe 3 : e30=  → decoded {} → The input for order creation cannot be blank
+Probe 1 : raw {                         → invalid Base64
+Probe 2 : ew==                          → decoded { → JObject parser failure
+Probe 3 : e30=                          → decoded {} → blank order input
+Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
 ```
 
-## Business Result Rules
+The fourth probe confirmed that the method does not accept any arbitrary non-empty object. It requires one or more specific business members or a specific nested order structure. The exact names remain unconfirmed.
+
+## Probe 4 Response
+
+```json
+{
+  "Message": null,
+  "MessageCode": 0,
+  "Parameters": [
+    "eyJwcm9iZSI6dHJ1ZX0=",
+    "[{\"probe\":true,\"Status\":\"Fail\",\"Message\":\"The input for order creation cannot be blank\"}]"
+  ],
+  "ReturnValue": null
+}
+```
+
+Confirmed observations:
 
 ```text
 - MessageCode = 0 is not business success.
 - Parse CoResult as a JSON-array string.
 - Evaluate Status.
-- Failure records may or may not include ErrrorMessage.
+- Arbitrary top-level properties do not satisfy the order-input contract.
+- This failure branch preserved the submitted probe property and added Status and Message.
+- The exact required business member or nesting remains unknown.
 ```
 
 ## No-Order Verification
@@ -51,10 +70,9 @@ Probe 3 : e30=  → decoded {} → The input for order creation cannot be blank
 Probe 1 check : zero rows
 Probe 2 check : zero rows
 Probe 3 check : zero rows
-SQL errors    : none
+Probe 4 check : pending
+SQL errors    : none on completed checks
 ```
-
-No unexpected Customer Order was found in the checked 30-minute windows.
 
 ## Evidence
 
@@ -65,28 +83,28 @@ tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-empty-object-blank-order-failure.md
 tests/evidence/2026-07-30-createcoandlines-empty-object-probe-no-order-created.md
+tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failure.md
 ```
 
 ## Next Step Only
 
-Follow:
+Run the same read-only recent-order query after Probe 4:
 
-```text
-implementation/17-createcoandlines-nonbusiness-marker-probe.md
+```sql
+SELECT TOP (20)
+       co_num,
+       cust_num,
+       order_date,
+       CreateDate,
+       CreatedBy,
+       RecordDate,
+       UpdatedBy
+FROM dbo.co_mst
+WHERE RecordDate >= DATEADD(MINUTE, -30, GETDATE())
+   OR CreateDate >= DATEADD(MINUTE, -30, GETDATE())
+ORDER BY COALESCE(RecordDate, CreateDate) DESC;
 ```
 
-The prepared decoded object is:
+Send the complete result, including an empty result.
 
-```json
-{"probe":true}
-```
-
-Base64:
-
-```text
-eyJwcm9iZSI6dHJ1ZX0=
-```
-
-This is only a marker to distinguish empty-object validation from missing-business-member validation. It is not asserted to be part of the Customer Order schema.
-
-Do not add customer, item, site, order number, date, quantity, price, or another payload during the same step.
+Do not invoke `CreateCoAndLines` again, do not add a guessed business-schema property, and do not submit customer, item, site, order, date, quantity, or price data during this step.
