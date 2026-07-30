@@ -17,7 +17,7 @@ CoAndLineInfoJson : input-only
 CoResult          : input/output + message
 ```
 
-## Confirmed Contract
+## Confirmed Runtime Contract
 
 ```text
 CoAndLineInfoJson
@@ -28,7 +28,7 @@ CoAndLineInfoJson
 → Customer Order and line processing
 ```
 
-## Completed Probes
+Completed controlled probes:
 
 ```text
 Probe 1 : raw {                         → invalid Base64
@@ -37,7 +37,7 @@ Probe 3 : e30=                          → decoded {} → blank order input
 Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
 ```
 
-An arbitrary non-empty object does not satisfy the method contract. The exact required business member names and nesting remain unconfirmed.
+An arbitrary non-empty object does not satisfy the method contract. Exact business member names and nesting remain unconfirmed.
 
 ## Business Result Rules
 
@@ -49,7 +49,7 @@ An arbitrary non-empty object does not satisfy the method contract. The exact re
 - Some failure branches preserve input properties and add Status and Message.
 ```
 
-## Completed No-Order Verifications
+## Completed Safety Verifications
 
 ```text
 Probe 1 check : zero rows
@@ -69,7 +69,7 @@ Payload-property guessing is stopped. Discovery targets standard tenant metadata
 SLCos.CreateCoAndLines
 ```
 
-## Confirmed Event Metadata
+## Confirmed Event-Handler Metadata
 
 Candidate IDOs:
 
@@ -82,7 +82,7 @@ IdoEventHandlerAppliesToTasks
 QueuedEventHandlers
 ```
 
-`EventHandlers` publishes:
+`EventHandlers` publishes call-site-relevant properties including:
 
 ```text
 EventName
@@ -102,30 +102,27 @@ Transactional
 TriggeringProperty
 ```
 
-## Completed Parent-Handler Search
-
-A read-only filter was applied:
+A read-only search for:
 
 ```text
 MethodToCall LIKE '%CreateCoAndLines%'
 ```
 
-Tenant result:
+returned zero rows. Therefore no parent `EventHandlers` row stores the target directly in `MethodToCall`.
+
+## Confirmed Event-Action Metadata Collections
+
+Read-only `IdoCollections` discovery returned:
 
 ```text
-Message        : Success
-MessageCode    : 0
-Items          : zero rows
-MoreRowsExists : false
+EventAction_GenericParms
+EventActionRevisions
+EventActions
+EventActionStates
+EventActionVariableAccess
 ```
 
-Confirmed conclusion:
-
-```text
-No parent EventHandlers row stores CreateCoAndLines directly in MethodToCall.
-```
-
-This does not rule out a standard call site. The reference may exist in child event-action metadata, revisions, form metadata, or scripts.
+Tenant descriptions identify `EventActions` as the primary action collection. The others are supporting collections for generic parameters, revisions, state/status, or variable access. Their actual property contracts have not yet been inspected.
 
 Evidence:
 
@@ -133,21 +130,22 @@ Evidence:
 tests/evidence/2026-07-30-event-handler-metadata-collections.md
 tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
 tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
+tests/evidence/2026-07-30-event-action-metadata-collections.md
 ```
 
 ## Next Step Only
 
-Discover the actual tenant collection name or names related to event actions:
+Read published property metadata for `EventActions`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25EventAction%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventActions
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete JSON response, including an empty result.
+Send the complete JSON response, especially `Properties`.
 
-Do not inspect `EventHandlerRevisions` in the same step. Do not assume that the parent `CONTAINS` property name `EventActions` is itself the loadable child IDO name.
+Do not load action rows, inspect `EventActionRevisions`, invoke `CreateCoAndLines`, guess business-schema properties, or edit metadata in the same step.
 
 ## Status
 
@@ -158,19 +156,10 @@ Payload property guessing           : STOPPED
 Event metadata collections          : CONFIRMED
 EventHandlers property metadata     : CONFIRMED
 Parent MethodToCall search          : COMPLETED — ZERO ROWS
-Event-action collection discovery   : NEXT
+Event-action collections            : CONFIRMED
+EventActions property metadata      : NEXT
 Exact decoded JSON schema           : PENDING
 Process/Reprocess                    : NOT STARTED
 Customer Order creation             : NOT STARTED
 Controlled receive API              : NOT STARTED
-```
-
-## Safety Boundary
-
-```text
-- Do not invoke CreateCoAndLines again.
-- Do not guess a business-schema property.
-- Do not edit form handlers, event actions, scripts, events, or metadata.
-- Do not submit customer, item, site, order, date, quantity, or price data.
-- Do not create Process/Reprocess logic yet.
 ```
