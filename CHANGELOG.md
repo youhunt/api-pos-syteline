@@ -16,7 +16,12 @@ implementation/18-discover-createcoandlines-call-sites.md
 implementation/19-controlled-sp-direct-order-processing.md
 ```
 
-- Runtime and metadata evidence for the `CreateCoAndLines` discovery path, including four controlled probes, four no-order checks, and zero-row call-site searches across current event-handler/action fields.
+- Runtime and metadata evidence for the `CreateCoAndLines` discovery path, including four controlled probes, four no-order checks, zero-row current event-handler/action searches, and the `EventActionRevisions` property contract.
+- Added:
+
+```text
+tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
+```
 
 ### Changed
 
@@ -52,9 +57,26 @@ EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
 EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 ```
 
-- On 30 July 2026, the user approved stopping further `CreateCoAndLines` reverse-engineering and pivoting to review/adapt a previous working stored procedure that inserted into `co_mst` and `coitem_mst`.
-- Further `EventActionRevisions`, `EventHandlerRevisions`, form metadata, and script discovery is cancelled unless the SP path later proves unsuitable.
-- Direct inserts are not treated as automatically safe; the stored procedure must include transaction control, idempotency, duplicate prevention, validation, rollback, and staging status/error handling.
+- Decision history on 30 July 2026:
+
+```text
+1. User temporarily approved a pivot to a prior stored-procedure approach.
+2. No stored-procedure SQL was created or executed.
+3. User subsequently instructed the project to continue CreateCoAndLines metadata discovery.
+4. The stored-procedure path is now deferred as an alternative.
+```
+
+- Confirmed `EventActionRevisions` relevant properties:
+
+```text
+ExpandedParameters      : String(4000), read-only
+ActionType              : Byte
+Description             : String(40)
+EventHandlerRowPointer  : GUID
+Parameters              : String(3800)
+Sequence                : Short Integer
+RowPointer              : GUID, read-only
+```
 
 ### Current SMK069 Status
 
@@ -67,10 +89,11 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 [CONFIRMED] Customer Order line IDO = SL.SLCoitems
 [COMPLETED] controlled CreateCoAndLines probes and no-order checks
 [COMPLETED] current event-handler/action call-site searches = zero rows
-[STOPPED] further CreateCoAndLines reverse-engineering
-[APPROVED] pivot to controlled stored procedure processing
-[NEXT] obtain and review the previous working stored procedure
-[PENDING] adapt SP to SMK069 staging and current tenant
+[CONFIRMED] EventActionRevisions property metadata
+[RESUMED] CreateCoAndLines metadata discovery
+[DEFERRED] direct-insert stored-procedure alternative
+[NEXT] filter EventActionRevisions.Parameters for CreateCoAndLines
+[PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
 [PENDING] final external POS REST API contract
@@ -79,10 +102,10 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 
 ### Planned
 
-- Obtain the previous working stored procedure.
-- Review its parameters, order number generation, required header/line columns, defaults, validation, transaction behavior, duplicate protection, and error handling.
-- Adapt it to `dbo.ue_SMK069_temp_sales_mst`, the current process-control columns, and the current tenant.
-- Do not execute direct Customer Order inserts until the adapted procedure has been reviewed and a controlled DEV test plan is approved.
+- Filter `EventActionRevisions.Parameters` for `CreateCoAndLines` using a read-only REST v1 load.
+- Search revision `ExpandedParameters`, handler revisions, form metadata, or scripts only as later separate steps when required by tenant evidence.
+- Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
+- Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
 ## [0.1.0] — 2026-07-23
 
