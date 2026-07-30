@@ -21,7 +21,7 @@ POS sample CSV / REST payload
 → co_mst + coitem_mst
 ```
 
-The official POS payload/file layout is not yet available. The final target remains controlled API integration.
+The official POS file/payload layout is not yet available. The final target remains controlled API integration.
 
 ## Confirmed Requirement Corrections
 
@@ -64,8 +64,10 @@ Primary key                        : SiteRef + co_num + co_line
 [CONFIRMED] CoAndLineInfoJson = input-only
 [CONFIRMED] CoResult = input/output + message parameter
 [CONFIRMED] collection hierarchy: SLCos base; SLCos_FT and ZIT_SLCos extend SLCos
-[CONFIRMED] base extension owner metadata = Customer.SLCos, assembly Customer
-[NEXT]      inspect Customer assembly metadata/source availability read-only
+[CONFIRMED] base extension owner = Customer.SLCos, assembly Customer
+[CONFIRMED] Customer assembly type = Binary Only
+[CONFIRMED] tenant source-code path for Customer.SLCos is unavailable through the assembly form
+[NEXT]      confirm DEV/TEST/UAT/PROD boundary before any controlled runtime probe
 [NOT STARTED] custom Process/Reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -139,7 +141,7 @@ tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
 
 ## Confirmed Collection Hierarchy and Extension Owner
 
-Tenant `IdoCollections` metadata returned:
+Tenant metadata returned:
 
 | Collection | Extends | Ext Class | Namespace | Assembly | Server | Access As | Runtime Identity |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -162,14 +164,47 @@ Base Customer Order extension class : Customer.SLCos
 Custom assembly                     : Customer
 ```
 
-`SLCos_FT` and `ZIT_SLCos` inherit from `SLCos` and do not publish their own extension class, namespace, or assembly in the returned metadata.
-
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-create-co-and-lines-method-row.md
 tests/evidence/2026-07-30-idocollections-idoinfo-properties.md
 tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md
+```
+
+## Confirmed Customer Assembly Record
+
+The standard **IDO Extension Class Assemblies** form shows:
+
+```text
+Assembly Name         : Customer
+Revision Num          : 1
+Revision Date         : 5/12/2026
+Locked By             : blank
+Access As             : BaseSyteLine
+Assembly Type         : Binary Only
+Extend And Replace    : blank
+Language              : blank
+Assembly File Version : blank
+References            : blank
+Filename              : Customer
+Full Name             : Customer, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+Symbol File Name      : Customer.pdb
+```
+
+Decision:
+
+```text
+- Customer.SLCos is backed by a binary-only assembly in this tenant.
+- Source code is not exposed by this assembly record.
+- The source-code discovery branch is closed.
+- The exact CoAndLineInfoJson schema remains unconfirmed.
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-customer-assembly-binary-only.md
 ```
 
 No standard business method has been executed and no Customer Order has been created.
@@ -186,29 +221,28 @@ No standard business method has been executed and no Customer Order has been cre
 - failure CoResult shape
 - whether header and lines are created atomically
 - whether another standard validation method must run first
-- whether source code for assembly Customer is available in this tenant
 ```
 
 ## Immediate Next Step
 
-Open the standard **IDO Extension Class Assemblies** form and filter:
+Confirm only:
 
 ```text
-Assembly Name = Customer
+1. Current environment: DEV, TEST, UAT, or PRODUCTION?
+2. Is creation of a disposable test Customer Order allowed there?
 ```
 
-Read only. Capture:
+Do not invoke `CreateCoAndLines` yet.
+
+Decision branch:
 
 ```text
-Assembly Name
-Assembly Type
-Language
-References
-Source Code availability/button state
-Binary or DLL information, if displayed
-```
+Non-production + disposable test allowed
+→ design one controlled malformed/minimal invocation with pre/post verification
 
-Do not check out, edit, build, import, save, resynchronize, or invoke `CreateCoAndLines`.
+Production or disposable test not allowed
+→ stop runtime probing and request an official method contract/sample from Infor or the solution owner
+```
 
 ## API Direction
 
@@ -234,7 +268,8 @@ Direct SQL insertion into `co_mst` or `coitem_mst` remains prohibited.
 6. Never direct-insert into `co_mst` or `coitem_mst`.
 7. Item mapping and broader item validation remain postponed.
 8. Distinguish Stored Procedure methods from Extension Class methods.
-9. Do not invoke `CreateCoAndLines` until the JSON contract and controlled test conditions are confirmed.
+9. Do not invoke `CreateCoAndLines` until environment safety and controlled test conditions are confirmed.
+10. Do not attempt to modify, rebuild, or reverse engineer the standard `Customer` binary assembly.
 
 ## Repository Documents to Read First
 
@@ -248,7 +283,7 @@ implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 implementation/13-create-SMK069-customer-validation.md
 implementation/14-discover-standard-customer-order-processing.md
 implementation/15-idomethodparameters-metadata-fallback.md
-tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md
+tests/evidence/2026-07-30-customer-assembly-binary-only.md
 CHANGELOG.md
 ```
 
@@ -265,7 +300,9 @@ Current status:
 - CoAndLineInfoJson is input-only;
 - CoResult is input/output and MessageFlag = 1;
 - SLCos is the base collection with extension class Customer.SLCos in assembly Customer;
-- SLCos_FT and ZIT_SLCos both extend SLCos and do not publish their own extension class/assembly;
+- SLCos_FT and ZIT_SLCos extend SLCos;
+- assembly Customer is Binary Only, filename Customer, full name Customer Version 1.0.0.0, symbol file Customer.pdb;
+- source code is not exposed in the tenant assembly record;
 - the exact JSON schema and result contract remain unconfirmed;
 - no standard business method has been executed;
 - custom Process/Reprocess, Customer Order creation, controlled receive service, and final POS API are not complete.
@@ -274,5 +311,5 @@ Target remains:
 POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
 
 Next step only:
-Open IDO Extension Class Assemblies, filter Assembly Name = Customer, and capture Assembly Type, Language, References, Source Code availability, and binary/DLL information. Do not edit, build, save, or invoke CreateCoAndLines.
+Confirm whether the current environment is DEV, TEST, UAT, or PRODUCTION and whether a disposable test Customer Order may be created. Do not invoke CreateCoAndLines yet.
 ```
