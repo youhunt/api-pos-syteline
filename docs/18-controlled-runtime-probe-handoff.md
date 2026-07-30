@@ -3,17 +3,18 @@
 ## Current Status
 
 ```text
-Environment                        : DEV
-Method                             : SL.SLCos.CreateCoAndLines
-Controlled probes                  : COMPLETED
-Post-probe co_mst checks           : COMPLETED — ZERO ROWS
-Runtime transport                  : Base64
-Decoded payload                    : JSON object / JObject
-Exact business JSON schema         : NOT CONFIRMED
-Metadata call-site discovery       : RESUMED
-Current EventActions searches      : COMPLETED — ZERO ROWS
-EventActionRevisions IDOInfo       : CONFIRMED
-Next search                        : EventActionRevisions.Parameters
+Environment                                      : DEV
+Method                                           : SL.SLCos.CreateCoAndLines
+Controlled probes                                : COMPLETED
+Post-probe co_mst checks                         : COMPLETED — ZERO ROWS
+Runtime transport                                : Base64
+Decoded payload                                  : JSON object / JObject
+Exact business JSON schema                       : NOT CONFIRMED
+Metadata call-site discovery                     : RESUMED
+Current EventActions searches                    : COMPLETED — ZERO ROWS
+EventActionRevisions IDOInfo                     : CONFIRMED
+EventActionRevisions.Parameters search           : COMPLETED — ZERO ROWS
+Next search                                      : EventActionRevisions.ExpandedParameters
 ```
 
 ## Confirmed Runtime Contract
@@ -50,10 +51,11 @@ All four read-only `dbo.co_mst` checks returned zero rows and no SQL error.
 ## Completed Metadata Searches
 
 ```text
-EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'             : zero rows
-EventActions.Parameters LIKE '%CreateCoAndLines%'                 : zero rows
-EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'         : zero rows
-EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'      : zero rows
+EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'                   : zero rows
+EventActions.Parameters LIKE '%CreateCoAndLines%'                       : zero rows
+EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'               : zero rows
+EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'            : zero rows
+EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'                : zero rows
 ```
 
 ## Decision History
@@ -83,6 +85,7 @@ Evidence:
 
 ```text
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
+tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
 ```
 
 ## Next Step Only
@@ -90,11 +93,11 @@ tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 Run:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=ExpandedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
 Send the complete JSON response, including an empty result.
 
-Do not search `ExpandedParameters`, inspect `EventHandlerRevisions`, invoke `CreateCoAndLines`, or edit metadata in the same step.
+Do not inspect `EventHandlerRevisions`, invoke `CreateCoAndLines`, guess business-schema properties, edit metadata, or execute SQL in the same step.
