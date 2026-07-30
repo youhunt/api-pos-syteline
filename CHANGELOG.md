@@ -7,34 +7,16 @@ All notable changes to this repository will be documented in this file.
 ### Added
 
 - Staging-table, IDO, Error Processing form, validation, Customer Order discovery, and controlled runtime-probe documentation.
-- Controlled discovery documents:
+- Controlled implementation documents:
 
 ```text
 implementation/16-controlled-createcoandlines-runtime-probe.md
 implementation/17-createcoandlines-nonbusiness-marker-probe.md
 implementation/18-discover-createcoandlines-call-sites.md
+implementation/19-controlled-sp-direct-order-processing.md
 ```
 
-- Runtime and metadata evidence including:
-
-```text
-tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
-tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
-tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
-tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
-tests/evidence/2026-07-30-createcoandlines-empty-object-blank-order-failure.md
-tests/evidence/2026-07-30-createcoandlines-empty-object-probe-no-order-created.md
-tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failure.md
-tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
-tests/evidence/2026-07-30-event-handler-metadata-collections.md
-tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
-tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
-tests/evidence/2026-07-30-event-action-metadata-collections.md
-tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
-tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
-tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
-tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no-match.md
-```
+- Runtime and metadata evidence for the `CreateCoAndLines` discovery path, including four controlled probes, four no-order checks, and zero-row call-site searches across current event-handler/action fields.
 
 ### Changed
 
@@ -49,34 +31,19 @@ Header : SL.SLCos
 Lines  : SL.SLCoitems
 ```
 
-- Confirmed `CreateCoAndLines` contract:
+- Confirmed `CreateCoAndLines` metadata and runtime observations:
 
 ```text
-IDO Name             : SLCos
-Method Name          : CreateCoAndLines
 Method Type          : Extension Class - Standard Method
 Transactional        : false
 Implementation owner : Customer.SLCos
 Assembly             : Customer — Binary Only
-CoAndLineInfoJson    : input-only
-CoResult             : input/output + message parameter
-```
-
-- Confirmed runtime processing sequence:
-
-```text
-Base64 decode
-→ JSON object / JObject parse
-→ locate expected non-blank order structure
-→ Customer Order schema validation
-→ Customer Order and line processing
+CoAndLineInfoJson    : input-only, Base64-encoded JSON object/JObject
+CoResult             : input/output + message parameter, JSON-array string
 ```
 
 - Completed four controlled probes and four read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
-- Confirmed `MessageCode = 0` is not business success; parse `CoResult` and evaluate `Status`.
-- Stopped guessing business-schema property names and pivoted to read-only metadata call-site discovery.
-- Confirmed event-handler and event-action metadata collections and their relevant properties.
-- Completed these read-only searches, all with zero rows:
+- Completed these read-only metadata searches, all with zero rows:
 
 ```text
 EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
@@ -85,8 +52,9 @@ EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
 EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 ```
 
-- Exhausted the current `EventActions` fields without finding the call site.
-- Selected read-only `EventActionRevisions` property discovery as the next step before filtering any revision rows.
+- On 30 July 2026, the user approved stopping further `CreateCoAndLines` reverse-engineering and pivoting to review/adapt a previous working stored procedure that inserted into `co_mst` and `coitem_mst`.
+- Further `EventActionRevisions`, `EventHandlerRevisions`, form metadata, and script discovery is cancelled unless the SP path later proves unsuitable.
+- Direct inserts are not treated as automatically safe; the stored procedure must include transaction control, idempotency, duplicate prevention, validation, rollback, and staging status/error handling.
 
 ### Current SMK069 Status
 
@@ -97,31 +65,24 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 [COMPLETED] customer validation and tests
 [CONFIRMED] Customer Order header IDO = SL.SLCos
 [CONFIRMED] Customer Order line IDO = SL.SLCoitems
-[CONFIRMED] CreateCoAndLines method metadata and parameter contract
-[CONFIRMED] implementation owner = Customer.SLCos
-[CONFIRMED] assembly Customer = Binary Only
-[COMPLETED] four controlled malformed/non-business probes
-[COMPLETED] four no-order checks = zero rows
-[COMPLETED] parent MethodToCall search = zero rows
-[COMPLETED] raw EventActions.Parameters search = zero rows
-[COMPLETED] EventActions.ExpandedParameters search = zero rows
-[COMPLETED] EventActions.SubstitutedParameters search = zero rows
-[NEXT] read EventActionRevisions property metadata
-[PENDING] locate exact standard CreateCoAndLines call site
-[PENDING] exact decoded JSON schema
-[PENDING] custom Process/Reprocess method
-[PENDING] controlled receive API method
+[COMPLETED] controlled CreateCoAndLines probes and no-order checks
+[COMPLETED] current event-handler/action call-site searches = zero rows
+[STOPPED] further CreateCoAndLines reverse-engineering
+[APPROVED] pivot to controlled stored procedure processing
+[NEXT] obtain and review the previous working stored procedure
+[PENDING] adapt SP to SMK069 staging and current tenant
+[PENDING] implement Process/Reprocess
+[PENDING] implement controlled receive API
 [PENDING] final external POS REST API contract
-[PENDING] Customer Order header and line creation
+[PENDING] Customer Order header and line creation test
 ```
 
 ### Planned
 
-- Read `EventActionRevisions` IDOInfo property metadata.
-- Filter revision metadata only after the tenant-published property contract is confirmed.
-- Inspect event-handler revisions, form metadata, or scripts only as later separate steps when evidence requires them.
-- Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
-- Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
+- Obtain the previous working stored procedure.
+- Review its parameters, order number generation, required header/line columns, defaults, validation, transaction behavior, duplicate protection, and error handling.
+- Adapt it to `dbo.ue_SMK069_temp_sales_mst`, the current process-control columns, and the current tenant.
+- Do not execute direct Customer Order inserts until the adapted procedure has been reviewed and a controlled DEV test plan is approved.
 
 ## [0.1.0] — 2026-07-23
 
