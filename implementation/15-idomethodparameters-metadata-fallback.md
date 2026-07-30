@@ -8,13 +8,14 @@ REST v1 IdoMethodParameters IDOInfo             : COMPLETED
 CreateCoAndLines parameter row load              : COMPLETED
 CreateCoAndLines parameter directions            : CONFIRMED
 REST v1 IdoMethods IDOInfo                       : COMPLETED
-CreateCoAndLines method row load                  : PENDING
+CreateCoAndLines method row load                  : COMPLETED
+Effective base collection contexts               : CONFIRMED
 CreateCoAndLines JSON schema                     : NOT YET CONFIRMED
 CreateCoAndLines execution                       : NOT ATTEMPTED
 Customer Order creation                          : NOT STARTED
 ```
 
-## Failed Legacy Read-Only Route
+## Failed Legacy Metadata Route
 
 ```http
 GET {{mongooseBaseUrl}}/IDORequestService/ido/info/IdoMethodParameters
@@ -61,16 +62,9 @@ Evidence:
 tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md
 ```
 
-## Completed CreateCoAndLines Parameter-Row Load
+## Completed CreateCoAndLines Parameter Load
 
-The tenant loaded only the rows for:
-
-```text
-CollectionName = SLCos
-MethodName     = CreateCoAndLines
-```
-
-Request pattern:
+Filtered metadata request:
 
 ```http
 GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethodParameters/adv?props=CollectionName,MethodName,ParameterName,Sequence,DataType,InputFlag,OutputFlag,MessageFlag&filter=CollectionName%20%3D%20%27SLCos%27%20AND%20MethodName%20%3D%20%27CreateCoAndLines%27
@@ -85,20 +79,7 @@ Confirmed rows:
 | 1 | `CoAndLineInfoJson` | `VARIANT` | 1 | 0 | 0 |
 | 2 | `CoResult` | `VARIANT` | 1 | 1 | 1 |
 
-## Confirmed Public Direction Contract
-
-```text
-CoAndLineInfoJson
-- input-only
-- not output
-- not message parameter
-
-CoResult
-- input/output
-- message parameter
-```
-
-Therefore the extension method contract is currently confirmed as:
+Confirmed direction contract:
 
 ```text
 Input  : CoAndLineInfoJson
@@ -109,12 +90,11 @@ Message: CoResult
 Evidence:
 
 ```text
+tests/evidence/2026-07-30-create-co-and-lines-parameters.md
 tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
 ```
 
 ## Successful REST v1 IdoMethods IDOInfo
-
-The tenant returned the published property metadata for `IdoMethods`.
 
 Relevant scalar properties:
 
@@ -131,14 +111,14 @@ DerSpMethodsAllowed
 DevelopmentFlag
 ```
 
-Related nested metadata properties:
+Related nested metadata:
 
 ```text
 MethodParameters
 MethodResultSets
 ```
 
-The response does **not** expose direct properties named like:
+The published IDOInfo properties do not directly expose:
 
 ```text
 ExtensionClass
@@ -149,34 +129,15 @@ HelpUrl
 JsonSchema
 ```
 
-This means the IDOInfo property list alone does not reveal the extension-class source or the exact `CoAndLineInfoJson` contract.
-
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-idomethods-idoinfo-properties.md
 ```
 
-## Important Limitation
+## Completed CreateCoAndLines Method Row Load
 
-The confirmed metadata still does not reveal:
-
-```text
-- exact JSON property names and nesting
-- required versus optional header fields
-- required versus optional line fields
-- whether co_num is generated or accepted
-- success result shape
-- failure result shape
-- whether header and lines are created atomically
-- whether another standard validation method must run first
-```
-
-No business method was invoked and no Customer Order data was created or changed.
-
-## Current Small Step — Load Only the CreateCoAndLines Method Row
-
-Use this read-only REST v1 Advanced LoadCollection request:
+Read-only request:
 
 ```http
 GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethods/adv?props=CollectionName,MethodName,BaseCollectionName,MethodDesc,MethodType,TxnFlag,StoredProcName,DerOutriggerProfile,DerSpMethodsAllowed&filter=CollectionName%20%3D%20%27SLCos%27%20AND%20MethodName%20%3D%20%27CreateCoAndLines%27
@@ -184,8 +145,77 @@ Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-This request reads only the method metadata row. It does not invoke `CreateCoAndLines`.
+The tenant returned three rows:
 
-Send the complete JSON response.
+| CollectionName | MethodName | BaseCollectionName | MethodType | TxnFlag | StoredProcName | MethodDesc | DerOutriggerProfile | DerSpMethodsAllowed |
+| --- | --- | --- | ---: | ---: | --- | --- | --- | ---: |
+| `SLCos` | `CreateCoAndLines` | `SLCos` | 2 | 0 | NULL | NULL | NULL | 1 |
+| `SLCos` | `CreateCoAndLines` | `SLCos_FT` | 2 | 0 | NULL | NULL | NULL | 1 |
+| `SLCos` | `CreateCoAndLines` | `ZIT_SLCos` | 2 | 0 | NULL | NULL | NULL | 1 |
+
+All three rows returned the same `_ItemId` value. Therefore they are currently treated as three effective collection/base contexts for one method metadata record, not as three independently confirmed implementations.
+
+Confirmed method facts:
+
+```text
+IDO UI Method Type   : Extension Class - Standard Method
+MethodType metadata  : 2
+TxnFlag               : 0
+StoredProcName        : NULL
+MethodDesc            : NULL
+DerOutriggerProfile   : NULL
+DerSpMethodsAllowed   : 1
+Effective base contexts:
+- SLCos
+- SLCos_FT
+- ZIT_SLCos
+```
+
+The exact inheritance or extension relationship between these three collection names remains unconfirmed. Do not assume that `SLCos_FT` or `ZIT_SLCos` contains the implementation until collection-level metadata is inspected.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-create-co-and-lines-method-row.md
+```
+
+## Important Limitation
+
+Metadata still does not reveal:
+
+```text
+- exact CoAndLineInfoJson property names and nesting
+- required versus optional header fields
+- required versus optional line fields
+- accepted date and numeric formats
+- whether co_num is generated or supplied
+- success CoResult shape
+- failure CoResult shape
+- whether header and lines are created atomically
+- whether another standard validation method must run first
+- which collection layer contains the extension implementation
+```
+
+No business method was invoked and no Customer Order data was created or changed.
+
+## Current Small Step — Inspect Collection Metadata Properties
+
+Use a read-only IDOInfo request for the collection metadata IDO:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/IdoCollections
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Purpose:
+
+```text
+- confirm whether IdoCollections exists in this tenant;
+- identify properties for base collection, extension class, assembly, profile, or inheritance metadata;
+- prepare a later filtered read of SLCos, SLCos_FT, and ZIT_SLCos.
+```
+
+Send the returned property names or the complete response.
 
 Do not invoke `CreateCoAndLines`, create Process/Reprocess logic, inspect another business method, or create a Customer Order during this step.
