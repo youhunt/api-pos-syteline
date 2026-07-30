@@ -1,4 +1,4 @@
-# Implementation 15 — IDO Method and Collection Metadata Discovery
+# Implementation 15 — IDO Method, Collection, and Assembly Discovery
 
 ## Status
 
@@ -12,6 +12,8 @@ CreateCoAndLines method rows                 : COMPLETED
 REST v1 IdoCollections metadata              : COMPLETED
 SLCos collection hierarchy                   : CONFIRMED
 Base extension class and assembly             : CONFIRMED
+Customer assembly metadata                   : CONFIRMED — BINARY ONLY
+Tenant source-code path                      : NOT AVAILABLE THROUGH THIS ASSEMBLY RECORD
 CreateCoAndLines JSON schema                 : NOT YET CONFIRMED
 CreateCoAndLines execution                   : NOT ATTEMPTED
 Customer Order creation                      : NOT STARTED
@@ -19,12 +21,13 @@ Customer Order creation                      : NOT STARTED
 
 ## Safety Boundary
 
-All requests documented here were metadata-only reads.
+All completed discovery steps were read-only.
 
 ```text
 No CreateCoAndLines invocation
 No Customer Order created or modified
 No standard metadata edited
+No assembly checkout, import, build, or save
 No direct SQL insert into co_mst or coitem_mst
 ```
 
@@ -131,11 +134,9 @@ Runtime identity: Customer.SLCos
 Technical conclusion:
 
 ```text
-Best implementation lead for CreateCoAndLines:
+Best implementation owner for CreateCoAndLines:
 Customer.SLCos in assembly Customer
 ```
-
-This conclusion is based on tenant metadata and confirms the owner metadata, but it does not expose source code or the JSON payload schema.
 
 Evidence:
 
@@ -144,7 +145,49 @@ tests/evidence/2026-07-30-idocollections-idoinfo-properties.md
 tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md
 ```
 
-## 5. Remaining Unknowns
+## 5. Confirmed Customer Assembly Record
+
+The standard **IDO Extension Class Assemblies** form was inspected read-only with:
+
+```text
+Assembly Name = Customer
+```
+
+Confirmed values:
+
+```text
+Assembly Name         : Customer
+Revision Num          : 1
+Revision Date         : 5/12/2026
+Locked By             : blank
+Access As             : BaseSyteLine
+Assembly Type         : Binary Only
+Extend And Replace    : blank
+Language              : blank
+Assembly File Version : blank
+References            : blank
+Filename              : Customer
+Full Name             : Customer, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
+Symbol File Name      : Customer.pdb
+```
+
+Technical decision:
+
+```text
+The Customer extension assembly is Binary Only in this tenant.
+The tenant form does not expose source code for Customer.SLCos.
+The source-code discovery branch is therefore closed.
+```
+
+The visible symbol-file name does not reveal the `CoAndLineInfoJson` contract.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-customer-assembly-binary-only.md
+```
+
+## 6. Remaining Unknowns
 
 ```text
 - exact CoAndLineInfoJson property names and nesting
@@ -156,37 +199,27 @@ tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md
 - failure CoResult shape
 - whether header and lines are created atomically
 - whether another standard validation method must run first
-- whether source code for the Customer assembly is available in this tenant
 ```
 
-## Current Small Step — Inspect Assembly Metadata Only
+## Current Small Step — Confirm a Safe Runtime-Test Environment
 
-Open the standard **IDO Extension Class Assemblies** form and filter:
+Before any controlled invalid-payload invocation, confirm only the environment boundary:
 
 ```text
-Assembly Name = Customer
+- Is the current tenant/database DEV, TEST, UAT, or PRODUCTION?
+- Is creation of a disposable test Customer Order allowed there?
 ```
 
-Read only; do not check out, edit, build, import, save, or resynchronize anything.
+Do not invoke `CreateCoAndLines` yet.
 
-Capture:
+The next technical branch depends on this answer:
 
 ```text
-Assembly Name
-Assembly Type
-Language
-References
-Source Code availability/button state
-Binary or DLL information, if displayed
+Non-production + disposable test allowed
+→ design one controlled malformed/minimal request with pre/post verification
+
+Production or test creation not allowed
+→ stop runtime probing and request an official contract/sample from Infor or the solution owner
 ```
 
-Purpose:
-
-```text
-- determine whether Customer is Build From Source or binary-only;
-- determine whether tenant source code can be opened read-only;
-- if source is available, locate Customer.SLCos.CreateCoAndLines and extract the exact JSON contract;
-- if source is not available, choose a different controlled discovery path.
-```
-
-Do not invoke `CreateCoAndLines`, inspect another business method, create Process/Reprocess logic, or create a Customer Order during this step.
+Do not create Process/Reprocess logic, import CSV, create the receive API method, or create a Customer Order during this step.
