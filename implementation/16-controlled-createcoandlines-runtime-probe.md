@@ -11,7 +11,10 @@ First no-order check               : COMPLETED — ZERO ROWS
 Base64 malformed JSON probe        : COMPLETED
 Decoded payload type               : JSON object / JObject
 Second no-order check              : COMPLETED — ZERO ROWS
-Empty-object probe                 : AUTHORIZED — NOT YET EXECUTED
+Empty-object probe                 : COMPLETED
+Non-blank order-input requirement  : CONFIRMED
+Third no-order check               : PENDING
+Non-empty contract probe           : NOT YET AUTHORIZED
 Valid Customer Order probe         : NOT READY
 Exact JSON schema                  : NOT YET CONFIRMED
 Customer Order creation            : NOT STARTED
@@ -35,9 +38,27 @@ CoAndLineInfoJson : input-only
 CoResult          : input/output + message
 ```
 
-## Probe 1 Result
+## Probe 1 — Raw Malformed Input
 
-Raw `{` failed before JSON parsing because the method expects Base64 content.
+Submitted:
+
+```text
+CoAndLineInfoJson : {
+CoResult          : blank
+```
+
+Result:
+
+```text
+Status : Fail
+Error  : input is not valid Base64
+```
+
+Confirmed:
+
+```text
+CoAndLineInfoJson must contain Base64-encoded content.
+```
 
 Evidence:
 
@@ -46,14 +67,14 @@ tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
 tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
 ```
 
-## Probe 2 Result
+## Probe 2 — Base64 for Malformed JSON
 
 Submitted:
 
 ```text
 CoAndLineInfoJson : ew==
 Decoded content   : {
-CoResult initial  : blank
+CoResult          : blank
 ```
 
 Tenant response:
@@ -70,113 +91,139 @@ Tenant response:
 }
 ```
 
-Confirmed contract:
+Confirmed:
 
 ```text
-CoAndLineInfoJson
-1. Base64 decode
-2. parse decoded content as a JSON object / JObject
-3. validate Customer Order schema and process
+The decoded content is parsed as a JSON object / Newtonsoft JObject.
 ```
-
-`MessageCode = 0` does not mean business success. The business result remains in `CoResult`, which is a string containing a JSON array. The exact failure key is `ErrrorMessage`.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
+tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
 ```
 
-## Second No-Order Verification — Completed
+## Probe 3 — Empty JSON Object
 
-The standard recent-order query was executed after the `ew==` probe.
-
-Tenant result:
+Submitted:
 
 ```text
-SQL error                         : none
-Rows returned                    : 0
-Unexpected recent Customer Order : not found
+CoAndLineInfoJson : e30=
+Decoded content   : {}
+CoResult          : blank
 ```
 
-Therefore the Base64 malformed JSON probe did not create or update a Customer Order within the checked 30-minute window.
+Tenant response:
+
+```json
+{
+  "Message": null,
+  "MessageCode": 0,
+  "Parameters": [
+    "e30=",
+    "[{\"Status\":\"Fail\",\"Message\":\"The input for order creation cannot be blank\"}]"
+  ],
+  "ReturnValue": null
+}
+```
+
+Confirmed:
+
+```text
+- Base64 decoding succeeded.
+- JObject parsing succeeded.
+- An empty JObject is treated as blank order input.
+- The order-input validation layer requires non-blank content.
+- MessageCode = 0 still does not establish business success.
+- CoResult remains a string containing a JSON array.
+```
+
+This failure branch contains only:
+
+```text
+Status
+Message
+```
+
+It does not contain `ErrrorMessage`, so integration code must not require that key on every failure result.
 
 Evidence:
 
 ```text
-tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
+tests/evidence/2026-07-30-createcoandlines-empty-object-blank-order-failure.md
+```
+
+## Confirmed Public Processing Sequence
+
+```text
+CoAndLineInfoJson
+1. Base64 decode
+2. parse decoded content as JSON object / JObject
+3. reject blank order input
+4. validate the Customer Order payload schema
+5. run Customer Order and line creation processing
+```
+
+The exact schema for steps 4 and 5 remains unconfirmed.
+
+## Result-Handling Rules Confirmed So Far
+
+```text
+- MessageCode = 0 means the Mongoose method invocation reached the method layer.
+- It does not mean Customer Order creation succeeded.
+- Parse the returned CoResult string as a JSON array.
+- Evaluate Status for business success or failure.
+- Failure records may or may not include ErrrorMessage.
+- The exact earlier key is ErrrorMessage with three consecutive r characters.
 ```
 
 ## Remaining Unknowns
 
 ```text
-- exact JSON property names and nesting
+- top-level order property name or names
+- exact JSON nesting
 - required header fields
 - required line fields
-- date and numeric formats
-- co_num generation behavior
+- accepted date and numeric formats
+- whether co_num is supplied or generated
 - success CoResult shape
-- atomicity of header and line creation
+- whether header and lines are created atomically
+- whether another standard validation method must run first
 ```
 
-## Current Small Step — Empty JSON Object Probe
+## Current Small Step — Third Read-Only No-Order Check
 
-Submit only an empty JSON object encoded as Base64:
+Repeat the same recent-order query after the empty-object probe:
 
-```text
-Raw decoded content : {}
-Base64 value        : e30=
-CoResult initial    : blank
+```sql
+SELECT TOP (20)
+       co_num,
+       cust_num,
+       order_date,
+       CreateDate,
+       CreatedBy,
+       RecordDate,
+       UpdatedBy
+FROM dbo.co_mst
+WHERE RecordDate >= DATEADD(MINUTE, -30, GETDATE())
+   OR CreateDate >= DATEADD(MINUTE, -30, GETDATE())
+ORDER BY COALESCE(RecordDate, CreateDate) DESC;
 ```
 
-Postman request:
+Send the complete result, including an empty result.
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/SLCos/CreateCoAndLines
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
-```
+Do not invoke `CreateCoAndLines` again during this step.
 
-Postman Params:
-
-```text
-Key   : parms
-Value : e30=,
-```
-
-Expected encoded URL fragment:
-
-```text
-?parms=e30%3D,
-```
-
-Purpose:
-
-```text
-- pass Base64 decoding;
-- pass JSON-object parsing;
-- reach schema validation;
-- capture the first missing-property or validation error without using customer, item, or valid order values.
-```
-
-Capture the complete response:
-
-```text
-HTTP status
-Message
-MessageCode
-ReturnValue
-Parameters
-```
+Only after this third no-order check succeeds may a later controlled probe use one non-empty, non-business marker object solely to determine whether the blank test checks object emptiness or a specific required top-level member. That later payload is not yet authorized.
 
 ## Safety Boundary
 
 ```text
-- Use exactly e30= as parameter 1.
-- Keep parameter 2 blank by retaining the trailing comma.
-- Do not add any JSON property.
-- Do not use customer, item, site, order number, date, quantity, or price values.
-- Do not retry with another payload in the same step.
+- No valid Customer Order payload has been submitted.
+- No customer, item, site, order number, date, quantity, or price value has been submitted.
+- Do not guess business schema fields yet.
 - Do not create Process/Reprocess logic.
-- After the response, perform another separate read-only Customer Order verification before advancing.
+- Do not import CSV or create the controlled receive API method.
+- Do not mark the empty-object probe as no-order verified until the SQL result is returned.
 ```
