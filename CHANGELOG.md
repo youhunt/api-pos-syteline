@@ -61,6 +61,8 @@ validation_msg : NULL
 
 - Marked the first mandatory customer validation requirement fully completed for both valid and invalid branches.
 - Advanced development to tenant-specific discovery of the standard Customer Order IDO and supported business process before creating custom Process/Reprocess logic.
+- Recorded that the first discovery screenshot showed `SL.SLCustomers` with collection `oCustomers`, which belongs to the standard Customers form and is not the Customer Order header IDO.
+- Kept the standard Customer Order header IDO status as not confirmed; the correct Customer Orders form must still be inspected.
 
 ### Current SMK069 Status
 
@@ -78,15 +80,16 @@ validation_msg : NULL
 [COMPLETED] valid-customer persisted staging result
 [COMPLETED] mandatory customer validation requirement
 [IN PROGRESS] standard Customer Order IDO/business-process discovery
-[PENDING]   custom Process/reprocess method
-[PENDING]   controlled service IDO receive method
-[PENDING]   final external POS REST API contract
-[PENDING]   Customer Order header and line creation
+[NOT CONFIRMED] standard Customer Order header IDO
+[PENDING] custom Process/reprocess method
+[PENDING] controlled service IDO receive method
+[PENDING] final external POS REST API contract
+[PENDING] Customer Order header and line creation
 ```
 
 ### Planned
 
-- Open the standard Customer Orders form in Design Mode and identify its exact primary collection IDO in this tenant.
+- Open the correct standard Customer Orders form in Design Mode and identify its exact primary collection IDO in this tenant.
 - Inspect supported standard Customer Order methods after the tenant IDO is confirmed.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts to standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
