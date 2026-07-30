@@ -1,20 +1,27 @@
 # Implementation 19 — Controlled Stored Procedure Customer Order Processing
 
-## Decision
+## Status
 
 ```text
 Decision date                     : 30 July 2026
-User approval                     : CONFIRMED
-CreateCoAndLines reverse-engineering: STOPPED
-Processing direction              : CONTROLLED STORED PROCEDURE
+Initial user approval             : CONFIRMED
+Later user direction              : RESUME CreateCoAndLines metadata discovery
+Processing direction              : DEFERRED ALTERNATIVE
 Direct target tables              : dbo.co_mst and dbo.coitem_mst
 Implementation status             : NOT STARTED
-Required input                    : previous working stored procedure
+SQL created                       : NO
+SQL executed                      : NO
 ```
 
-The user confirmed that a previous implementation successfully used a stored procedure with direct inserts into `co_mst` and `coitem_mst`. The project therefore stops further metadata discovery for `SLCos.CreateCoAndLines` and pivots to reviewing and adapting the previous stored procedure.
+The user previously confirmed that an earlier implementation used a stored procedure with direct inserts into `co_mst` and `coitem_mst`. This alternative remains documented, but it is no longer the active next step because the user subsequently instructed the project to continue metadata discovery for `SLCos.CreateCoAndLines`.
 
-## Intended Flow
+Active work continues in:
+
+```text
+implementation/18-discover-createcoandlines-call-sites.md
+```
+
+## Intended Alternative Flow
 
 ```text
 POS/API data
@@ -27,53 +34,31 @@ POS/API data
 → expose errors through ue_SMK069APISalesErrorProcessing
 ```
 
-## Mandatory Controls
-
-The stored procedure design must include, at minimum:
+## Mandatory Controls if Reactivated
 
 ```text
 1. SET XACT_ABORT ON and explicit transaction control.
 2. Idempotency protection for co_num + co_line + SiteRef.
 3. Reprocess protection against duplicate header or line creation.
-4. Validation that the selected staging rows belong to one order/site.
+4. Validation that selected staging rows belong to one order/site.
 5. Customer existence and active-state validation.
 6. Item and item/site validation.
-7. Cost retrieval from item_mst; cost is not stored in staging.
+7. Cost retrieval from item_mst.
 8. Header total derived from SUM(unit_price * qty_ordered).
 9. Complete error capture and rollback on failure.
-10. Staging status update:
-    N = New
-    V = Valid
-    E = Error
-    P = Processed
-    C = Cancelled
-11. Maintain retry_count, validation_msg, error_msg, processed_date, processed_by.
-12. No partial header/line commit.
+10. Maintain process_status, validation_msg, error_msg, retry_count, processed_date, and processed_by.
+11. No partial header/line commit.
 ```
 
 ## Important Boundary
 
-Direct inserts may bypass standard SyteLine business logic. The implementation is therefore not considered safe merely because it is inside a stored procedure. The previous procedure must be reviewed against the current tenant's required columns, defaults, validations, triggers, and downstream behavior before execution.
+Direct inserts may bypass standard SyteLine business logic. This path is not considered safe merely because it is implemented inside a stored procedure.
 
-No SQL has been created or executed as part of this decision.
-
-## Current Small Step
-
-Obtain the previous working stored procedure from the user.
-
-Review it before changing anything, specifically:
+## Current Boundary
 
 ```text
-- input parameters
-- co_num generation
-- required co_mst columns
-- required coitem_mst columns
-- default values and site handling
-- customer and item validation
-- transaction and rollback behavior
-- duplicate prevention
-- error handling
-- staging status updates
+- Do not draft or execute direct-insert SQL now.
+- Do not request the previous stored procedure as the current next step.
+- Continue read-only CreateCoAndLines metadata discovery.
+- Reactivate this document only after a later explicit user decision.
 ```
-
-Do not draft a replacement procedure from assumptions before the previous procedure is available.
