@@ -29,6 +29,7 @@ Lines  : SL.SLCoitems
 - `tests/evidence/2026-07-30-idomethods-idoinfo-properties.md` confirming published method-level metadata properties.
 - `tests/evidence/2026-07-30-create-co-and-lines-method-row.md` recording effective method contexts for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
 - `tests/evidence/2026-07-30-idocollections-idoinfo-properties.md` confirming collection-level extension and inheritance metadata properties.
+- `tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md` confirming the collection hierarchy and `Customer.SLCos` extension-owner metadata.
 
 ### Changed
 
@@ -89,22 +90,28 @@ SLCos_FT
 ZIT_SLCos
 ```
 
-- Recorded that `MethodDesc`, `StoredProcName`, and `DerOutriggerProfile` are NULL for all returned method rows.
-- Confirmed that `IdoCollections` exposes the following implementation and hierarchy properties:
+- Confirmed the actual collection hierarchy:
 
 ```text
-Extends
-ExtClassName
-ExtClassNamespace
-CustomAssemblyName
-ServerName
-AccessAs
-OutriggerProfile
-DerServerPlusCollection
+SLCos
+├── SLCos_FT extends SLCos
+└── ZIT_SLCos extends SLCos
 ```
 
-- Kept the supported Customer Order creation sequence unconfirmed until the collection hierarchy, exact JSON schema, and runtime result behavior are verified.
-- Advanced the next step to a read-only metadata load for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
+- Confirmed base extension-owner metadata:
+
+```text
+Collection       : SLCos
+Extension class  : SLCos
+Namespace        : Customer
+Custom assembly  : Customer
+Server project   : Customer
+Runtime identity : Customer.SLCos
+```
+
+- Confirmed that `SLCos_FT` and `ZIT_SLCos` inherit from `SLCos` and do not publish their own extension class, namespace, or custom assembly.
+- Kept the supported Customer Order creation sequence unconfirmed until the exact JSON schema and runtime result behavior are verified.
+- Advanced the next step to a read-only inspection of the `Customer` record on the **IDO Extension Class Assemblies** form.
 
 ### Current SMK069 Status
 
@@ -123,9 +130,10 @@ DerServerPlusCollection
 [CONFIRMED] CreateCoAndLines is Extension Class - Standard Method
 [CONFIRMED] CoAndLineInfoJson = input-only
 [CONFIRMED] CoResult = input/output + message parameter
-[CONFIRMED] effective contexts = SLCos, SLCos_FT, ZIT_SLCos
-[CONFIRMED] IdoCollections extension/inheritance metadata properties
-[NEXT] load collection rows for SLCos, SLCos_FT, and ZIT_SLCos
+[CONFIRMED] SLCos is the base collection
+[CONFIRMED] SLCos_FT and ZIT_SLCos extend SLCos
+[CONFIRMED] extension owner metadata = Customer.SLCos, assembly Customer
+[NEXT] inspect Customer assembly type and source availability read-only
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -134,10 +142,10 @@ DerServerPlusCollection
 
 ### Planned
 
-- Load read-only `IdoCollections` rows for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
-- Confirm the actual `Extends` chain and extension class, namespace, assembly, server project, access-as, outrigger, and server-plus metadata.
-- Determine the exact `CoAndLineInfoJson` schema and `CoResult` behavior without risking standard-table inserts.
-- Inspect `NewCustomerOrderValidSp` or `SL.SLCoitems` methods only after `CreateCoAndLines` has been evaluated.
+- Inspect the `Customer` record on the IDO Extension Class Assemblies form without editing or building it.
+- Determine whether assembly `Customer` is Build From Source or binary-only and whether source code is available read-only.
+- If source is available, locate `Customer.SLCos.CreateCoAndLines` and extract the exact `CoAndLineInfoJson` and `CoResult` contracts.
+- If source is not available, select a controlled non-destructive discovery path before invoking the method.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Prepare sample CSV import, final API documentation, Postman collection, and deployment runbook.
