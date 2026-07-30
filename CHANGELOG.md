@@ -39,6 +39,7 @@ tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
 tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
 tests/evidence/2026-07-30-event-action-metadata-collections.md
 tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
+tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
 ```
 
 ### Changed
@@ -91,54 +92,13 @@ Base64 decode
 
 - Confirmed `MessageCode = 0` does not establish business success; parse `CoResult` and evaluate `Status`.
 - Confirmed `CoResult` is a JSON-array string and failure records may or may not contain `ErrrorMessage`.
-- Completed four controlled probes:
-
-```text
-Probe 1 : raw {                         → invalid Base64
-Probe 2 : ew==                          → decoded { → JObject parser failure
-Probe 3 : e30=                          → decoded {} → blank order input
-Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
-```
-
-- Confirmed an arbitrary non-empty property does not satisfy the required order-input contract.
-- Completed four post-probe read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
-- Stopped guessing business-schema property names.
-- Pivoted to read-only discovery of standard form/event/script metadata that calls `SLCos.CreateCoAndLines`.
-- Confirmed tenant event-related metadata IDOs and `EventHandlers` call-site properties.
+- Completed four controlled probes and four post-probe read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
+- Stopped guessing business-schema property names and pivoted to read-only discovery of standard form/event/script metadata.
+- Confirmed tenant event-handler and event-action metadata collections.
 - Completed the read-only `EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'` search; it returned zero rows.
-- Confirmed tenant event-action metadata collections:
-
-```text
-EventAction_GenericParms
-EventActionRevisions
-EventActions
-EventActionStates
-EventActionVariableAccess
-```
-
-- Selected `EventActions` as the primary child-action metadata candidate.
-- Confirmed `EventActions` publishes call-site-relevant properties:
-
-```text
-ActionType
-DerActionTypeText
-Parameters
-ExpandedParameters
-SubstitutedParameters
-EventName
-EventHandlerSequence
-Sequence
-Description
-EventHandlerRowPointer
-RowPointer
-AccessAs
-DerAccessAs
-EventActionVariableAccess
-IsEventActionRevision
-EventHandlerRevisionRowPointer
-```
-
-- Selected raw `Parameters` as the first event-action search field. Derived `ExpandedParameters` and `SubstitutedParameters` remain later fallback paths.
+- Confirmed `EventActions` call-site-relevant properties including `Parameters`, `ExpandedParameters`, and `SubstitutedParameters`.
+- Completed the read-only `EventActions.Parameters LIKE '%CreateCoAndLines%'` search; it returned zero rows.
+- Selected `EventActions.ExpandedParameters` as the next separate read-only fallback. `SubstitutedParameters` and revision metadata remain later paths.
 
 ### Current SMK069 Status
 
@@ -164,7 +124,8 @@ EventHandlerRevisionRowPointer
 [COMPLETED] parent MethodToCall search = zero rows
 [CONFIRMED] event-action metadata collections
 [CONFIRMED] EventActions property metadata
-[NEXT] filter EventActions.Parameters for CreateCoAndLines
+[COMPLETED] raw EventActions.Parameters search = zero rows
+[NEXT] filter EventActions.ExpandedParameters for CreateCoAndLines
 [PENDING] locate exact standard CreateCoAndLines call site
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
@@ -175,8 +136,8 @@ EventHandlerRevisionRowPointer
 
 ### Planned
 
-- Filter raw `EventActions.Parameters` for `CreateCoAndLines` using a read-only REST v1 load.
-- Search derived parameter fields, revisions, form metadata, or scripts only as later separate steps if the raw search returns no match.
+- Filter `EventActions.ExpandedParameters` for `CreateCoAndLines` using a read-only REST v1 load.
+- Search `SubstitutedParameters`, revisions, form metadata, or scripts only as later separate steps if the expanded search returns no match.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
