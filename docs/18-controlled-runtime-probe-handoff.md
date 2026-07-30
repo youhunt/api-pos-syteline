@@ -37,7 +37,7 @@ Probe 3 : e30=                          → decoded {} → blank order input
 Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
 ```
 
-Probe 4 confirmed that an arbitrary non-empty object does not satisfy the method contract. The exact required business member names and nesting remain unconfirmed.
+An arbitrary non-empty object does not satisfy the method contract. The exact required business member names and nesting remain unconfirmed.
 
 ## Business Result Rules
 
@@ -63,13 +63,15 @@ No unexpected Customer Order was found in any checked 30-minute window.
 
 ## Technical Decision
 
-Payload-property guessing is stopped. Discovery now targets standard tenant metadata that may call:
+Payload-property guessing is stopped. Discovery targets standard tenant metadata that may call:
 
 ```text
 SLCos.CreateCoAndLines
 ```
 
-## Confirmed Event Metadata Collections
+## Confirmed Event Metadata
+
+Candidate IDOs:
 
 ```text
 EventHandlerRevisions
@@ -80,23 +82,7 @@ IdoEventHandlerAppliesToTasks
 QueuedEventHandlers
 ```
 
-All are published from:
-
-```text
-ServerName : MGCore
-AccessAs   : Core
-```
-
-Strongest initial candidates:
-
-```text
-EventHandlers
-EventHandlerRevisions
-```
-
-## Confirmed EventHandlers Properties
-
-The tenant-published properties most relevant to call-site discovery are:
+`EventHandlers` publishes:
 
 ```text
 EventName
@@ -116,42 +102,52 @@ Transactional
 TriggeringProperty
 ```
 
-`MethodToCall` is the first parent-handler field to search. `EventActions` is a child `CONTAINS` property whose internal contract has not yet been inspected.
+## Completed Parent-Handler Search
+
+A read-only filter was applied:
+
+```text
+MethodToCall LIKE '%CreateCoAndLines%'
+```
+
+Tenant result:
+
+```text
+Message        : Success
+MessageCode    : 0
+Items          : zero rows
+MoreRowsExists : false
+```
+
+Confirmed conclusion:
+
+```text
+No parent EventHandlers row stores CreateCoAndLines directly in MethodToCall.
+```
+
+This does not rule out a standard call site. The reference may exist in child event-action metadata, revisions, form metadata, or scripts.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-event-handler-metadata-collections.md
 tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
-```
-
-## Current Unknowns
-
-```text
-- exact top-level order member name or names
-- exact header/line nesting
-- required header fields
-- required line fields
-- accepted date and numeric formats
-- whether co_num is supplied or generated
-- success CoResult shape
-- atomicity of header and line creation
-- which standard metadata object calls CreateCoAndLines
+tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
 ```
 
 ## Next Step Only
 
-Run this read-only metadata query:
+Discover the actual tenant collection name or names related to event actions:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventHandlers/adv?props=EventName,Sequence,Description,Purpose,IDOCollections,AppliesToObjects,AccessAs,Active,InitialAction,InitialActionSequence,MethodToCall&filter=MethodToCall%20LIKE%20%27%25CreateCoAndLines%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25EventAction%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
 Send the complete JSON response, including an empty result.
 
-Do not inspect `EventHandlerRevisions` or `EventActions` in the same step.
+Do not inspect `EventHandlerRevisions` in the same step. Do not assume that the parent `CONTAINS` property name `EventActions` is itself the loadable child IDO name.
 
 ## Status
 
@@ -161,7 +157,8 @@ Four no-order checks                : COMPLETED — ZERO ROWS
 Payload property guessing           : STOPPED
 Event metadata collections          : CONFIRMED
 EventHandlers property metadata     : CONFIRMED
-Filtered MethodToCall search        : NEXT
+Parent MethodToCall search          : COMPLETED — ZERO ROWS
+Event-action collection discovery   : NEXT
 Exact decoded JSON schema           : PENDING
 Process/Reprocess                    : NOT STARTED
 Customer Order creation             : NOT STARTED
