@@ -65,7 +65,8 @@ Primary key                        : SiteRef + co_num + co_line
 [CONFIRMED] CoAndLineInfoJson = input-only
 [CONFIRMED] CoResult = input/output + message parameter
 [CONFIRMED] effective method contexts = SLCos, SLCos_FT, ZIT_SLCos
-[NEXT]      inspect read-only IdoCollections property metadata
+[CONFIRMED] IdoCollections exposes extension/inheritance metadata properties
+[NEXT]      load metadata rows for SLCos, SLCos_FT, and ZIT_SLCos
 [NOT STARTED] custom Process/Reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -108,32 +109,6 @@ tests/evidence/2026-07-30-standard-customer-order-header-ido.md
 tests/evidence/2026-07-30-standard-customer-order-line-ido.md
 ```
 
-The earlier `SL.SLCustomers / oCustomers` screenshot belonged to the Customers form and is not a Customer Order IDO.
-
-## SL.SLCos Method Discovery
-
-Creation-related candidates:
-
-```text
-CreateCoAndLines
-NewCustomerOrderValidSp
-CreateCoColSp
-CoCustomerValidSp
-CoCustomerValid2Sp
-CoCustSeqValidSp
-VerifyCoCustNumSp
-CoNextKeyDelSp
-SumCoSp
-```
-
-`CreateCoAndLines` was selected first because its name explicitly references both header and lines.
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-slcoss-header-method-list.md
-```
-
 ## Confirmed CreateCoAndLines Contract Metadata
 
 ```text
@@ -165,46 +140,9 @@ tests/evidence/2026-07-30-create-co-and-lines-parameters.md
 tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
 ```
 
-## Method Metadata Route Discovery
-
-The first metadata route failed:
-
-```text
-/IDORequestService/ido/info/IdoMethodParameters
-→ HTTP 500 generic ASP.NET Runtime Error
-```
-
-REST v1 metadata routes succeeded and exposed the parameter direction flags plus method-level metadata.
-
-Relevant `IdoMethods` properties:
-
-```text
-CollectionName
-MethodName
-BaseCollectionName
-MethodDesc
-MethodType
-TxnFlag
-StoredProcName
-DerOutriggerProfile
-DerSpMethodsAllowed
-MethodParameters
-MethodResultSets
-```
-
-No direct `ExtensionClass`, `Assembly`, `SourceCode`, `HelpUrl`, or `JsonSchema` property was exposed.
-
-Evidence:
-
-```text
-tests/evidence/2026-07-30-idomethodparameters-info-endpoint-500.md
-tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md
-tests/evidence/2026-07-30-idomethods-idoinfo-properties.md
-```
-
 ## Confirmed CreateCoAndLines Effective Method Rows
 
-A filtered read-only load of `IdoMethods` returned three rows:
+A read-only `IdoMethods` load returned:
 
 | CollectionName | BaseCollectionName | MethodType | TxnFlag | StoredProcName | MethodDesc | DerOutriggerProfile |
 | --- | --- | ---: | ---: | --- | --- | --- |
@@ -212,19 +150,61 @@ A filtered read-only load of `IdoMethods` returned three rows:
 | `SLCos` | `SLCos_FT` | 2 | 0 | NULL | NULL | NULL |
 | `SLCos` | `ZIT_SLCos` | 2 | 0 | NULL | NULL | NULL |
 
-All rows returned the same `_ItemId`. Current safe interpretation:
+All rows returned the same `_ItemId`. Safe interpretation:
 
 ```text
 - one effective method metadata record is represented across three collection/base contexts;
-- the exact inheritance/extension relationship is not yet confirmed;
-- do not assume which collection layer contains the extension-class implementation;
-- the row data does not reveal the JSON schema.
+- the inheritance relationship is not yet confirmed;
+- do not assume which layer owns the extension implementation;
+- the method rows do not reveal the JSON schema.
 ```
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-create-co-and-lines-method-row.md
+```
+
+## IdoCollections Metadata Discovery
+
+The tenant `IdoCollections` IDOInfo response exposes:
+
+```text
+CollectionName
+Caption
+CaptionOrName
+CollectionDesc
+Extends
+ExtClassName
+ExtClassNamespace
+CustomAssemblyName
+ServerName
+AccessAs
+OutriggerProfile
+DerServerPlusCollection
+ReplaceFlag
+DevelopmentFlag
+DerSpMethodsAllowed
+```
+
+Related nested metadata includes:
+
+```text
+Methods
+Properties
+Tables
+Rules
+DataRules
+Filters
+EventHandlerAppliesToObjects
+```
+
+These fields are sufficient to compare `SLCos`, `SLCos_FT`, and `ZIT_SLCos` and identify the inheritance chain, extension class, namespace, custom assembly, server project, access-as alias, outrigger profile, and server-plus collection reference.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-idocollections-idoinfo-properties.md
 ```
 
 No standard business method has been executed and no Customer Order has been created.
@@ -241,28 +221,20 @@ No standard business method has been executed and no Customer Order has been cre
 - failure CoResult shape
 - whether header and lines are created atomically
 - whether another standard validation method must run first
-- which collection layer contains the extension implementation
+- actual inheritance and implementation ownership across SLCos, SLCos_FT, and ZIT_SLCos
 ```
 
 ## Immediate Next Step
 
-Perform only this read-only metadata request:
+Perform only this read-only request:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/IdoCollections
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,Extends,ExtClassName,ExtClassNamespace,CustomAssemblyName,ServerName,AccessAs,OutriggerProfile,DerServerPlusCollection,ReplaceFlag,DevelopmentFlag&filter=CollectionName%20%3D%20%27SLCos%27%20OR%20CollectionName%20%3D%20%27SLCos_FT%27%20OR%20CollectionName%20%3D%20%27ZIT_SLCos%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete response or at least the returned property names.
-
-Purpose:
-
-```text
-- determine whether collection metadata exposes base/inheritance information;
-- look for extension-class, assembly, profile, or implementation-reference fields;
-- prepare a later filtered load for SLCos, SLCos_FT, and ZIT_SLCos.
-```
+Send the complete JSON response.
 
 Do not invoke `CreateCoAndLines`, inspect another business method, create Process logic, create Customer Orders, import CSV, or create the receive API method during this step.
 
@@ -290,7 +262,7 @@ Direct SQL insertion into `co_mst` or `coitem_mst` remains prohibited.
 6. Never direct-insert into `co_mst` or `coitem_mst`.
 7. Item mapping and broader item validation remain postponed.
 8. Distinguish Stored Procedure methods from Extension Class methods.
-9. Treat collection hierarchy conclusions as pending until collection metadata confirms them.
+9. Treat collection hierarchy conclusions as pending until collection rows confirm them.
 
 ## Repository Documents to Read First
 
@@ -304,7 +276,7 @@ implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 implementation/13-create-SMK069-customer-validation.md
 implementation/14-discover-standard-customer-order-processing.md
 implementation/15-idomethodparameters-metadata-fallback.md
-tests/evidence/2026-07-30-create-co-and-lines-method-row.md
+tests/evidence/2026-07-30-idocollections-idoinfo-properties.md
 CHANGELOG.md
 ```
 
@@ -321,6 +293,7 @@ Current status:
 - CoAndLineInfoJson is input-only;
 - CoResult is input/output and MessageFlag = 1;
 - the method row is represented with BaseCollectionName SLCos, SLCos_FT, and ZIT_SLCos using the same _ItemId;
+- IdoCollections exposes Extends, ExtClassName, ExtClassNamespace, CustomAssemblyName, ServerName, AccessAs, OutriggerProfile, and DerServerPlusCollection;
 - the exact JSON schema, collection hierarchy, and result contract remain unconfirmed;
 - no standard business method has been executed;
 - custom Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not complete.
@@ -329,5 +302,5 @@ Target remains:
 POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
 
 Next step only:
-Call REST v1 IDOInfo for IdoCollections and provide its property names. Do not invoke CreateCoAndLines or create a Customer Order.
+Load read-only IdoCollections metadata rows for SLCos, SLCos_FT, and ZIT_SLCos using the documented Advanced LoadCollection request. Do not invoke CreateCoAndLines or create a Customer Order.
 ```
