@@ -63,7 +63,8 @@ Do not create a separate `site_ref`; standard `SiteRef` fulfills the source requ
 [CONFIRMED] standard Customer Order header IDO = SL.SLCos
 [CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
 [REVIEWED]  SL.SLCos method-name list
-[NEXT]      inspect CreateCoAndLines parameters
+[CONFIRMED] CreateCoAndLines = Extension Class - Standard Method, not Stored Procedure
+[NEXT]      inspect CreateCoAndLines parameter rows
 [NOT STARTED] custom Process/Reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -158,26 +159,41 @@ Evidence:
 tests/evidence/2026-07-30-slcoss-header-method-list.md
 ```
 
+## Confirmed `CreateCoAndLines` Attributes
+
+```text
+IDO Name      : SLCos
+Method Name   : CreateCoAndLines
+Method Type   : Extension Class - Standard Method
+Transactional : false / not enabled according to the method list
+Stored Proc.  : not applicable
+```
+
+`CreateCoAndLines` is implemented in the standard `SL.SLCos` extension class. It is not a Stored Procedure method, so there is no Stored Procedure name to capture or configure.
+
+The method's public parameter contract still needs to be inspected before deciding whether it is suitable for SMK069.
+
 ## Immediate Next Step
 
-Inspect only method `CreateCoAndLines`:
+Stay on method:
 
 ```text
 IDO         : SL.SLCos
 Method Name : CreateCoAndLines
+Method Type : Extension Class - Standard Method
 ```
 
-Capture:
+Capture only its parameter metadata:
 
 ```text
-Method Type
-Transactional setting
-Stored Procedure / implementation reference
-all Parameter Names
+Parameter Name
 Sequence
 User Data Type
+Input/output direction, if visible
 Custom Load Method Output Properties, if populated
 ```
+
+Do not look for or supply a Stored Procedure name.
 
 Do not edit, resync, save, or execute the standard method.
 
@@ -208,6 +224,7 @@ Direct SQL insertion into `co_mst` or `coitem_mst` remains prohibited.
 5. Keep validation and processing reusable by form, CSV, and REST API paths.
 6. Do not perform direct SQL insert into `co_mst` or `coitem_mst`.
 7. Item mapping and broader item validation remain postponed.
+8. Distinguish Stored Procedure methods from Extension Class methods; `CreateCoAndLines` is an Extension Class method.
 
 ## Repository Documents to Read First
 
@@ -236,7 +253,8 @@ Current status:
 - standard Customer Order header IDO is SL.SLCos;
 - standard Customer Order line IDO is SL.SLCoitems;
 - SL.SLCos method list has been reviewed;
-- relevant candidates include CreateCoAndLines, NewCustomerOrderValidSp, CreateCoColSp, and CoCustomerValidSp;
+- CreateCoAndLines is confirmed as Extension Class - Standard Method, not a Stored Procedure method;
+- relevant candidates also include NewCustomerOrderValidSp, CreateCoColSp, and CoCustomerValidSp;
 - no standard method has been modified or executed;
 - custom Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not complete.
 
@@ -244,5 +262,5 @@ Target remains:
 POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
 
 Next step only:
-Open IDO Methods for SL.SLCos, select CreateCoAndLines, and provide its complete Method Attributes and parameter list. Do not modify, resync, save, or execute it. Do not inspect another method or SL.SLCoitems in the same step.
+Stay on SL.SLCos method CreateCoAndLines and provide its complete parameter rows: Parameter Name, Sequence, User Data Type, direction if visible, and output properties if populated. Do not look for a Stored Procedure because this is an Extension Class method. Do not modify, resync, save, or execute it, and do not inspect another method or SL.SLCoitems in the same step.
 ```
