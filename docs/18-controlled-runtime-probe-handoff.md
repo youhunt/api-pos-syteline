@@ -28,7 +28,7 @@ CoAndLineInfoJson
 → Customer Order and line processing
 ```
 
-Completed controlled probes:
+Completed probes:
 
 ```text
 Probe 1 : raw {                         → invalid Base64
@@ -37,7 +37,7 @@ Probe 3 : e30=                          → decoded {} → blank order input
 Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
 ```
 
-An arbitrary non-empty object does not satisfy the method contract. Exact business member names and nesting remain unconfirmed.
+All four post-probe `dbo.co_mst` checks returned zero rows with no SQL error. Payload-property guessing is stopped.
 
 ## Business Result Rules
 
@@ -49,29 +49,9 @@ An arbitrary non-empty object does not satisfy the method contract. Exact busine
 - Some failure branches preserve input properties and add Status and Message.
 ```
 
-## Completed Safety Verifications
+## Standard Call-Site Discovery
 
-```text
-Probe 1 check : zero rows
-Probe 2 check : zero rows
-Probe 3 check : zero rows
-Probe 4 check : zero rows
-SQL errors    : none
-```
-
-No unexpected Customer Order was found in any checked 30-minute window.
-
-## Technical Decision
-
-Payload-property guessing is stopped. Discovery targets standard tenant metadata that may call:
-
-```text
-SLCos.CreateCoAndLines
-```
-
-## Confirmed Event-Handler Metadata
-
-Candidate IDOs:
+Confirmed event-handler metadata collections:
 
 ```text
 EventHandlerRevisions
@@ -82,37 +62,15 @@ IdoEventHandlerAppliesToTasks
 QueuedEventHandlers
 ```
 
-`EventHandlers` publishes call-site-relevant properties including:
+The parent search:
 
 ```text
-EventName
-Sequence
-MethodToCall
-IDOCollections
-AppliesToObjects
-EventActions                 : CONTAINS
-InitialAction
-InitialActionSequence
-Description
-Purpose
-AccessAs
-Active
-Synchronous
-Transactional
-TriggeringProperty
+EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
 ```
 
-A read-only search for:
+returned zero rows.
 
-```text
-MethodToCall LIKE '%CreateCoAndLines%'
-```
-
-returned zero rows. Therefore no parent `EventHandlers` row stores the target directly in `MethodToCall`.
-
-## Confirmed Event-Action Metadata Collections
-
-Read-only `IdoCollections` discovery returned:
+Confirmed event-action collections:
 
 ```text
 EventAction_GenericParms
@@ -122,7 +80,30 @@ EventActionStates
 EventActionVariableAccess
 ```
 
-Tenant descriptions identify `EventActions` as the primary action collection. The others are supporting collections for generic parameters, revisions, state/status, or variable access. Their actual property contracts have not yet been inspected.
+`EventActions` is the primary child-action candidate.
+
+## Confirmed EventActions Properties
+
+```text
+ActionType
+DerActionTypeText
+Parameters
+ExpandedParameters
+SubstitutedParameters
+EventName
+EventHandlerSequence
+Sequence
+Description
+EventHandlerRowPointer
+RowPointer
+AccessAs
+DerAccessAs
+EventActionVariableAccess
+IsEventActionRevision
+EventHandlerRevisionRowPointer
+```
+
+The first search field is raw `Parameters`. Derived `ExpandedParameters` and `SubstitutedParameters` are later fallback paths.
 
 Evidence:
 
@@ -131,21 +112,22 @@ tests/evidence/2026-07-30-event-handler-metadata-collections.md
 tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
 tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
 tests/evidence/2026-07-30-event-action-metadata-collections.md
+tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
 ```
 
 ## Next Step Only
 
-Read published property metadata for `EventActions`:
+Run:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventActions
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete JSON response, especially `Properties`.
+Send the complete JSON response, including an empty result.
 
-Do not load action rows, inspect `EventActionRevisions`, invoke `CreateCoAndLines`, guess business-schema properties, or edit metadata in the same step.
+Do not query derived parameter fields, revisions, scripts, or another metadata collection in the same step. Do not invoke `CreateCoAndLines` or edit metadata.
 
 ## Status
 
@@ -157,7 +139,8 @@ Event metadata collections          : CONFIRMED
 EventHandlers property metadata     : CONFIRMED
 Parent MethodToCall search          : COMPLETED — ZERO ROWS
 Event-action collections            : CONFIRMED
-EventActions property metadata      : NEXT
+EventActions property metadata      : CONFIRMED
+Raw Parameters search               : NEXT
 Exact decoded JSON schema           : PENDING
 Process/Reprocess                    : NOT STARTED
 Customer Order creation             : NOT STARTED
