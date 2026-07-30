@@ -3,18 +3,19 @@
 ## Status
 
 ```text
-Environment                              : DEV
-Controlled malformed probes              : COMPLETED
-All four no-order checks                  : COMPLETED — ZERO ROWS
-Base64 input requirement                  : CONFIRMED
-Decoded payload type                     : JSON object / JObject
-Specific order structure required         : CONFIRMED
-Exact business JSON schema                : NOT CONFIRMED
-Business-property guessing                : STOPPED
-Metadata call-site discovery              : RESUMED BY USER
-Current EventActions fields               : EXHAUSTED — ZERO ROWS
-EventActionRevisions property discovery   : COMPLETED
-EventActionRevisions.Parameters search    : NEXT
+Environment                                      : DEV
+Controlled malformed probes                      : COMPLETED
+All four no-order checks                          : COMPLETED — ZERO ROWS
+Base64 input requirement                          : CONFIRMED
+Decoded payload type                             : JSON object / JObject
+Specific order structure required                 : CONFIRMED
+Exact business JSON schema                        : NOT CONFIRMED
+Business-property guessing                        : STOPPED
+Metadata call-site discovery                      : RESUMED BY USER
+Current EventActions fields                       : EXHAUSTED — ZERO ROWS
+EventActionRevisions property discovery           : COMPLETED
+EventActionRevisions.Parameters search            : COMPLETED — ZERO ROWS
+EventActionRevisions.ExpandedParameters search    : NEXT
 ```
 
 ## Confirmed Runtime Findings
@@ -90,14 +91,43 @@ Evidence:
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 ```
 
-The first revision search field is raw `Parameters`. `ExpandedParameters` remains a later separate fallback.
+## Completed Step — Filter EventActionRevisions.Parameters
 
-## Current Small Step
-
-Run this read-only REST v1 request:
+Read-only request:
 
 ```http
 GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Tenant result:
+
+```text
+Message        : Success
+MessageCode    : 0
+Items          : zero rows
+MoreRowsExists : false
+```
+
+Confirmed conclusion:
+
+```text
+No EventActionRevisions row stores CreateCoAndLines in raw Parameters.
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
+```
+
+## Current Small Step
+
+Search the derived/read-only revision field:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=ExpandedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
@@ -111,6 +141,6 @@ Capture the complete JSON response, including an empty result.
 - Do not invoke CreateCoAndLines.
 - Do not guess Customer Order JSON properties.
 - Do not edit revisions, actions, handlers, scripts, events, or metadata.
-- Do not search ExpandedParameters or EventHandlerRevisions in the same step.
+- Do not inspect EventHandlerRevisions in the same step.
 - Do not implement Process/Reprocess or direct table inserts yet.
 ```
