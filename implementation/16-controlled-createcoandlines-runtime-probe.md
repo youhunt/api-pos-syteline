@@ -10,8 +10,8 @@ Base64 requirement                 : CONFIRMED
 First no-order check               : COMPLETED — ZERO ROWS
 Base64 malformed JSON probe        : COMPLETED
 Decoded payload type               : JSON object / JObject
-Second no-order check              : PENDING
-Empty-object probe                 : NOT YET AUTHORIZED
+Second no-order check              : COMPLETED — ZERO ROWS
+Empty-object probe                 : AUTHORIZED — NOT YET EXECUTED
 Valid Customer Order probe         : NOT READY
 Exact JSON schema                  : NOT YET CONFIRMED
 Customer Order creation            : NOT STARTED
@@ -87,6 +87,26 @@ Evidence:
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
 ```
 
+## Second No-Order Verification — Completed
+
+The standard recent-order query was executed after the `ew==` probe.
+
+Tenant result:
+
+```text
+SQL error                         : none
+Rows returned                    : 0
+Unexpected recent Customer Order : not found
+```
+
+Therefore the Base64 malformed JSON probe did not create or update a Customer Order within the checked 30-minute window.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
+```
+
 ## Remaining Unknowns
 
 ```text
@@ -99,8 +119,64 @@ tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.
 - atomicity of header and line creation
 ```
 
-## Current Small Step
+## Current Small Step — Empty JSON Object Probe
 
-Repeat the read-only `dbo.co_mst` recent-order query used after probe 1. Send the result, including an empty result. Do not invoke `CreateCoAndLines` again during this step.
+Submit only an empty JSON object encoded as Base64:
 
-Only after the second no-order check succeeds may a future probe submit Base64 `e30=`, which decodes to the empty JSON object `{}`. That probe is not authorized yet.
+```text
+Raw decoded content : {}
+Base64 value        : e30=
+CoResult initial    : blank
+```
+
+Postman request:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/SLCos/CreateCoAndLines
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Postman Params:
+
+```text
+Key   : parms
+Value : e30=,
+```
+
+Expected encoded URL fragment:
+
+```text
+?parms=e30%3D,
+```
+
+Purpose:
+
+```text
+- pass Base64 decoding;
+- pass JSON-object parsing;
+- reach schema validation;
+- capture the first missing-property or validation error without using customer, item, or valid order values.
+```
+
+Capture the complete response:
+
+```text
+HTTP status
+Message
+MessageCode
+ReturnValue
+Parameters
+```
+
+## Safety Boundary
+
+```text
+- Use exactly e30= as parameter 1.
+- Keep parameter 2 blank by retaining the trailing comma.
+- Do not add any JSON property.
+- Do not use customer, item, site, order number, date, quantity, or price values.
+- Do not retry with another payload in the same step.
+- Do not create Process/Reprocess logic.
+- After the response, perform another separate read-only Customer Order verification before advancing.
+```
