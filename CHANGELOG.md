@@ -16,12 +16,13 @@ implementation/18-discover-createcoandlines-call-sites.md
 implementation/19-controlled-sp-direct-order-processing.md
 ```
 
-- Runtime and metadata evidence for the `CreateCoAndLines` discovery path, including four controlled probes, four no-order checks, zero-row current event-handler/action searches, and the `EventActionRevisions` property contract.
+- Runtime and metadata evidence for the `CreateCoAndLines` discovery path, including four controlled probes, four no-order checks, zero-row current event-handler/action searches, and revision metadata behavior.
 - Added:
 
 ```text
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
+tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
 ```
 
 ### Changed
@@ -49,7 +50,7 @@ CoResult             : input/output + message parameter, JSON-array string
 ```
 
 - Completed four controlled probes and four read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
-- Completed these read-only metadata searches, all with zero rows:
+- Completed these read-only metadata searches with zero rows:
 
 ```text
 EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
@@ -81,7 +82,9 @@ RowPointer              : GUID, read-only
 ```
 
 - Confirmed `EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'` completed successfully with zero rows.
-- Selected `EventActionRevisions.ExpandedParameters` as the next separate read-only fallback.
+- Attempted `EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'`; the tenant returned `MessageCode 450` and `IllegalFilterException` with `Items = null`.
+- Classified the `ExpandedParameters` attempt as a rejected filter, not a zero-row result.
+- Selected `EventHandlerRevisions` IDOInfo discovery as the next read-only step.
 
 ### Current SMK069 Status
 
@@ -96,9 +99,10 @@ RowPointer              : GUID, read-only
 [COMPLETED] current event-handler/action call-site searches = zero rows
 [CONFIRMED] EventActionRevisions property metadata
 [COMPLETED] EventActionRevisions.Parameters search = zero rows
+[FAILED] EventActionRevisions.ExpandedParameters filter = IllegalFilterException
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] filter EventActionRevisions.ExpandedParameters for CreateCoAndLines
+[NEXT] read EventHandlerRevisions property metadata
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -108,8 +112,9 @@ RowPointer              : GUID, read-only
 
 ### Planned
 
-- Filter `EventActionRevisions.ExpandedParameters` for `CreateCoAndLines` using a read-only REST v1 load.
-- Search handler revisions, form metadata, or scripts only as later separate steps when required by tenant evidence.
+- Read `EventHandlerRevisions` IDOInfo property metadata.
+- Filter handler revisions only after tenant-published property names are confirmed.
+- Search form metadata or scripts only as later separate steps when required by tenant evidence.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
