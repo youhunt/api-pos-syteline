@@ -23,6 +23,9 @@ Lines  : SL.SLCoitems
 
 - `tests/evidence/2026-07-30-slcoss-header-method-list.md` recording relevant standard header-method candidates.
 - `tests/evidence/2026-07-30-create-co-and-lines-parameters.md` recording the standard extension-method parameter metadata.
+- `implementation/15-idomethodparameters-metadata-fallback.md` documenting the failed legacy metadata route and successful REST v1 fallback.
+- `tests/evidence/2026-07-30-idomethodparameters-info-endpoint-500.md` recording the generic HTTP 500 response.
+- `tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md` confirming published metadata properties including parameter direction flags.
 
 ### Changed
 
@@ -69,9 +72,22 @@ Stored Proc.  : not applicable
 2. CoResult          : VARIANT
 ```
 
-- Recorded that parameter direction is not visible in the tenant grid and the exact JSON contract remains unconfirmed.
-- Advanced the next step to a read-only metadata inspection of `IdoMethodParameters`; no business method execution is required.
-- Kept the supported Customer Order creation sequence unconfirmed until method direction, JSON schema, and behavior are verified.
+- Confirmed that `IdoMethodParameters` exposes these relevant properties:
+
+```text
+CollectionName
+MethodName
+ParameterName
+Sequence
+DataType
+InputFlag
+OutputFlag
+MessageFlag
+```
+
+- Replaced the failed `/ido/info/IdoMethodParameters` route with the successful REST v1 IDOInfo fallback.
+- Advanced the next step to a read-only Advanced LoadCollection query filtered to `SLCos / CreateCoAndLines`.
+- Kept the supported Customer Order creation sequence unconfirmed until parameter directions, JSON schema, and behavior are verified.
 
 ### Current SMK069 Status
 
@@ -90,7 +106,8 @@ Stored Proc.  : not applicable
 [REVIEWED] SL.SLCos method-name list
 [CONFIRMED] CreateCoAndLines is Extension Class - Standard Method
 [CONFIRMED] CreateCoAndLines parameters = CoAndLineInfoJson, CoResult
-[NEXT] inspect read-only IdoMethodParameters property metadata
+[CONFIRMED] IdoMethodParameters direction properties are available
+[NEXT] load direction rows for SLCos / CreateCoAndLines
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
@@ -99,8 +116,7 @@ Stored Proc.  : not applicable
 
 ### Planned
 
-- Call the read-only Mongoose metadata endpoint for `IdoMethodParameters` and identify its available properties.
-- Load only the metadata rows for `SLCos / CreateCoAndLines` to determine whether output/by-reference information is exposed.
+- Load only the `IdoMethodParameters` rows for `SLCos / CreateCoAndLines` and inspect `InputFlag`, `OutputFlag`, and `MessageFlag`.
 - Determine the exact `CoAndLineInfoJson` schema and `CoResult` behavior without risking standard-table inserts.
 - Inspect `NewCustomerOrderValidSp` or `SL.SLCoitems` methods only after `CreateCoAndLines` has been evaluated.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
