@@ -22,7 +22,8 @@ Form metadata collection discovery                : COMPLETED
 Selected form metadata candidate                  : FormsAndObjects
 FormsAndObjects property discovery                : COMPLETED
 Direct FormsAndObjects text search                : NOT AUTHORIZED
-FormsAndObjects method discovery                  : NEXT
+FormsAndObjects IDOInfo Methods section           : NOT EXPOSED
+IdoMethods row discovery for FormsAndObjects      : NEXT
 ```
 
 ## Confirmed Runtime Contract
@@ -149,7 +150,33 @@ Therefore:
 ```text
 - do not filter FormsAndObjects directly for CreateCoAndLines;
 - do not assume DerXMLData or DerBinaryData contains form source;
-- inspect tenant-published FormsAndObjects methods before loading or invoking anything.
+- inspect tenant-published FormsAndObjects method metadata before loading or invoking anything.
+```
+
+## IDOInfo Methods Limitation
+
+The tenant rechecked:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/FormsAndObjects
+```
+
+The response exposed `Properties` but no `Methods` section. Repeating this endpoint is therefore not useful for method discovery.
+
+This does **not** prove that `FormsAndObjects` has no methods. It means only that the tenant's IDOInfo response does not expose them in a `Methods` array.
+
+The already confirmed `IdoMethods` metadata contract publishes:
+
+```text
+CollectionName
+MethodName
+BaseCollectionName
+MethodDesc
+MethodType
+TxnFlag
+StoredProcName
+DerOutriggerProfile
+DerSpMethodsAllowed
 ```
 
 Evidence:
@@ -157,6 +184,8 @@ Evidence:
 ```text
 tests/evidence/2026-07-30-form-named-metadata-collections.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
+tests/evidence/2026-07-30-formsandobjects-idoinfo-no-methods-section.md
+tests/evidence/2026-07-30-idomethods-idoinfo-properties.md
 ```
 
 ## Decision History
@@ -170,6 +199,12 @@ The stored-procedure option remains documented in `implementation/19-controlled-
 
 ## Current Small Step
 
-Read only the tenant-published method list/metadata for `FormsAndObjects`. The goal is to identify a read/export/get-object method that can retrieve form/object definitions without invoking it.
+Load only scalar `IdoMethods` metadata rows for `FormsAndObjects`:
 
-Do not load form rows, invoke any `FormsAndObjects` method, invoke `CreateCoAndLines`, guess Customer Order JSON properties, edit metadata, or execute SQL.
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethods/adv?props=CollectionName,MethodName,BaseCollectionName,MethodDesc,MethodType,TxnFlag,StoredProcName,DerOutriggerProfile,DerSpMethodsAllowed&filter=CollectionName%20%3D%20%27FormsAndObjects%27
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Do not invoke a `FormsAndObjects` method, load a form object, invoke `CreateCoAndLines`, guess Customer Order JSON properties, edit metadata, or execute SQL.
