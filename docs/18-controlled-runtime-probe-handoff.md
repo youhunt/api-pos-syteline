@@ -51,7 +51,7 @@ All four post-probe `dbo.co_mst` checks returned zero rows with no SQL error. Pa
 
 ## Standard Call-Site Discovery
 
-Confirmed event-handler metadata collections:
+Confirmed event-handler collections:
 
 ```text
 EventHandlerRevisions
@@ -103,7 +103,24 @@ IsEventActionRevision
 EventHandlerRevisionRowPointer
 ```
 
-The first search field is raw `Parameters`. Derived `ExpandedParameters` and `SubstitutedParameters` are later fallback paths.
+## Completed Raw Parameters Search
+
+The read-only search:
+
+```text
+EventActions.Parameters LIKE '%CreateCoAndLines%'
+```
+
+returned:
+
+```text
+Message        : Success
+MessageCode    : 0
+Items          : zero rows
+MoreRowsExists : false
+```
+
+Therefore no current `EventActions` row stores the target in raw `Parameters`. This does not rule out a reference in derived fields, revisions, form metadata, or scripts.
 
 Evidence:
 
@@ -113,6 +130,7 @@ tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
 tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
 tests/evidence/2026-07-30-event-action-metadata-collections.md
 tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
+tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
 ```
 
 ## Next Step Only
@@ -120,29 +138,30 @@ tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
 Run:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=ExpandedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
 Send the complete JSON response, including an empty result.
 
-Do not query derived parameter fields, revisions, scripts, or another metadata collection in the same step. Do not invoke `CreateCoAndLines` or edit metadata.
+Do not search `SubstitutedParameters`, revisions, scripts, or another metadata collection in the same step. Do not invoke `CreateCoAndLines` or edit metadata.
 
 ## Status
 
 ```text
-Four controlled probes              : COMPLETED
-Four no-order checks                : COMPLETED — ZERO ROWS
-Payload property guessing           : STOPPED
-Event metadata collections          : CONFIRMED
-EventHandlers property metadata     : CONFIRMED
-Parent MethodToCall search          : COMPLETED — ZERO ROWS
-Event-action collections            : CONFIRMED
-EventActions property metadata      : CONFIRMED
-Raw Parameters search               : NEXT
-Exact decoded JSON schema           : PENDING
-Process/Reprocess                    : NOT STARTED
-Customer Order creation             : NOT STARTED
-Controlled receive API              : NOT STARTED
+Four controlled probes                  : COMPLETED
+Four no-order checks                    : COMPLETED — ZERO ROWS
+Payload property guessing               : STOPPED
+Event metadata collections              : CONFIRMED
+EventHandlers property metadata         : CONFIRMED
+Parent MethodToCall search              : COMPLETED — ZERO ROWS
+Event-action collections                : CONFIRMED
+EventActions property metadata          : CONFIRMED
+Raw Parameters search                   : COMPLETED — ZERO ROWS
+ExpandedParameters search               : NEXT
+Exact decoded JSON schema               : PENDING
+Process/Reprocess                       : NOT STARTED
+Customer Order creation                 : NOT STARTED
+Controlled receive API                  : NOT STARTED
 ```
