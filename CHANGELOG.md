@@ -33,15 +33,16 @@ All notable changes to this repository will be documented in this file.
 - `SMK069_temp_sales_mst` implementation documentation aligned to the revised sales requirement.
 - Six SMK069 process-control fields: `process_status`, `validation_msg`, `error_msg`, `retry_count`, `processed_date`, and `processed_by`.
 - `implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md` with completed form and Preview evidence.
-- `implementation/13-create-SMK069-customer-validation.md` with confirmed tenant method type, naming rules, generated parameters, persistence evidence, and invalid-customer test case.
+- `implementation/13-create-SMK069-customer-validation.md` with method configuration, persistence evidence, and customer-validation test results.
 - `database/stored-procedures/SMK069ValidateCustomerSp.sql` implementation for reusable customer validation.
 - `docs/17-current-status-and-new-chat-handoff.md` with current progress and API direction.
 - Tenant evidence for completed Preview behavior and read-only `process_status` display mapping.
 - Tenant evidence that `SMK069ValidateCustomerSp` is visible in the IDO Method Wizard.
 - Confirmed generated customer-validation IDO method name `ue_SMK069ValidateCustomerSp` with Transactional enabled.
-- Confirmed generated parameter order: `SiteRef` sequence 1, `CoNum` sequence 2, and `Infobar` sequence 3, all displayed as `VARIANT` in the tenant grid.
-- Tenant evidence that the saved `ue_SMK069ValidateCustomerSp` method and all three parameters remain after closing and reopening IDO Methods.
-- Controlled invalid-customer evidence: `DEFAULT / TEST000002 / TST0002` returns `NOT FOUND` against `customer_mst`.
+- Confirmed generated parameter order: `SiteRef`, `CoNum`, and `Infobar`.
+- Tenant evidence that the saved IDO method remains after closing and reopening IDO Methods.
+- Controlled invalid-customer evidence: `DEFAULT / TEST000002 / TST0002` is absent from `customer_mst`.
+- Successful direct execution evidence for `dbo.SMK069ValidateCustomerSp`: ReturnCode `0`, `process_status = E`, and customer-not-found Infobar/validation message.
 
 ### Changed
 
@@ -52,15 +53,12 @@ All notable changes to this repository will be documented in this file.
 - Removed `cost` from the implemented SMK069 staging design; cost is obtained from `item_mst`.
 - Corrected the SMK069 header calculation to `SUM(unit_price * qty_ordered)`.
 - Replaced the duplicate `site_ref`/`SiteRef` concept with one standard `SiteRef` column.
-- Marked the SMK069 base form, all four Preview behaviors, process-status display mapping, and read-only behavior as completed.
+- Marked the SMK069 base form, all Preview behaviors, process-status display mapping, and read-only behavior as completed.
 - Confirmed tenant support for `Stored Procedure - Standard Method` on `ue_SMK069TempSales`.
-- Corrected the customer-validation procedure name from `dbo.ue_SMK069ValidateCustomerSp` to `dbo.SMK069ValidateCustomerSp`.
-- Documented that stored procedures do not receive the `ue_` prefix in this tenant, while custom IDO method names receive `ue_` automatically.
-- Confirmed the generated IDO method name as `ue_SMK069ValidateCustomerSp`.
-- Defined customer-not-found as a business validation result (`process_status = E`) rather than a technical stored-procedure failure.
+- Corrected the customer-validation procedure name to `dbo.SMK069ValidateCustomerSp` while the IDO method receives the automatic `ue_` prefix.
+- Defined customer-not-found as a business validation result (`process_status = E`) rather than a technical execution failure.
 - Completed generated parameter review and method persistence verification.
-- Confirmed `TEST000002 / TST0002` as the first invalid-customer execution case.
-- Sequenced validation testing to verify stored-procedure logic first, followed by the same call through the IDO/API layer.
+- Completed the direct stored-procedure invalid-customer test and advanced testing to the Mongoose IDO REST layer.
 
 ### Current SMK069 Status
 
@@ -70,29 +68,27 @@ All notable changes to this repository will be documented in this file.
 [COMPLETED] ue_SMK069TempSales IDO and properties update
 [COMPLETED] ue_SMK069APISalesErrorProcessing base form and Preview
 [COMPLETED] process_status display and read-only verification
-[CONFIRMED] Stored Procedure - Standard Method tenant option
 [COMPLETED] dbo.SMK069ValidateCustomerSp created in tenant
 [COMPLETED] ue_SMK069ValidateCustomerSp IDO method persisted
 [COMPLETED] generated parameter review
-[COMPLETED] TEST000002 / TST0002 invalid-customer confirmation
-[NEXT]      invalid-customer stored-procedure execution test
-[PENDING]   invalid-customer IDO/API invocation test
+[COMPLETED] invalid-customer test case confirmation
+[COMPLETED] direct stored-procedure invalid-customer execution test
+[NEXT]      invalid-customer IDO REST invocation test
 [PENDING]   valid-customer validation test
 [PENDING]   Process/reprocess method
 [PENDING]   controlled service IDO receive method
-[PENDING]   REST API ingestion
+[PENDING]   final REST API ingestion
 [PENDING]   Customer Order header and line creation
 ```
 
 ### Planned
 
-- Execute `dbo.SMK069ValidateCustomerSp` for `DEFAULT + TEST000002` and verify ReturnCode, Infobar, `process_status`, and `validation_msg`.
-- Invoke and verify the same invalid-customer outcome through `ue_SMK069ValidateCustomerSp` on the IDO layer.
+- Invoke `ue_SMK069ValidateCustomerSp` through Mongoose `InvokeMethod` and verify ReturnValue and returned Infobar.
 - Execute and verify a valid-customer outcome separately.
 - Add controlled Process/Reprocess logic for `SiteRef + co_num`.
 - Design and implement the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Create Customer Order header and lines using supported SyteLine processing.
-- Prepare sample CSV import, REST/API documentation, Postman collection, and deployment runbook.
+- Prepare sample CSV import, final REST/API documentation, Postman collection, and deployment runbook.
 
 ## [0.1.0] — 2026-07-23
 
