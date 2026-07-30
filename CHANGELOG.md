@@ -26,6 +26,7 @@ tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-script-named-metadata-collections.md
 tests/evidence/2026-07-30-script-description-metadata-collections.md
 tests/evidence/2026-07-30-form-named-metadata-collections.md
+tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
 ```
 
 ### Changed
@@ -66,8 +67,8 @@ EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 - Attempted `EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'`; the tenant returned `MessageCode 450`, `IllegalFilterException`, and `Items = null`.
 - Classified that attempt as a rejected filter, not a zero-row result.
 - Confirmed `EventHandlerRevisions` has no direct call-site text field and instead exposes child `EventActionRevisions`/`EventActions`.
-- Searched tenant collection names and descriptions for `Script`; neither path identified a production form/global script metadata candidate.
-- Searched tenant collection names for `Form`; the broad substring returned many false positives from words including `Performance`, `Formula`, `Information`, `Format`, and `ProForma`.
+- Searched tenant collection names and descriptions for `Script`; neither path identified a production form/global-script metadata candidate.
+- Searched tenant collection names for `Form`; the broad substring returned many lexical false positives.
 - Confirmed relevant form-oriented candidates:
 
 ```text
@@ -78,8 +79,11 @@ DocTypeFormProperties  : MGCore/Core
 WSFormExtensionHints   : MGCore/Core
 ```
 
-- Selected `FormsAndObjects` as the strongest tenant-confirmed form metadata candidate because its description directly references `FormControl` and `FormSync`.
-- No claim is made yet that `FormsAndObjects` exposes script text or contains `CreateCoAndLines`; its property contract is the next read-only step.
+- Selected `FormsAndObjects` as the strongest tenant-confirmed form metadata candidate.
+- Confirmed `FormsAndObjects` exposes a wrapper/utility contract including object selectors, scope/configuration properties, action/process controls, XML/binary transfer fields, and output/diagnostic fields.
+- Confirmed no obvious direct persistent form-definition property is published for `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
+- Direct filtering of `FormsAndObjects` for `CreateCoAndLines` is therefore not authorized from the property contract alone.
+- Selected read-only discovery of the `FormsAndObjects` method list/metadata as the next step.
 - Decision history on 30 July 2026:
 
 ```text
@@ -106,9 +110,11 @@ WSFormExtensionHints   : MGCore/Core
 [COMPLETED] Script metadata collection discovery = no useful app script candidate
 [COMPLETED] Form metadata collection discovery
 [SELECTED] FormsAndObjects as strongest form metadata candidate
+[CONFIRMED] FormsAndObjects property metadata
+[NOT AUTHORIZED] direct FormsAndObjects text search
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] read FormsAndObjects property metadata
+[NEXT] read FormsAndObjects method list/metadata
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -118,8 +124,8 @@ WSFormExtensionHints   : MGCore/Core
 
 ### Planned
 
-- Read `FormsAndObjects` IDOInfo property metadata.
-- Load or filter form rows only after searchable tenant-published properties are confirmed.
+- Read the tenant-published `FormsAndObjects` method list/metadata without invoking any method.
+- Select a read/export/get-object candidate only after its actual method and parameter contract is known.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
