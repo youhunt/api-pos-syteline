@@ -29,6 +29,7 @@ tests/evidence/2026-07-30-form-named-metadata-collections.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-no-methods-section.md
 tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
+tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
 ```
 
 ### Changed
@@ -66,27 +67,13 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 ```
 
-- Attempted `EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'`; the tenant returned `MessageCode 450`, `IllegalFilterException`, and `Items = null`.
-- Classified that attempt as a rejected filter, not a zero-row result.
-- Confirmed `EventHandlerRevisions` has no direct call-site text field and instead exposes child `EventActionRevisions`/`EventActions`.
-- Searched tenant collection names and descriptions for `Script`; neither path identified a production form/global-script metadata candidate.
-- Searched tenant collection names for `Form`; the broad substring returned many lexical false positives.
-- Confirmed relevant form-oriented candidates:
-
-```text
-FormsAndObjects        : Wrapper for FormControl and FormSync — MGCore/Core
-FormAliases            : MGCore/Core
-AppForms               : IDO for Widget Forms — MGCore/Core
-DocTypeFormProperties  : MGCore/Core
-WSFormExtensionHints   : MGCore/Core
-```
-
-- Selected `FormsAndObjects` as the strongest tenant-confirmed form metadata candidate.
-- Confirmed `FormsAndObjects` exposes a wrapper/utility contract including object selectors, scope/configuration properties, action/process controls, XML/binary transfer fields, and output/diagnostic fields.
-- Confirmed no obvious direct persistent form-definition property is published for `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
-- Direct filtering of `FormsAndObjects` for `CreateCoAndLines` is therefore not authorized from the property contract alone.
-- Tenant rechecked `idoinfo/FormsAndObjects`; the response exposed `Properties` but no `Methods` section.
-- Used `IdoMethods` as the correct method-discovery source and confirmed:
+- Attempted `EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'`; the tenant returned `MessageCode 450`, `IllegalFilterException`, and `Items = null`. This is a rejected filter, not a zero-row result.
+- Confirmed `EventHandlerRevisions` has no direct call-site text field.
+- Script-name and script-description metadata discovery identified no useful production form/global-script candidate.
+- Form metadata discovery selected `FormsAndObjects` as the strongest tenant-confirmed candidate.
+- Confirmed `FormsAndObjects` publishes a utility/wrapper property contract, not obvious persistent fields for `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
+- Confirmed the tenant's `idoinfo/FormsAndObjects` response exposes no `Methods` array.
+- Used `IdoMethods` and confirmed:
 
 ```text
 Rows returned  : 37
@@ -96,7 +83,7 @@ TxnFlag 0      : 37
 StoredProcName : NULL for all rows
 ```
 
-- Identified the strongest current metadata candidates:
+- Identified the strongest metadata candidates:
 
 ```text
 UtilitiesListNames
@@ -105,8 +92,32 @@ UtilitiesGeneratePseudoCode / UtilitiesGeneratePseudoCode2
 GetUtilitiesOutput
 ```
 
+- Compared both pseudo-code generator contracts. Each exposes 12 `VARIANT` parameters. Common parameters are:
+
+```text
+SessionID
+SourceConfig
+TargetConfig
+Source
+DatabaseName
+Type
+Scope
+ObjectList
+Version
+SegmentCount
+CompareIncludeSettings
+```
+
+- Confirmed `SegmentCount` is input/output; every other parameter is input-only, and no parameter is a message parameter.
+- Confirmed the only contract difference is sequence 7:
+
+```text
+UtilitiesGeneratePseudoCode  : RelativePosition
+UtilitiesGeneratePseudoCode2 : Options
+```
+
 - The possible list → load → generate pseudo-code → retrieve-output sequence remains an inference and has not been invoked.
-- Selected read-only comparison of `UtilitiesGeneratePseudoCode` and `UtilitiesGeneratePseudoCode2` parameter metadata as the next step.
+- Selected read-only inspection of `GetUtilitiesOutput` parameters as the next step.
 - Decision history on 30 July 2026:
 
 ```text
@@ -130,17 +141,16 @@ GetUtilitiesOutput
 [COMPLETED] EventActionRevisions.Parameters search = zero rows
 [FAILED] EventActionRevisions.ExpandedParameters filter = IllegalFilterException
 [CONFIRMED] EventHandlerRevisions has no direct call-site text field
-[COMPLETED] Script metadata collection discovery = no useful app script candidate
-[COMPLETED] Form metadata collection discovery
+[COMPLETED] Script metadata discovery = no useful app script candidate
+[COMPLETED] Form metadata discovery
 [SELECTED] FormsAndObjects as strongest form metadata candidate
 [CONFIRMED] FormsAndObjects property metadata
-[NOT AUTHORIZED] direct FormsAndObjects text search
 [NOT EXPOSED] FormsAndObjects Methods array in IDOInfo response
 [COMPLETED] FormsAndObjects method metadata = 37 methods
-[SELECTED] UtilitiesGeneratePseudoCode and UtilitiesGeneratePseudoCode2 for parameter comparison
+[COMPLETED] pseudo-code generator parameter comparison
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] read pseudo-code method parameter metadata
+[NEXT] read GetUtilitiesOutput parameter metadata
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -150,9 +160,8 @@ GetUtilitiesOutput
 
 ### Planned
 
-- Load parameter metadata for `FormsAndObjects.UtilitiesGeneratePseudoCode%` without invoking either method.
-- Select a pseudo-code method only after the tenant-published parameter contracts are compared.
-- Inspect `GetUtilitiesOutput` parameters later as a separate step when the generation contract supports that flow.
+- Read `FormsAndObjects.GetUtilitiesOutput` parameter metadata without invoking the method.
+- Do not run either pseudo-code generator until valid values and serialization formats for all required `VARIANT` inputs are tenant-confirmed.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
