@@ -50,31 +50,48 @@ Tenant response:
 }
 ```
 
-## Confirmed Discovery
+Confirmed discovery:
 
 ```text
 CoAndLineInfoJson must contain Base64-encoded content.
 ```
 
-The raw `{` value failed during Base64 decoding. The decoded JSON schema remains unknown.
+`MessageCode = 0` does not establish business success. Read the returned `CoResult` string and parse its JSON-array content.
 
-`MessageCode = 0` means the method call reached the Mongoose method layer; it does not mean Customer Order creation succeeded. The business result must be read from `CoResult`.
-
-Confirmed failure result shape:
+Observed failure keys:
 
 ```text
-CoResult = string containing a JSON array
-Status   = Fail
-Message  = Error occurred during customer order/line creation
-Key      = ErrrorMessage
+Status        : Fail
+Message       : Error occurred during customer order/line creation
+Error key     : ErrrorMessage
 ```
 
-The exact tenant key is `ErrrorMessage` with three consecutive `r` characters.
+The exact key `ErrrorMessage` contains three consecutive `r` characters.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
+```
+
+## Completed No-Order Verification
+
+A read-only query checked `dbo.co_mst` for orders created or changed in the previous 30 minutes.
+
+Result:
+
+```text
+SQL error                         : none
+Rows returned                    : 0
+Unexpected recent Customer Order : not found
+```
+
+The raw malformed probe therefore did not create a Customer Order within the checked window.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
 ```
 
 ## Current Unknowns
@@ -85,43 +102,42 @@ tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
 - required and optional line fields
 - co_num generation behavior
 - success CoResult shape
-- deeper JSON validation errors
+- deeper JSON parsing or validation errors
 - atomicity of header and line creation
 ```
 
 ## Next Step Only
 
-Perform a separate read-only verification for Customer Orders created around the first probe:
-
-```sql
-SELECT TOP (20)
-       co_num,
-       cust_num,
-       order_date,
-       CreateDate,
-       CreatedBy,
-       RecordDate,
-       UpdatedBy
-FROM dbo.co_mst
-WHERE RecordDate >= DATEADD(MINUTE, -30, GETDATE())
-   OR CreateDate >= DATEADD(MINUTE, -30, GETDATE())
-ORDER BY COALESCE(RecordDate, CreateDate) DESC;
-```
-
-Send the complete result, including an empty result. If SQL reports an unavailable column, send the exact error and stop.
-
-Do not invoke `CreateCoAndLines` again during this step.
-
-## Prepared Future Probe — Not Yet Authorized
-
-After no-order verification, the next malformed decoded-content probe may use:
+Send Base64 for the deliberately malformed decoded content `{`:
 
 ```text
 Raw content : {
 Base64      : ew==
 ```
 
-This is intended to pass Base64 decoding and reach JSON parsing. Do not send it yet.
+Postman request:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/SLCos/CreateCoAndLines
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Postman Params:
+
+```text
+parms = ew==,
+```
+
+The trailing comma supplies the blank initial value for `CoResult`.
+
+Expected URL fragment:
+
+```text
+?parms=ew%3D%3D,
+```
+
+Capture the complete HTTP status and JSON response. Do not submit another payload during the same step.
 
 ## Status
 
@@ -129,10 +145,21 @@ This is intended to pass Base64 decoding and reach JSON parsing. Do not send it 
 Environment gate              : PASSED
 Raw JSON malformed probe      : COMPLETED
 Base64 requirement            : CONFIRMED
-No-order read-only check      : PENDING
-Base64 malformed-content test : NOT YET RUN
+No-order read-only check      : COMPLETED — ZERO ROWS
+Base64 malformed-content test : AUTHORIZED — NOT YET RUN
 Valid order probe             : NOT READY
 Process/Reprocess              : NOT STARTED
 Customer Order creation        : NOT STARTED
 Controlled receive API         : NOT STARTED
+```
+
+## Safety Boundary
+
+```text
+- Use exactly ew== as parameter 1.
+- Keep the trailing comma for blank parameter 2.
+- Do not use real Customer Order values.
+- Do not guess schema property names.
+- Do not retry with another payload in the same step.
+- Re-run a separate read-only Customer Order check after the response.
 ```
