@@ -14,13 +14,12 @@ Metadata call-site discovery                     : RESUMED
 Current EventActions searches                    : COMPLETED — ZERO ROWS
 EventActionRevisions.Parameters search           : COMPLETED — ZERO ROWS
 EventActionRevisions.ExpandedParameters filter   : FAILED — ILLEGAL FILTER
-EventHandlerRevisions IDOInfo                    : CONFIRMED
-Direct handler-revision text search              : NOT AVAILABLE
-Script-name discovery                            : NO USEFUL APP SCRIPT CANDIDATE
-Script-description discovery                     : NO USEFUL APP SCRIPT CANDIDATE
+EventHandlerRevisions direct text search         : NOT AVAILABLE
+Script metadata discovery                        : NO USEFUL APP SCRIPT CANDIDATE
 Form metadata discovery                          : COMPLETED
-Selected form metadata candidate                 : FormsAndObjects
-Next step                                        : FormsAndObjects IDOInfo
+Selected form candidate                          : FormsAndObjects
+FormsAndObjects properties                       : CONFIRMED
+Next step                                        : FormsAndObjects method metadata/list
 ```
 
 ## Confirmed Runtime Contract
@@ -43,16 +42,7 @@ Business result handling:
 - ErrrorMessage is optional and misspelled with three r characters when present.
 ```
 
-## Completed Probes
-
-```text
-Probe 1 : raw {                         → invalid Base64
-Probe 2 : ew==                          → decoded { → JObject parser failure
-Probe 3 : e30=                          → decoded {} → blank order input
-Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
-```
-
-All four read-only `dbo.co_mst` checks returned zero rows and no SQL error.
+Four controlled malformed/non-business probes and four read-only `dbo.co_mst` checks were completed. Every check returned zero rows with no SQL error.
 
 ## Completed Metadata Searches
 
@@ -64,62 +54,69 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'            : zero r
 EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'                : zero rows
 ```
 
-`EventActionRevisions.ExpandedParameters` could not be evaluated because the tenant rejected the server-side filter with `IllegalFilterException`, `MessageCode = 450`, and `Items = null`. This is not a zero-row result.
+The `EventActionRevisions.ExpandedParameters` filter was rejected with `IllegalFilterException`, `MessageCode = 450`, and `Items = null`; it is not a zero-row result.
 
-`EventHandlerRevisions` exposes handler context and child action collections but no direct call-site text field.
+`EventHandlerRevisions` exposes no direct call-site text property.
 
-## Script Metadata Discovery
+## Script and Form Discovery
 
-Name search returned only:
+Script-name and script-description searches did not identify a production form/global-script metadata source.
 
-```text
-BuildApplicationMessagesScript : temporary application-message script generation
-UTScripts                      : UnitTesting
-UTScriptSelections             : UnitTesting
-```
-
-Description search returned:
+The broad form-name discovery identified these relevant candidates:
 
 ```text
-BuildApplicationMessagesScript : temporary application-message script generation
-Deployment                     : deployment scripts/XML for applet deployment
-SLInvSequences                 : false positive; "description" contains substring "script"
-SLInvSequences_IDS             : same false-positive mechanism
+FormsAndObjects        : Wrapper for FormControl and FormSync — MGCore/Core
+FormAliases            : MGCore/Core
+AppForms               : IDO for Widget Forms — MGCore/Core
+DocTypeFormProperties  : MGCore/Core
+WSFormExtensionHints   : MGCore/Core
 ```
 
-No production form/global script metadata source has been identified through the script-name or script-description paths.
+`FormsAndObjects` was selected as the strongest candidate.
 
-## Form Metadata Discovery
+## FormsAndObjects Property Contract
 
-The broad tenant search for collection names containing `Form` completed successfully with `MessageCode = 0` and `MoreRowsExists = false`.
-
-Many results were lexical false positives from words such as:
+The tenant publishes utility-style properties including:
 
 ```text
-Performance
-Formula
-Information
-Format
-ProForma
+DerObjectName
+DerObjectType
+DerObjectTypeStr
+DerRefObjName
+DerRefObjType
+DerSecondaryObjectName
+DerTertiaryObjectName
+DerScopeNameStr
+DerScopeType
+DerScopeTypeStr
+DerCurrentConfiguration
+DerSourceConfiguration
+DerTargetConfiguration
+DerAction
+DerProcessInformation
+DerXMLData
+DerBinaryData
+Upload
+Download
+DerOutputText
+DerCommandLinks
+DerExplanation
+DerInstruction
+LicenseDocument
+RowPointer
 ```
 
-Relevant candidates:
-
-| CollectionName | CollectionDesc | ServerName | AccessAs |
-| --- | --- | --- | --- |
-| `FormsAndObjects` | Wrapper for FormControl and FormSync | `MGCore` | `Core` |
-| `FormAliases` | NULL | `MGCore` | `Core` |
-| `AppForms` | IDO for Widget Forms | `MGCore` | `Core` |
-| `DocTypeFormProperties` | NULL | `MGCore` | `Core` |
-| `WSFormExtensionHints` | NULL | `MGCore` | `Core` |
-
-Selected candidate:
+No obvious persistent form-definition field is published for:
 
 ```text
-FormsAndObjects
+FormName
+Script
+EventName
+MethodToCall
+Parameters
 ```
 
-It is the strongest tenant-confirmed candidate because its description directly references `FormControl` and `FormSync`. This does not yet prove that it exposes script text or contains `CreateCoAndLines`.
+Do not filter `FormsAndObjects` directly for `CreateCoAndLines`, and do not assume `DerXMLData` or `DerBinaryData` contains form source.
 
 Evidence:
 
@@ -131,12 +128,13 @@ tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-script-named-metadata-collections.md
 tests/evidence/2026-07-30-script-description-metadata-collections.md
 tests/evidence/2026-07-30-form-named-metadata-collections.md
+tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
 ```
 
 ## Decision History
 
 ```text
-30 July 2026 — user temporarily approved pivoting to a previous stored-procedure approach.
+30 July 2026 — user temporarily approved a possible previous stored-procedure approach.
 30 July 2026 — user explicitly instructed the project to continue CreateCoAndLines metadata discovery.
 ```
 
@@ -144,14 +142,6 @@ The stored-procedure option remains deferred and unimplemented.
 
 ## Next Step Only
 
-Read the property metadata for `FormsAndObjects`:
+Obtain the tenant-published method list/metadata for `FormsAndObjects`. Identify method names and classifications only.
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/FormsAndObjects
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
-```
-
-Send the complete JSON response, especially `Properties`.
-
-Do not load `FormsAndObjects` rows, inspect another form collection, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL in the same step.
+Do not invoke a `FormsAndObjects` method, load a form object, invoke `CreateCoAndLines`, edit metadata, guess business-schema properties, or execute SQL.
