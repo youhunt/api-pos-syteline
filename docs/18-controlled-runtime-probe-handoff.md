@@ -32,25 +32,11 @@ Probe 1 submitted raw `{` and confirmed that `CoAndLineInfoJson` must be Base64-
 Probe 2 submitted:
 
 ```text
-Base64         : ew==
-Decoded content: {
+Base64          : ew==
+Decoded content : {
 ```
 
-Tenant response:
-
-```json
-{
-  "Message": null,
-  "MessageCode": 0,
-  "Parameters": [
-    "ew==",
-    "[{\"ErrrorMessage\":\"Error reading JObject from JsonReader. Path '', line 1, position 1.\",\"Status\":\"Fail\",\"Message\":\"Error occurred during customer order/line creation\"}]"
-  ],
-  "ReturnValue": null
-}
-```
-
-## Confirmed Contract
+The tenant returned a `JObject` parser failure. This confirms:
 
 ```text
 CoAndLineInfoJson
@@ -59,7 +45,19 @@ CoAndLineInfoJson
 → schema validation and Customer Order processing
 ```
 
-`MessageCode = 0` does not establish business success. Read and parse `CoResult`. The failure branch remains a string containing a JSON array with `Status = Fail` and exact key `ErrrorMessage`.
+`MessageCode = 0` does not establish business success. Read and parse `CoResult`. The failure branch is a string containing a JSON array with `Status = Fail` and the exact error key `ErrrorMessage`.
+
+## Completed No-Order Verifications
+
+After each of the first two probes, the same read-only recent-order query was executed against `dbo.co_mst`.
+
+```text
+Probe 1 check : zero rows
+Probe 2 check : zero rows
+SQL errors    : none
+```
+
+No unexpected Customer Order was found in either checked 30-minute window.
 
 Evidence:
 
@@ -67,6 +65,7 @@ Evidence:
 tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
 tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
+tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
 ```
 
 ## Current Unknowns
@@ -74,6 +73,7 @@ tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.
 ```text
 - exact JSON property names and nesting
 - required header and line fields
+- date and numeric formats
 - co_num generation behavior
 - success CoResult shape
 - atomicity
@@ -81,29 +81,61 @@ tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.
 
 ## Next Step Only
 
-Repeat the same read-only `dbo.co_mst` query used after probe 1 and send the complete result, including an empty result.
-
-Do not invoke `CreateCoAndLines` again during this step.
-
-The empty-object probe is prepared but not yet authorized:
+Submit the empty JSON object `{}` as Base64:
 
 ```text
 Raw decoded content : {}
 Base64              : e30=
+CoResult initial    : blank
 ```
+
+Postman request:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/SLCos/CreateCoAndLines
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Postman Params:
+
+```text
+parms = e30=,
+```
+
+The trailing comma supplies the blank initial value for `CoResult`.
+
+Expected URL fragment:
+
+```text
+?parms=e30%3D,
+```
+
+Capture the complete HTTP status and JSON response. Do not add any JSON property or retry with another payload during the same step.
 
 ## Status
 
 ```text
-Raw malformed probe              : COMPLETED
-Base64 requirement               : CONFIRMED
-First no-order check             : COMPLETED — ZERO ROWS
-Base64 malformed JSON probe      : COMPLETED
-JSON object / JObject requirement: CONFIRMED
-Second no-order check            : PENDING
-Empty-object probe               : NOT YET AUTHORIZED
-Valid order probe                : NOT READY
-Process/Reprocess                : NOT STARTED
-Customer Order creation          : NOT STARTED
-Controlled receive API           : NOT STARTED
+Raw malformed probe               : COMPLETED
+Base64 requirement                : CONFIRMED
+First no-order check              : COMPLETED — ZERO ROWS
+Base64 malformed JSON probe       : COMPLETED
+JSON object / JObject requirement : CONFIRMED
+Second no-order check             : COMPLETED — ZERO ROWS
+Empty-object probe                : AUTHORIZED — NOT YET RUN
+Valid order probe                 : NOT READY
+Process/Reprocess                 : NOT STARTED
+Customer Order creation           : NOT STARTED
+Controlled receive API            : NOT STARTED
+```
+
+## Safety Boundary for Next Probe
+
+```text
+- Use exactly e30= as parameter 1.
+- Retain the trailing comma for blank parameter 2.
+- Do not add customer, item, order, site, date, quantity, or price data.
+- Do not guess schema property names.
+- Do not submit another payload in the same step.
+- Run another separate read-only Customer Order check after the response.
 ```
