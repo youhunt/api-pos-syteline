@@ -8,13 +8,15 @@ Empty-object probe                  : COMPLETED
 Third read-only co_mst check        : COMPLETED — ZERO ROWS
 Non-business marker probe           : COMPLETED
 Specific order structure required   : CONFIRMED
-Marker-probe no-order check         : PENDING
+Marker-probe no-order check         : COMPLETED — ZERO ROWS
 Exact business JSON schema          : NOT YET CONFIRMED
+Further property-name guessing      : STOPPED
+Next discovery path                 : STANDARD CALL-SITE METADATA
 Valid Customer Order probe          : NOT READY
 Customer Order creation             : NOT STARTED
 ```
 
-## Confirmed Gate
+## Confirmed Gate Before Marker Probe
 
 ```text
 Environment                    : DEV
@@ -29,12 +31,6 @@ Evidence:
 ```text
 tests/evidence/2026-07-30-createcoandlines-empty-object-probe-no-order-created.md
 ```
-
-## Purpose
-
-Determine whether the message `The input for order creation cannot be blank` is triggered only because the JSON object has no members, or because a specific top-level order member or structure is missing.
-
-The `probe` member is not part of the confirmed business schema. It was used only as a non-business marker.
 
 ## Completed Marker Probe
 
@@ -102,6 +98,24 @@ Evidence:
 tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failure.md
 ```
 
+## Marker-Probe No-Order Verification — Completed
+
+The standard read-only recent-order query was executed after the marker probe.
+
+Tenant result:
+
+```text
+SQL error                         : none
+Rows returned                    : 0
+Unexpected recent Customer Order : not found
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
+```
+
 ## Confirmed Public Processing Sequence
 
 ```text
@@ -127,36 +141,23 @@ CoAndLineInfoJson
 - whether another standard validation method must run first
 ```
 
-## Current Small Step — Read-Only No-Order Check
+## Technical Decision
 
-Run the same recent-order query after the marker probe:
+Do not continue guessing business-schema property names. Four controlled probes and four zero-row no-order checks are complete. The next safe path is read-only discovery of standard tenant metadata that calls `SLCos.CreateCoAndLines`.
 
-```sql
-SELECT TOP (20)
-       co_num,
-       cust_num,
-       order_date,
-       CreateDate,
-       CreatedBy,
-       RecordDate,
-       UpdatedBy
-FROM dbo.co_mst
-WHERE RecordDate >= DATEADD(MINUTE, -30, GETDATE())
-   OR CreateDate >= DATEADD(MINUTE, -30, GETDATE())
-ORDER BY COALESCE(RecordDate, CreateDate) DESC;
+Continue with:
+
+```text
+implementation/18-discover-createcoandlines-call-sites.md
 ```
-
-Send the complete result, including an empty result.
-
-Do not invoke `CreateCoAndLines` again during this step.
 
 ## Safety Boundary
 
 ```text
 - No valid Customer Order payload has been submitted.
 - No customer, item, site, order number, date, quantity, or price value has been submitted.
-- Do not guess a business-schema member yet.
-- Do not create Process/Reprocess logic.
+- Do not guess a business-schema member.
+- Do not invoke CreateCoAndLines again during call-site discovery.
+- Do not create Process/Reprocess logic yet.
 - Do not import CSV or create the controlled receive API method.
-- Do not mark the marker probe as no-order verified until the SQL result is returned.
 ```
