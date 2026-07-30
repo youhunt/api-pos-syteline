@@ -16,6 +16,7 @@ POS sample CSV / REST payload
 → dbo.ue_SMK069_temp_sales_mst
 → reusable validation
 → Error Processing form
+→ reusable Process/Reprocess method
 → supported Customer Order business process
 → co_mst + coitem_mst
 ```
@@ -56,11 +57,13 @@ Do not create a separate `site_ref`; standard `SiteRef` fulfills the source requ
 [COMPLETED] dbo.SMK069ValidateCustomerSp
 [COMPLETED] ue_SMK069ValidateCustomerSp transactional IDO method
 [COMPLETED] parameter review: SiteRef, CoNum, Infobar
-[COMPLETED] invalid-customer SQL test
+[COMPLETED] invalid-customer direct SQL test
 [COMPLETED] invalid-customer Mongoose IDO REST test
-[COMPLETED] valid-customer Mongoose IDO REST response
-[NEXT]      verify valid-customer staging status is V and validation_msg is NULL
-[NOT STARTED] Process/reprocess method
+[COMPLETED] valid-customer Mongoose IDO REST test
+[COMPLETED] valid-customer persisted staging result
+[COMPLETED] first mandatory customer validation requirement
+[IN PROGRESS] standard Customer Order IDO/business-process discovery
+[NOT STARTED] custom Process/reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
 [NOT STARTED] controlled service IDO receive method
@@ -94,13 +97,6 @@ Method Name   : ue_SMK069ValidateCustomerSp
 Transactional : checked
 ```
 
-Tenant naming behavior:
-
-```text
-Stored Procedure : no ue_ prefix
-IDO Method       : ue_ prefix added automatically
-```
-
 Parameters:
 
 ```text
@@ -113,13 +109,13 @@ The procedure reads `cust_num` from staging. `cust_num` is not passed directly a
 
 ## Invalid-Customer Evidence
 
-Original controlled case:
+Controlled case:
 
 ```text
 DEFAULT | TEST000002 | TST0002 | NOT FOUND
 ```
 
-Direct SQL and IDO REST tests returned:
+Verified result:
 
 ```text
 ReturnValue     = 0
@@ -134,33 +130,15 @@ Evidence:
 tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md
 ```
 
-## Parameter Semantics Correction
-
-The correct REST call shape is:
-
-```text
-SiteRef, CoNum, blank Infobar placeholder
-```
-
-A call using `DEFAULT,C000001,` returned `16` because `C000001` was interpreted as a `CoNum`, not as `cust_num`.
-
 ## Valid-Customer Evidence
 
-The staging customers were changed to real customer values:
+Controlled staging case:
 
 ```text
-DEFAULT | TEST000001 | C000001 | line 1
-DEFAULT | TEST000001 | C000001 | line 2
-DEFAULT | TEST000002 | C000002 | line 1
+DEFAULT | TEST000002 | line 1 | C000002
 ```
 
-The method was invoked for:
-
-```text
-DEFAULT, TEST000002, <blank Infobar>
-```
-
-Observed response:
+Mongoose IDO REST response:
 
 ```json
 {
@@ -175,41 +153,71 @@ Observed response:
 }
 ```
 
-This is the expected valid-customer API response: execution succeeded and no validation message was returned. Final staging status still requires direct verification.
+Persisted staging result:
+
+```text
+SiteRef        : DEFAULT
+co_num         : TEST000002
+co_line        : 1
+cust_num       : C000002
+process_status : V
+validation_msg : NULL
+```
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-smk069-valid-customer-ido-rest-response.md
+tests/evidence/2026-07-30-smk069-valid-customer-staging-result.md
 ```
+
+Customer validation is now fully completed for both valid and invalid branches.
+
+## Current Development Object
+
+```text
+implementation/14-discover-standard-customer-order-processing.md
+```
+
+The next custom object will be a reusable Process/Reprocess server-side method called by both:
+
+```text
+Error Processing form
+controlled POS/API service
+```
+
+Before designing it, the exact standard Customer Order IDO and supported business methods must be identified from this tenant.
 
 ## Immediate Next Step
 
-Run only:
-
-```sql
-SELECT
-    SiteRef,
-    co_num,
-    co_line,
-    cust_num,
-    process_status,
-    validation_msg
-FROM dbo.ue_SMK069_temp_sales_mst
-WHERE SiteRef = N'DEFAULT'
-  AND co_num = N'TEST000002'
-ORDER BY co_line;
-```
-
-Expected:
+Do only this discovery action:
 
 ```text
-cust_num       = C000002
-process_status = V
-validation_msg = NULL
+1. Open the standard Customer Orders form
+2. Enter Design Mode
+3. Open Collections
+4. Select the primary collection
+5. Capture the exact standard IDO name and collection name
+6. Send a screenshot
 ```
 
-Do not create Process, Customer Order, CSV import, or the controlled receive API method in the same step.
+Do not modify the standard Customer Orders form.
+
+Do not create the custom Process method, Process button, Customer Order, CSV import, or controlled receive API method in this same step.
+
+## API Direction
+
+```text
+POS / Postman / CSV
+→ controlled service IDO receive method
+→ custom staging
+→ reusable validation
+→ reusable Process/Reprocess method
+→ supported Customer Order business processing
+→ co_mst + coitem_mst
+```
+
+The successful validation-method REST calls prove the Mongoose API layer, but they are not the final external POS receive endpoint. Direct SQL insertion into standard Customer Order tables remains prohibited.
 
 ## Development Rules
 
@@ -231,8 +239,10 @@ database/stored-procedures/SMK069ValidateCustomerSp.sql
 implementation/11-create-SMK069-temp-sales-table.md
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 implementation/13-create-SMK069-customer-validation.md
+implementation/14-discover-standard-customer-order-processing.md
 tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md
 tests/evidence/2026-07-30-smk069-valid-customer-ido-rest-response.md
+tests/evidence/2026-07-30-smk069-valid-customer-staging-result.md
 CHANGELOG.md
 ```
 
@@ -244,11 +254,15 @@ Lanjutkan repository private youhunt/api-pos-syteline sebagai source of truth.
 Current status:
 - staging table, IDO, Error Processing form, Preview, and process_status mapping are complete;
 - dbo.SMK069ValidateCustomerSp and ue_SMK069ValidateCustomerSp are complete;
-- invalid-customer SQL and IDO REST tests passed;
-- staging customers were changed to C000001 for TEST000001 and C000002 for TEST000002;
-- IDO REST call DEFAULT,TEST000002, returned MessageCode 0, ReturnValue 0, and blank Infobar;
-- valid-customer staging status still needs verification;
-- Process, Customer Order creation, controlled service receive method, and final POS API are not started.
+- invalid-customer direct SQL and IDO REST tests passed;
+- valid-customer IDO REST response passed;
+- TEST000002 persisted as C000002 / process_status V / validation_msg NULL;
+- customer validation is fully completed;
+- Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not started.
 
-The next step is only to query TEST000002 and confirm process_status = V and validation_msg = NULL.
+Target remains:
+POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
+
+Next step only:
+Open the standard Customer Orders form in Design Mode, inspect its primary collection, and provide a screenshot showing the exact standard IDO and collection name. Do not modify the standard form or create Process logic yet.
 ```
