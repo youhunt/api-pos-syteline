@@ -5,16 +5,17 @@
 ```text
 Environment                         : DEV
 Controlled malformed probes         : COMPLETED
-All four no-order checks             : COMPLETED — ZERO ROWS
-Base64 input requirement             : CONFIRMED
-Decoded payload type                 : JSON object / JObject
-Specific order structure required    : CONFIRMED
-Exact business JSON schema           : NOT YET CONFIRMED
-Further property-name guessing       : STOPPED
-Standard call-site discovery         : STARTED — READ-ONLY
-Candidate event metadata IDOs        : CONFIRMED
-EventHandlers property discovery     : COMPLETED
-Filtered MethodToCall search         : NEXT
+All four no-order checks            : COMPLETED — ZERO ROWS
+Base64 input requirement            : CONFIRMED
+Decoded payload type                : JSON object / JObject
+Specific order structure required   : CONFIRMED
+Exact business JSON schema          : NOT YET CONFIRMED
+Further property-name guessing      : STOPPED
+Standard call-site discovery        : STARTED — READ-ONLY
+Candidate event metadata IDOs       : CONFIRMED
+EventHandlers property discovery    : COMPLETED
+Filtered MethodToCall search        : COMPLETED — ZERO ROWS
+Event-action collection discovery   : NEXT
 ```
 
 ## Why the Discovery Path Changes
@@ -41,7 +42,7 @@ A standard call site may reveal the exact JSON construction and Base64 encoding 
 
 ## Completed Step — Candidate Metadata Collections
 
-Read-only tenant metadata returned the following collections:
+Read-only tenant metadata returned:
 
 | CollectionName | Description | ServerName | AccessAs |
 | --- | --- | --- | --- |
@@ -60,7 +61,7 @@ tests/evidence/2026-07-30-event-handler-metadata-collections.md
 
 ## Completed Step — EventHandlers Property Metadata
 
-REST v1 IDOInfo confirmed that `EventHandlers` publishes the following call-site-relevant properties:
+Relevant published properties include:
 
 ```text
 EventName
@@ -78,34 +79,9 @@ Active
 Synchronous
 Transactional
 TriggeringProperty
-EditableByWizard
-Obsolete
-Suspend
 ```
 
-The strongest parent-row property for the first search is:
-
-```text
-MethodToCall
-```
-
-Context properties to return with each match are:
-
-```text
-EventName
-Sequence
-Description
-Purpose
-IDOCollections
-AppliesToObjects
-AccessAs
-Active
-InitialAction
-InitialActionSequence
-MethodToCall
-```
-
-`EventActions` is published as `CONTAINS`; its child-property schema has not yet been inspected and must not be guessed.
+`EventActions` is published as `CONTAINS`; its child-property schema and loadable collection name have not yet been confirmed.
 
 Evidence:
 
@@ -113,9 +89,9 @@ Evidence:
 tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
 ```
 
-## Current Small Step — Filter EventHandlers by MethodToCall
+## Completed Step — Filter EventHandlers.MethodToCall
 
-Run this read-only REST v1 request:
+Read-only request:
 
 ```http
 GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventHandlers/adv?props=EventName,Sequence,Description,Purpose,IDOCollections,AppliesToObjects,AccessAs,Active,InitialAction,InitialActionSequence,MethodToCall&filter=MethodToCall%20LIKE%20%27%25CreateCoAndLines%25%27
@@ -123,15 +99,48 @@ Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete JSON response, including an empty result.
-
-### Interpretation Rules
+Tenant result:
 
 ```text
-- A returned row is evidence only that the parent handler MethodToCall references the target text.
-- Do not infer action parameters from the parent row.
-- Do not inspect EventHandlerRevisions or EventActions in the same step.
-- If zero rows are returned, the next separate path will inspect EventActions metadata or other script/form metadata.
+Message        : Success
+MessageCode    : 0
+Items          : zero rows
+MoreRowsExists : false
+```
+
+Confirmed conclusion:
+
+```text
+No parent EventHandlers row stores CreateCoAndLines directly in MethodToCall.
+```
+
+This does not rule out a standard call site. The reference may be in child event actions, revisions, form metadata, scripts, or another metadata object.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
+```
+
+## Current Small Step — Discover Event-Action Metadata Collections
+
+Do not assume that the `CONTAINS` property name `EventActions` is automatically the loadable child IDO name. First discover actual tenant collection names:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25EventAction%25%27
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Capture the complete JSON response, including an empty result.
+
+## Interpretation Rules
+
+```text
+- A returned collection is only a candidate metadata source.
+- Do not infer its property contract from its name.
+- Do not query EventHandlerRevisions in the same step.
+- Do not load action rows until the actual collection name is confirmed.
 ```
 
 ## Safety Boundary
@@ -141,7 +150,6 @@ Capture the complete JSON response, including an empty result.
 - Do not invoke CreateCoAndLines again.
 - Do not guess a Customer Order JSON property.
 - Do not edit form handlers, event actions, scripts, events, or metadata.
-- Do not query EventHandlerRevisions in the same step.
 - Do not create Process/Reprocess logic yet.
 - Do not import CSV or create the controlled receive API method.
 ```
