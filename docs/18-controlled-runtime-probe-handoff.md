@@ -54,32 +54,21 @@ All four post-probe `dbo.co_mst` checks returned zero rows with no SQL error. Pa
 Confirmed current searches:
 
 ```text
-EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'          : zero rows
-EventActions.Parameters LIKE '%CreateCoAndLines%'              : zero rows
-EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'      : zero rows
+EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'              : zero rows
+EventActions.Parameters LIKE '%CreateCoAndLines%'                  : zero rows
+EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'          : zero rows
+EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'       : zero rows
 ```
 
-Confirmed relevant `EventActions` properties:
+The current `EventActions` path is exhausted. These zero-row results do not prove that no standard call site exists. Remaining paths include:
 
 ```text
-ActionType
-DerActionTypeText
-Parameters
-ExpandedParameters
-SubstitutedParameters
-EventName
-EventHandlerSequence
-Sequence
-Description
-EventHandlerRowPointer
-RowPointer
-AccessAs
-DerAccessAs
-IsEventActionRevision
-EventHandlerRevisionRowPointer
+EventActionRevisions
+EventHandlerRevisions
+form metadata
+form or global scripts
+another metadata object
 ```
-
-The zero-row results do not rule out a standard call site. Remaining paths include `SubstitutedParameters`, action revisions, handler revisions, form metadata, scripts, or another metadata object.
 
 Evidence:
 
@@ -91,21 +80,22 @@ tests/evidence/2026-07-30-event-action-metadata-collections.md
 tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactions-parameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactions-expandedparameters-createcoandlines-no-match.md
+tests/evidence/2026-07-30-eventactions-substitutedparameters-createcoandlines-no-match.md
 ```
 
 ## Next Step Only
 
-Run:
+Read the published property metadata for `EventActionRevisions`:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=SubstitutedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventActionRevisions
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the complete JSON response, including an empty result.
+Send the complete JSON response, especially the `Properties` list.
 
-Do not inspect revisions, scripts, or another metadata collection in the same step. Do not invoke `CreateCoAndLines` or edit metadata.
+Do not load revision rows, inspect `EventHandlerRevisions`, invoke `CreateCoAndLines`, guess business-schema properties, or edit metadata in the same step.
 
 ## Status
 
@@ -120,7 +110,8 @@ Event-action collections                  : CONFIRMED
 EventActions property metadata            : CONFIRMED
 Raw Parameters search                     : COMPLETED — ZERO ROWS
 ExpandedParameters search                 : COMPLETED — ZERO ROWS
-SubstitutedParameters search              : NEXT
+SubstitutedParameters search              : COMPLETED — ZERO ROWS
+EventActionRevisions property discovery   : NEXT
 Exact decoded JSON schema                 : PENDING
 Process/Reprocess                         : NOT STARTED
 Customer Order creation                   : NOT STARTED
