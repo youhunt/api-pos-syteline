@@ -62,10 +62,10 @@ Primary key                        : SiteRef + co_num + co_line
 [CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
 [REVIEWED]  SL.SLCos method-name list
 [CONFIRMED] CreateCoAndLines is Extension Class - Standard Method, not SP
-[CONFIRMED] CreateCoAndLines parameters = CoAndLineInfoJson, CoResult
 [CONFIRMED] CoAndLineInfoJson = input-only
 [CONFIRMED] CoResult = input/output + message parameter
-[NEXT]      discover the exact CreateCoAndLines JSON schema
+[CONFIRMED] effective method contexts = SLCos, SLCos_FT, ZIT_SLCos
+[NEXT]      inspect read-only IdoCollections property metadata
 [NOT STARTED] custom Process/Reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -126,7 +126,7 @@ CoNextKeyDelSp
 SumCoSp
 ```
 
-`CreateCoAndLines` was selected for first contract inspection because its name explicitly references both header and lines.
+`CreateCoAndLines` was selected first because its name explicitly references both header and lines.
 
 Evidence:
 
@@ -158,8 +158,6 @@ CoAndLineInfoJson : input-only
 CoResult          : input/output and framework message parameter
 ```
 
-Custom Load Method Output Properties is blank because this is a standard method.
-
 Evidence:
 
 ```text
@@ -167,36 +165,66 @@ tests/evidence/2026-07-30-create-co-and-lines-parameters.md
 tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
 ```
 
-## Metadata Route Discovery
+## Method Metadata Route Discovery
 
-The first route failed:
+The first metadata route failed:
 
 ```text
 /IDORequestService/ido/info/IdoMethodParameters
 → HTTP 500 generic ASP.NET Runtime Error
 ```
 
-The REST v1 fallback succeeded and exposed:
+REST v1 metadata routes succeeded and exposed the parameter direction flags plus method-level metadata.
+
+Relevant `IdoMethods` properties:
 
 ```text
 CollectionName
 MethodName
-ParameterName
-Sequence
-DataType
-InputFlag
-OutputFlag
-MessageFlag
+BaseCollectionName
+MethodDesc
+MethodType
+TxnFlag
+StoredProcName
+DerOutriggerProfile
+DerSpMethodsAllowed
+MethodParameters
+MethodResultSets
 ```
 
-The filtered load for `SLCos / CreateCoAndLines` then confirmed the parameter directions above.
+No direct `ExtensionClass`, `Assembly`, `SourceCode`, `HelpUrl`, or `JsonSchema` property was exposed.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-idomethodparameters-info-endpoint-500.md
 tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md
-tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
+tests/evidence/2026-07-30-idomethods-idoinfo-properties.md
+```
+
+## Confirmed CreateCoAndLines Effective Method Rows
+
+A filtered read-only load of `IdoMethods` returned three rows:
+
+| CollectionName | BaseCollectionName | MethodType | TxnFlag | StoredProcName | MethodDesc | DerOutriggerProfile |
+| --- | --- | ---: | ---: | --- | --- | --- |
+| `SLCos` | `SLCos` | 2 | 0 | NULL | NULL | NULL |
+| `SLCos` | `SLCos_FT` | 2 | 0 | NULL | NULL | NULL |
+| `SLCos` | `ZIT_SLCos` | 2 | 0 | NULL | NULL | NULL |
+
+All rows returned the same `_ItemId`. Current safe interpretation:
+
+```text
+- one effective method metadata record is represented across three collection/base contexts;
+- the exact inheritance/extension relationship is not yet confirmed;
+- do not assume which collection layer contains the extension-class implementation;
+- the row data does not reveal the JSON schema.
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-create-co-and-lines-method-row.md
 ```
 
 No standard business method has been executed and no Customer Order has been created.
@@ -213,7 +241,7 @@ No standard business method has been executed and no Customer Order has been cre
 - failure CoResult shape
 - whether header and lines are created atomically
 - whether another standard validation method must run first
-- whether UpdateCollection participates in the process
+- which collection layer contains the extension implementation
 ```
 
 ## Immediate Next Step
@@ -221,12 +249,20 @@ No standard business method has been executed and no Customer Order has been cre
 Perform only this read-only metadata request:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/IdoMethods
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/IdoCollections
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the property-name list. We are looking for any extension-class, assembly, implementation-reference, source, help, or description property for `SLCos / CreateCoAndLines` that can lead to the official JSON contract.
+Send the complete response or at least the returned property names.
+
+Purpose:
+
+```text
+- determine whether collection metadata exposes base/inheritance information;
+- look for extension-class, assembly, profile, or implementation-reference fields;
+- prepare a later filtered load for SLCos, SLCos_FT, and ZIT_SLCos.
+```
 
 Do not invoke `CreateCoAndLines`, inspect another business method, create Process logic, create Customer Orders, import CSV, or create the receive API method during this step.
 
@@ -254,6 +290,7 @@ Direct SQL insertion into `co_mst` or `coitem_mst` remains prohibited.
 6. Never direct-insert into `co_mst` or `coitem_mst`.
 7. Item mapping and broader item validation remain postponed.
 8. Distinguish Stored Procedure methods from Extension Class methods.
+9. Treat collection hierarchy conclusions as pending until collection metadata confirms them.
 
 ## Repository Documents to Read First
 
@@ -267,11 +304,7 @@ implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 implementation/13-create-SMK069-customer-validation.md
 implementation/14-discover-standard-customer-order-processing.md
 implementation/15-idomethodparameters-metadata-fallback.md
-tests/evidence/2026-07-30-standard-customer-order-header-ido.md
-tests/evidence/2026-07-30-standard-customer-order-line-ido.md
-tests/evidence/2026-07-30-slcoss-header-method-list.md
-tests/evidence/2026-07-30-create-co-and-lines-parameters.md
-tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
+tests/evidence/2026-07-30-create-co-and-lines-method-row.md
 CHANGELOG.md
 ```
 
@@ -284,10 +317,11 @@ Current status:
 - staging, IDO, Error Processing form, Preview, process_status mapping, and customer validation are complete;
 - standard Customer Order header IDO = SL.SLCos;
 - standard Customer Order line IDO = SL.SLCoitems;
-- CreateCoAndLines is an Extension Class - Standard Method, Transactional unchecked, and is not a Stored Procedure;
+- CreateCoAndLines is an Extension Class - Standard Method, Transactional unchecked, and not a Stored Procedure;
 - CoAndLineInfoJson is input-only;
 - CoResult is input/output and MessageFlag = 1;
-- the exact JSON schema and result contract remain unconfirmed;
+- the method row is represented with BaseCollectionName SLCos, SLCos_FT, and ZIT_SLCos using the same _ItemId;
+- the exact JSON schema, collection hierarchy, and result contract remain unconfirmed;
 - no standard business method has been executed;
 - custom Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not complete.
 
@@ -295,5 +329,5 @@ Target remains:
 POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
 
 Next step only:
-Call REST v1 IDOInfo for IdoMethods and provide its property names. Do not invoke CreateCoAndLines or create a Customer Order.
+Call REST v1 IDOInfo for IdoCollections and provide its property names. Do not invoke CreateCoAndLines or create a Customer Order.
 ```
