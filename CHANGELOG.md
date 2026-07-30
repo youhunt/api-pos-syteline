@@ -24,6 +24,7 @@ tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-ma
 tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
 tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-script-named-metadata-collections.md
+tests/evidence/2026-07-30-script-description-metadata-collections.md
 ```
 
 ### Changed
@@ -64,17 +65,26 @@ EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 - Attempted `EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'`; the tenant returned `MessageCode 450`, `IllegalFilterException`, and `Items = null`.
 - Classified that attempt as a rejected filter, not a zero-row result.
 - Confirmed `EventHandlerRevisions` has no direct call-site text field and instead exposes child `EventActionRevisions`/`EventActions`.
-- Searched tenant collection names for `Script`; the only results were:
+- Searched tenant collection names for `Script`; no production form/global script metadata candidate was identified.
+- Searched tenant collection descriptions for `script`; results were:
 
 ```text
 BuildApplicationMessagesScript : temporary application-message script-generation IDO
-UTScripts                      : UnitTesting collection
-UTScriptSelections             : UnitTesting selection collection
+Deployment                     : deployment scripts/XML for applet deployment
+SLInvSequences                 : lexical false positive because "description" contains "script"
+SLInvSequences_IDS             : same lexical false-positive mechanism
 ```
 
-- No obvious production form-script or global-script metadata collection was identified by name.
-- Selected `CollectionDesc LIKE '%script%'` as the next separate read-only discovery step.
-- The direct-insert stored-procedure design remains deferred while metadata discovery is active.
+- Concluded that neither the script-name nor script-description discovery path identified a useful application call-site metadata source.
+- Selected tenant `Form` collection discovery as the next read-only path.
+- Decision history on 30 July 2026:
+
+```text
+1. User temporarily approved a pivot to a prior stored-procedure approach.
+2. No stored-procedure SQL was created or executed.
+3. User subsequently instructed the project to continue CreateCoAndLines metadata discovery.
+4. The stored-procedure path is now deferred as an alternative.
+```
 
 ### Current SMK069 Status
 
@@ -90,11 +100,11 @@ UTScriptSelections             : UnitTesting selection collection
 [COMPLETED] EventActionRevisions.Parameters search = zero rows
 [FAILED] EventActionRevisions.ExpandedParameters filter = IllegalFilterException
 [CONFIRMED] EventHandlerRevisions has no direct call-site text field
-[COMPLETED] Script-named collection discovery
-[NO CANDIDATE] production form/global script metadata by collection name
+[COMPLETED] Script-named collection discovery = no useful app script candidate
+[COMPLETED] Script-description discovery = no useful app script candidate
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] search IdoCollections.CollectionDesc for script
+[NEXT] discover tenant collections whose names contain Form
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -104,9 +114,8 @@ UTScriptSelections             : UnitTesting selection collection
 
 ### Planned
 
-- Search `IdoCollections.CollectionDesc` for `script` using a read-only REST v1 load.
-- Inspect any selected candidate collection's property contract before loading or filtering its rows.
-- Search form metadata only as a later separate path when required by tenant evidence.
+- Discover tenant `IdoCollections` whose names contain `Form`.
+- Select a relevant form metadata candidate from tenant evidence before reading its property contract or rows.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
