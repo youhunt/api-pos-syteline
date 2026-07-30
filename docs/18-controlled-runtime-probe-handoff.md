@@ -37,42 +37,29 @@ Probe 3 : e30=                          → decoded {} → blank order input
 Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
 ```
 
-The fourth probe confirmed that the method does not accept any arbitrary non-empty object. It requires one or more specific business members or a specific nested order structure. The exact names remain unconfirmed.
+Probe 4 confirmed that an arbitrary non-empty object does not satisfy the method contract. The method requires one or more specific business members or a specific nested order structure. The exact names remain unconfirmed.
 
-## Probe 4 Response
-
-```json
-{
-  "Message": null,
-  "MessageCode": 0,
-  "Parameters": [
-    "eyJwcm9iZSI6dHJ1ZX0=",
-    "[{\"probe\":true,\"Status\":\"Fail\",\"Message\":\"The input for order creation cannot be blank\"}]"
-  ],
-  "ReturnValue": null
-}
-```
-
-Confirmed observations:
+## Business Result Rules
 
 ```text
 - MessageCode = 0 is not business success.
 - Parse CoResult as a JSON-array string.
 - Evaluate Status.
-- Arbitrary top-level properties do not satisfy the order-input contract.
-- This failure branch preserved the submitted probe property and added Status and Message.
-- The exact required business member or nesting remains unknown.
+- Failure records may or may not include ErrrorMessage.
+- Some failure branches preserve input properties and add Status and Message.
 ```
 
-## No-Order Verification
+## Completed No-Order Verifications
 
 ```text
 Probe 1 check : zero rows
 Probe 2 check : zero rows
 Probe 3 check : zero rows
-Probe 4 check : pending
-SQL errors    : none on completed checks
+Probe 4 check : zero rows
+SQL errors    : none
 ```
+
+No unexpected Customer Order was found in any checked 30-minute window.
 
 ## Evidence
 
@@ -84,27 +71,56 @@ tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-creat
 tests/evidence/2026-07-30-createcoandlines-empty-object-blank-order-failure.md
 tests/evidence/2026-07-30-createcoandlines-empty-object-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failure.md
+tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
 ```
+
+## Current Unknowns
+
+```text
+- exact top-level order member name or names
+- exact header/line nesting
+- required header fields
+- required line fields
+- accepted date and numeric formats
+- whether co_num is supplied or generated
+- success CoResult shape
+- atomicity of header and line creation
+```
+
+## Technical Decision
+
+Stop guessing payload properties. The next safe discovery path is to locate a standard form event handler, form script, global script, application event action, or other tenant metadata call site that invokes:
+
+```text
+SLCos.CreateCoAndLines
+```
+
+A standard call site may expose the exact JSON-building and Base64-encoding behavior.
 
 ## Next Step Only
 
-Run the same read-only recent-order query after Probe 4:
+Follow:
 
-```sql
-SELECT TOP (20)
-       co_num,
-       cust_num,
-       order_date,
-       CreateDate,
-       CreatedBy,
-       RecordDate,
-       UpdatedBy
-FROM dbo.co_mst
-WHERE RecordDate >= DATEADD(MINUTE, -30, GETDATE())
-   OR CreateDate >= DATEADD(MINUTE, -30, GETDATE())
-ORDER BY COALESCE(RecordDate, CreateDate) DESC;
+```text
+implementation/18-discover-createcoandlines-call-sites.md
 ```
 
-Send the complete result, including an empty result.
+Run this read-only metadata query:
 
-Do not invoke `CreateCoAndLines` again, do not add a guessed business-schema property, and do not submit customer, item, site, order, date, quantity, or price data during this step.
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25FormEvent%25%27%20OR%20CollectionName%20LIKE%20%27%25EventHandler%25%27
+Authorization: {{mongooseSecurityToken}}
+Accept: application/json
+```
+
+Send the complete JSON response.
+
+## Safety Boundary
+
+```text
+- Do not invoke CreateCoAndLines again.
+- Do not guess a business-schema property.
+- Do not edit form handlers, scripts, events, or metadata.
+- Do not submit customer, item, site, order, date, quantity, or price data.
+- Do not create Process/Reprocess logic yet.
+```
