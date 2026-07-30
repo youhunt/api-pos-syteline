@@ -6,18 +6,17 @@
 Base form and Preview       : COMPLETED
 process_status display      : VERIFIED
 process_status read-only    : VERIFIED
-Method type                 : CONFIRMED — Stored Procedure - Standard Method
 Customer validation SP      : CREATED IN TENANT
 IDO method attributes       : CONFIGURED
 Generated parameters        : VERIFIED
 IDO method persisted        : VERIFIED
 Invalid test customer       : VERIFIED — TEST000002 / TST0002 NOT FOUND
 Stored-procedure logic test : VERIFIED
-IDO-layer invocation test   : NOT STARTED
+IDO REST invocation test    : VERIFIED
 Valid-customer test         : NOT STARTED
 Process/Reprocess            : NOT STARTED
 Customer Order creation     : NOT STARTED
-API ingestion               : NOT STARTED
+API receive implementation  : NOT STARTED
 ```
 
 ## Validation Requirement
@@ -64,6 +63,8 @@ Process/Reprocess action
 ```
 
 Do not duplicate customer lookup logic inside the form.
+
+The successful IDO REST invocation proves that the validation method can be called through Mongoose. It does not replace the future controlled service IDO receive method required for the final POS integration API.
 
 ## Confirmed Tenant Method Configuration
 
@@ -142,18 +143,18 @@ It does not update `co_mst` or `coitem_mst`.
 
 ## Generated Parameter Evidence
 
-| Sequence | Parameter Name | User Data Type |
-| ---: | --- | --- |
-| 1 | `SiteRef` | `VARIANT` |
-| 2 | `CoNum` | `VARIANT` |
-| 3 | `Infobar` | `VARIANT` |
+| Sequence | Parameter Name | User Data Type | Direction |
+| ---: | --- | --- | --- |
+| 1 | `SiteRef` | `VARIANT` | Input |
+| 2 | `CoNum` | `VARIANT` | Input |
+| 3 | `Infobar` | `VARIANT` | Output |
 
-Direction follows the stored procedure definition:
+Direction follows the stored-procedure definition:
 
-```text
-SiteRef : input
-CoNum   : input
-Infobar : output
+```sql
+@SiteRef dbo.SiteType,
+@CoNum   dbo.CoNumType,
+@Infobar dbo.InfobarType OUTPUT
 ```
 
 The **Custom Load Method Output Properties** area is blank. This is correct because `ue_SMK069ValidateCustomerSp` is a Stored Procedure Standard Method, not a custom load method.
@@ -186,14 +187,7 @@ Therefore, `DEFAULT + TEST000002` is the controlled invalid-customer case.
 
 ## Stored-Procedure Logic Test Evidence
 
-The procedure was executed directly in the application database with:
-
-```text
-SiteRef : DEFAULT
-CoNum   : TEST000002
-```
-
-Observed result:
+Direct application-database execution returned:
 
 ```text
 ReturnCode     : 0
@@ -202,52 +196,91 @@ process_status : E
 validation_msg : Customer TST0002 tidak ditemukan di customer_mst.
 ```
 
-This confirms that the stored-procedure business logic works correctly for an invalid customer. It does not yet prove IDO or REST invocation.
+This confirms that the stored-procedure business logic works correctly for an invalid customer.
 
-## Current Small Step — Invoke Through the IDO REST Layer
+## IDO REST Invocation Evidence
 
-Use the Mongoose `InvokeMethod` REST operation with the existing Mongoose API base URL and security token:
-
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/ue_SMK069TempSales/ue_SMK069ValidateCustomerSp?parms=DEFAULT,TEST000002,
-Authorization: {{mongooseSecurityToken}}
-```
-
-Parameter order:
+The method was invoked through the Mongoose IDO REST layer using:
 
 ```text
-1. DEFAULT
-2. TEST000002
-3. blank output placeholder for Infobar
+IDO    : ue_SMK069TempSales
+Method : ue_SMK069ValidateCustomerSp
+Parms  : DEFAULT, TEST000002, <blank Infobar output placeholder>
 ```
 
-Expected response:
+Observed response:
+
+```json
+{
+  "Message": null,
+  "MessageCode": 0,
+  "Parameters": [
+    "DEFAULT",
+    "TEST000002",
+    "Customer TST0002 tidak ditemukan di customer_mst."
+  ],
+  "ReturnValue": "0"
+}
+```
+
+Verified interpretation:
 
 ```text
-ReturnValue = 0
-returned Infobar = Customer TST0002 tidak ditemukan di customer_mst.
+MessageCode  = 0
+ReturnValue  = 0
+Parameter 1  = DEFAULT
+Parameter 2  = TEST000002
+Parameter 3  = Customer TST0002 tidak ditemukan di customer_mst.
 ```
 
-After the request, confirm the staging row remains:
+This proves that the saved custom method is callable through Mongoose and returns the expected output parameter.
+
+Detailed evidence:
 
 ```text
-process_status = E
-validation_msg = Customer TST0002 tidak ditemukan di customer_mst.
+tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md
 ```
 
-Do not test a valid customer in the same step.
+## Current Small Step — Select One Real Customer
 
-## Next Step After IDO Invocation Confirmation
+Do not modify staging data yet. First retrieve one customer that actually exists for site `DEFAULT`:
 
-After the IDO method is proven callable through Mongoose:
+```sql
+SELECT TOP (10)
+    c.site_ref,
+    c.cust_num,
+    c.cust_seq,
+    c.name
+FROM dbo.customer_mst AS c
+WHERE c.site_ref = N'DEFAULT'
+  AND c.cust_seq = 0
+ORDER BY c.cust_num;
+```
+
+Choose one returned `cust_num` for the controlled valid-customer test.
+
+Expected result:
 
 ```text
-- prepare one staged order using a real customer_mst customer;
-- execute the same method separately;
-- verify process_status becomes V;
-- verify validation_msg becomes NULL.
+At least one row with site_ref = DEFAULT and cust_seq = 0
 ```
+
+Do not update `TEST000001`, invoke the method, create Process logic, or create a Customer Order during this step.
+
+## Next Step After a Real Customer Is Selected
+
+After one real customer is confirmed:
+
+```text
+1. assign that customer temporarily to TEST000001;
+2. reset TEST000001 process_status to N and clear validation_msg;
+3. invoke ue_SMK069ValidateCustomerSp through the IDO REST layer;
+4. verify process_status becomes V;
+5. verify validation_msg becomes NULL.
+```
+
+These actions will be performed separately, one small step at a time.
 
 ## Stop Point
 
-Do not create the Process button, Customer Order, CSV importer, service receive method, or final external REST endpoint during this step.
+Do not create the Process button, Customer Order, CSV importer, controlled receive service method, or final external POS API endpoint during this step.
