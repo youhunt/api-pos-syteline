@@ -11,6 +11,7 @@ Customer validation SP   : CREATED IN TENANT
 IDO method attributes    : CONFIGURED
 Generated parameters     : VERIFIED
 IDO method persisted     : VERIFIED
+Invalid test customer    : VERIFIED — TEST000002 / TST0002 NOT FOUND
 Execution test           : NOT STARTED
 Process/Reprocess         : NOT STARTED
 Customer Order creation  : NOT STARTED
@@ -64,7 +65,7 @@ Do not duplicate customer lookup logic inside the form.
 
 ## Confirmed Tenant Method Configuration
 
-Tenant screenshots dated 29 July 2026 confirm:
+Tenant screenshots confirm:
 
 ```text
 IDO Name      : ue_SMK069TempSales
@@ -77,8 +78,6 @@ Transactional : checked
 The stored procedure must exist before it can be selected in the wizard. Its presence in the Stored Procedure dropdown confirms that `dbo.SMK069ValidateCustomerSp` has been created and is visible to Mongoose metadata.
 
 ## Confirmed Tenant Naming Rule
-
-The tenant applies this naming behavior:
 
 ```text
 Stored Procedure : no ue_ prefix
@@ -145,8 +144,6 @@ It does not update `co_mst` or `coitem_mst`.
 
 ## Generated Parameter Evidence
 
-The tenant IDO Methods screen generated the following parameters:
-
 | Sequence | Parameter Name | User Data Type |
 | ---: | --- | --- |
 | 1 | `SiteRef` | `VARIANT` |
@@ -161,7 +158,7 @@ The order matches the stored-procedure contract:
 3. Infobar  — output
 ```
 
-The tenant screen does not expose separate direction, SQL data type, or length columns in the visible parameter grid. Direction therefore follows the stored-procedure definition:
+The tenant screen does not expose separate direction, SQL data type, or length columns in the visible parameter grid. Direction follows the stored-procedure definition:
 
 ```sql
 @SiteRef dbo.SiteType,
@@ -188,51 +185,69 @@ Parameter 3      : Infobar
 
 This confirms that the IDO method metadata was saved successfully. Do not recreate the method.
 
-## Current Small Step — Confirm Invalid Test Customer
+## Invalid Customer Test Case Evidence
 
-Before executing the IDO method, confirm that the staged test customer for `TEST000002` is not present in `customer_mst`.
+A database query confirmed:
 
-Run only this query:
+```text
+SiteRef       : DEFAULT
+co_num        : TEST000002
+cust_num      : TST0002
+CustomerCheck : NOT FOUND
+```
+
+Therefore, `DEFAULT + TEST000002` is the controlled invalid-customer case for the first execution test.
+
+## Current Small Step — Execute Validation Logic Once
+
+To isolate stored-procedure logic from any later IDO/API invocation issue, perform only the first invalid-customer execution against the application database:
 
 ```sql
+DECLARE
+    @ReturnCode int,
+    @Infobar dbo.InfobarType;
+
+EXEC @ReturnCode = dbo.SMK069ValidateCustomerSp
+    @SiteRef = N'DEFAULT',
+    @CoNum   = N'TEST000002',
+    @Infobar = @Infobar OUTPUT;
+
 SELECT
-    s.SiteRef,
-    s.co_num,
-    s.cust_num,
-    CASE
-        WHEN EXISTS
-        (
-            SELECT 1
-            FROM dbo.customer_mst AS c
-            WHERE c.site_ref = s.SiteRef
-              AND c.cust_num = s.cust_num
-              AND c.cust_seq = 0
-        )
-        THEN N'EXISTS'
-        ELSE N'NOT FOUND'
-    END AS CustomerCheck
-FROM dbo.ue_SMK069_temp_sales_mst AS s
-WHERE s.SiteRef = N'DEFAULT'
-  AND s.co_num = N'TEST000002';
+    @ReturnCode AS ReturnCode,
+    @Infobar AS Infobar;
+
+SELECT
+    SiteRef,
+    co_num,
+    co_line,
+    cust_num,
+    process_status,
+    validation_msg
+FROM dbo.ue_SMK069_temp_sales_mst
+WHERE SiteRef = N'DEFAULT'
+  AND co_num = N'TEST000002'
+ORDER BY co_line;
 ```
 
-Expected test result:
+Expected result:
 
 ```text
-TEST000002 | TST0002 | NOT FOUND
+ReturnCode    = 0
+Infobar       = Customer TST0002 tidak ditemukan di customer_mst.
+process_status = E
+validation_msg populated with the same customer-not-found message
 ```
 
-Do not execute the method yet during this step. If the query returns `EXISTS`, use a different deliberately invalid test customer before method execution.
+This is a controlled logic test of the server-side procedure. It does not replace the later IDO-method and REST/API invocation tests.
 
-## Next Step After Confirmation
+## Next Step After SQL Logic Confirmation
 
-After `TEST000002` is confirmed as an invalid customer test case:
+After the invalid result is confirmed:
 
 ```text
-- invoke ue_SMK069ValidateCustomerSp for DEFAULT + TEST000002;
-- verify process_status becomes E;
-- verify validation_msg is populated;
-- then test a real customer separately.
+- invoke ue_SMK069ValidateCustomerSp through the IDO layer;
+- verify the same Error result;
+- then prepare and test one valid customer separately.
 ```
 
 The tests must be performed one at a time.
