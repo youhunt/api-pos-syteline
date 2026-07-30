@@ -1,19 +1,20 @@
-# Implementation 15 — IdoMethodParameters Metadata Fallback
+# Implementation 15 — IDO Method Metadata Discovery
 
 ## Status
 
 ```text
 /IDORequestService/ido/info/IdoMethodParameters : FAILED — HTTP 500
-REST v1 IDOInfo fallback                       : COMPLETED
-Relevant metadata properties                   : CONFIRMED
-CreateCoAndLines parameter row load             : COMPLETED
-CreateCoAndLines parameter directions           : CONFIRMED
-CreateCoAndLines JSON schema                    : NOT YET CONFIRMED
-CreateCoAndLines execution                      : NOT ATTEMPTED
-Customer Order creation                         : NOT STARTED
+REST v1 IdoMethodParameters IDOInfo             : COMPLETED
+CreateCoAndLines parameter row load              : COMPLETED
+CreateCoAndLines parameter directions            : CONFIRMED
+REST v1 IdoMethods IDOInfo                       : COMPLETED
+CreateCoAndLines method row load                  : PENDING
+CreateCoAndLines JSON schema                     : NOT YET CONFIRMED
+CreateCoAndLines execution                       : NOT ATTEMPTED
+Customer Order creation                          : NOT STARTED
 ```
 
-## Failed Read-Only Route
+## Failed Legacy Read-Only Route
 
 ```http
 GET {{mongooseBaseUrl}}/IDORequestService/ido/info/IdoMethodParameters
@@ -37,7 +38,7 @@ Evidence:
 tests/evidence/2026-07-30-idomethodparameters-info-endpoint-500.md
 ```
 
-## Successful REST v1 IDOInfo Fallback
+## Successful REST v1 IdoMethodParameters IDOInfo
 
 The REST v1 IDOInfo route returned the published property metadata for `IdoMethodParameters`.
 
@@ -60,7 +61,7 @@ Evidence:
 tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md
 ```
 
-## Completed Parameter-Row Load
+## Completed CreateCoAndLines Parameter-Row Load
 
 The tenant loaded only the rows for:
 
@@ -111,9 +112,54 @@ Evidence:
 tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
 ```
 
+## Successful REST v1 IdoMethods IDOInfo
+
+The tenant returned the published property metadata for `IdoMethods`.
+
+Relevant scalar properties:
+
+```text
+CollectionName
+MethodName
+BaseCollectionName
+MethodDesc
+MethodType
+TxnFlag
+StoredProcName
+DerOutriggerProfile
+DerSpMethodsAllowed
+DevelopmentFlag
+```
+
+Related nested metadata properties:
+
+```text
+MethodParameters
+MethodResultSets
+```
+
+The response does **not** expose direct properties named like:
+
+```text
+ExtensionClass
+Assembly
+ImplementationClass
+SourceCode
+HelpUrl
+JsonSchema
+```
+
+This means the IDOInfo property list alone does not reveal the extension-class source or the exact `CoAndLineInfoJson` contract.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-idomethods-idoinfo-properties.md
+```
+
 ## Important Limitation
 
-The direction metadata does not reveal:
+The confirmed metadata still does not reveal:
 
 ```text
 - exact JSON property names and nesting
@@ -128,16 +174,18 @@ The direction metadata does not reveal:
 
 No business method was invoked and no Customer Order data was created or changed.
 
-## Current Small Step — Discover the Extension Implementation Metadata
+## Current Small Step — Load Only the CreateCoAndLines Method Row
 
-Use only a read-only IDOInfo request for the `IdoMethods` metadata IDO:
+Use this read-only REST v1 Advanced LoadCollection request:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/IdoMethods
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethods/adv?props=CollectionName,MethodName,BaseCollectionName,MethodDesc,MethodType,TxnFlag,StoredProcName,DerOutriggerProfile,DerSpMethodsAllowed&filter=CollectionName%20%3D%20%27SLCos%27%20AND%20MethodName%20%3D%20%27CreateCoAndLines%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Send the returned property names. The purpose is to identify whether tenant metadata exposes an extension-class, assembly, source, help, or implementation-reference field for `SLCos / CreateCoAndLines`.
+This request reads only the method metadata row. It does not invoke `CreateCoAndLines`.
 
-Do not invoke `CreateCoAndLines`, create Process/Reprocess logic, or create a Customer Order during this step.
+Send the complete JSON response.
+
+Do not invoke `CreateCoAndLines`, create Process/Reprocess logic, inspect another business method, or create a Customer Order during this step.
