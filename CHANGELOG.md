@@ -16,6 +16,7 @@ Lines  : SL.SLCoitems
 
 - Evidence confirming `CreateCoAndLines` metadata, parameters, parameter directions, collection hierarchy, extension owner, and binary-only assembly.
 - `implementation/16-controlled-createcoandlines-runtime-probe.md` for controlled DEV contract discovery.
+- `implementation/17-createcoandlines-nonbusiness-marker-probe.md` for distinguishing empty-object validation from required-business-structure validation.
 - Runtime evidence:
 
 ```text
@@ -24,6 +25,8 @@ tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-empty-object-blank-order-failure.md
+tests/evidence/2026-07-30-createcoandlines-empty-object-probe-no-order-created.md
+tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failure.md
 ```
 
 ### Changed
@@ -74,25 +77,30 @@ Assembly        : Customer — Binary Only
 - Confirmed the decoded content is parsed as a JSON object / Newtonsoft `JObject`.
 - Completed the second read-only recent-order verification after the `ew==` probe; it returned zero rows with no SQL error.
 - Completed the empty-object probe using Base64 `e30=`, which decodes to `{}`.
-- Confirmed the empty object passed Base64 decoding and JObject parsing but failed non-blank order-input validation with:
+- Confirmed the empty object passed Base64 decoding and `JObject` parsing but failed non-blank order-input validation with:
 
 ```text
 The input for order creation cannot be blank
 ```
 
+- Completed the third read-only recent-order verification after the empty-object probe; it returned zero rows with no SQL error.
+- Completed the non-business marker probe using decoded payload `{"probe":true}`.
+- Confirmed that an arbitrary non-empty top-level member still returns `The input for order creation cannot be blank`.
+- Confirmed that the method therefore requires one or more specific business members or a specific nested order structure; exact names remain unknown.
+- Confirmed that this marker failure branch preserved the submitted `probe` property and added `Status` and `Message` in `CoResult`.
 - Refined the public processing sequence to:
 
 ```text
 Base64 decode
 → JSON object / JObject parse
-→ non-blank order-input validation
+→ locate expected non-blank order structure
 → Customer Order schema validation
 → Customer Order and line processing
 ```
 
-- Confirmed again that `MessageCode = 0` does not establish business success; `CoResult` returned `Status = Fail`.
-- Confirmed `CoResult` failure records do not always contain `ErrrorMessage`; the empty-object branch returned only `Status` and `Message`.
-- Added a third read-only no-order verification gate before any non-empty contract probe.
+- Confirmed again that `MessageCode = 0` does not establish business success; parse `CoResult` and evaluate `Status`.
+- Confirmed `CoResult` failure records do not always contain `ErrrorMessage`.
+- Added a fourth read-only no-order verification gate before any further contract probe.
 
 ### Current SMK069 Status
 
@@ -115,8 +123,11 @@ Base64 decode
 [CONFIRMED] decoded payload must be JSON object / JObject
 [COMPLETED] second no-order verification = zero rows
 [COMPLETED] empty JSON object probe
-[CONFIRMED] non-blank order input is required
-[NEXT] third read-only no-order verification
+[CONFIRMED] non-blank expected order structure is required
+[COMPLETED] third no-order verification = zero rows
+[COMPLETED] non-business marker probe
+[CONFIRMED] arbitrary non-empty property does not satisfy order-input contract
+[NEXT] fourth read-only no-order verification
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled receive API method
@@ -126,8 +137,8 @@ Base64 decode
 
 ### Planned
 
-- Repeat the read-only recent-order check after the empty-object probe.
-- Only after a zero-row result, design one controlled non-empty marker-object probe without customer, item, site, order, date, quantity, or price values.
+- Repeat the read-only recent-order check after the non-business marker probe.
+- Do not guess a business-schema member until the no-order gate is closed and the next discovery path is selected.
 - Determine exact JSON property names, required header/line fields, `co_num` behavior, and success `CoResult` shape.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
