@@ -8,20 +8,21 @@ Controlled malformed probes         : COMPLETED
 All four no-order checks             : COMPLETED — ZERO ROWS
 Base64 input requirement             : CONFIRMED
 Decoded payload type                 : JSON object / JObject
-Specific order structure required   : CONFIRMED
+Specific order structure required    : CONFIRMED
 Exact business JSON schema           : NOT YET CONFIRMED
-Further property-name guessing      : STOPPED
-Standard call-site discovery        : STARTED — READ-ONLY
-Candidate event metadata IDOs       : CONFIRMED
-EventHandlers property discovery    : COMPLETED
-Filtered MethodToCall search        : COMPLETED — ZERO ROWS
-Event-action collection discovery   : COMPLETED
-EventActions property discovery     : NEXT
+Further property-name guessing       : STOPPED
+Standard call-site discovery         : STARTED — READ-ONLY
+Candidate event metadata IDOs        : CONFIRMED
+EventHandlers property discovery     : COMPLETED
+Filtered MethodToCall search         : COMPLETED — ZERO ROWS
+Event-action collection discovery    : COMPLETED
+EventActions property discovery      : COMPLETED
+Filtered EventActions.Parameters     : NEXT
 ```
 
-## Why the Discovery Path Changes
+## Why the Discovery Path Changed
 
-The completed runtime probes confirmed:
+The controlled runtime probes confirmed:
 
 ```text
 1. raw input is rejected unless it is valid Base64;
@@ -31,9 +32,9 @@ The completed runtime probes confirmed:
 5. no Customer Order was created by any of the four probes in the checked windows.
 ```
 
-The method therefore expects one or more specific business members or a specific nested order structure. Guessing names such as `Order`, `Header`, `Lines`, `Co`, or similar is not authorized because tenant evidence has not confirmed them.
+The method therefore expects one or more specific business members or a specific nested order structure. Guessing names such as `Order`, `Header`, `Lines`, or `Co` is stopped.
 
-The safe path is to locate a standard form event handler, form script, global script, application event action, or another metadata call site that invokes:
+The safe path is to locate standard tenant metadata that invokes:
 
 ```text
 SLCos.CreateCoAndLines
@@ -41,18 +42,18 @@ SLCos.CreateCoAndLines
 
 A standard call site may reveal the exact JSON construction and Base64 encoding behavior.
 
-## Completed Step — Candidate Event Metadata Collections
+## Confirmed Event Metadata Collections
 
 Read-only tenant metadata returned:
 
-| CollectionName | Description | ServerName | AccessAs |
-| --- | --- | --- | --- |
-| `EventHandlerRevisions` | Event Handler Revisions | `MGCore` | `Core` |
-| `EventHandlers` | Event Handlers | `MGCore` | `Core` |
-| `EventHandlerStates` | Event Handler Status | `MGCore` | `Core` |
-| `IdoEventHandlerAppliesToObjects` | NULL | `MGCore` | `Core` |
-| `IdoEventHandlerAppliesToTasks` | NULL | `MGCore` | `Core` |
-| `QueuedEventHandlers` | Event Queue | `MGCore` | `Core` |
+```text
+EventHandlerRevisions
+EventHandlers
+EventHandlerStates
+IdoEventHandlerAppliesToObjects
+IdoEventHandlerAppliesToTasks
+QueuedEventHandlers
+```
 
 Evidence:
 
@@ -60,9 +61,9 @@ Evidence:
 tests/evidence/2026-07-30-event-handler-metadata-collections.md
 ```
 
-## Completed Step — EventHandlers Property Metadata
+## EventHandlers Discovery
 
-Relevant published properties include:
+Relevant `EventHandlers` properties include:
 
 ```text
 EventName
@@ -82,56 +83,34 @@ Transactional
 TriggeringProperty
 ```
 
+A read-only search for:
+
+```text
+MethodToCall LIKE '%CreateCoAndLines%'
+```
+
+returned zero rows. Therefore no parent `EventHandlers` row stores the target directly in `MethodToCall`.
+
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
-```
-
-## Completed Step — Filter EventHandlers.MethodToCall
-
-Tenant result:
-
-```text
-Message        : Success
-MessageCode    : 0
-Items          : zero rows
-MoreRowsExists : false
-```
-
-Confirmed conclusion:
-
-```text
-No parent EventHandlers row stores CreateCoAndLines directly in MethodToCall.
-```
-
-This does not rule out a standard call site. The reference may be in child event actions, revisions, form metadata, scripts, or another metadata object.
-
-Evidence:
-
-```text
 tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
 ```
 
-## Completed Step — Event-Action Collection Discovery
+## Confirmed Event-Action Collections
 
 Read-only `IdoCollections` discovery returned:
 
-| CollectionName | Description | ServerName | AccessAs |
-| --- | --- | --- | --- |
-| `EventAction_GenericParms` | Event Action - Generic Parameters | `MGCore` | `Core` |
-| `EventActionRevisions` | Event Action - Revisions | `MGCore` | `Core` |
-| `EventActions` | Event Actions | `MGCore` | `Core` |
-| `EventActionStates` | Event Handler Status – Actions tab | `MGCore` | `Core` |
-| `EventActionVariableAccess` | Event Actions – Variable Access tab | `MGCore` | `Core` |
-
-The primary candidate for child action records is:
-
 ```text
+EventAction_GenericParms
+EventActionRevisions
 EventActions
+EventActionStates
+EventActionVariableAccess
 ```
 
-The other collections appear, from tenant-provided descriptions, to support generic parameters, revisions, state/status, or variable access. Their property contracts remain uninspected.
+`EventActions` is the primary child-action metadata candidate. The remaining collections are later paths for generic parameters, revisions, state/status, or variable access.
 
 Evidence:
 
@@ -139,32 +118,64 @@ Evidence:
 tests/evidence/2026-07-30-event-action-metadata-collections.md
 ```
 
-## Current Small Step — Read EventActions Property Metadata
+## Confirmed EventActions Properties
 
-Use REST v1 IDOInfo:
+REST v1 IDOInfo confirmed these call-site-relevant properties:
+
+```text
+ActionType                     : Byte, required
+DerActionTypeText              : String(50), read-only
+Parameters                     : String(MAX)
+ExpandedParameters             : String(4000), read-only
+SubstitutedParameters          : String(4000), read-only
+EventName                      : String(50), read-only
+EventHandlerSequence           : Short Integer, read-only
+Sequence                       : Short Integer, required
+Description                    : String(40)
+EventHandlerRowPointer         : GUID, required
+RowPointer                     : GUID, read-only
+AccessAs                       : String(50), read-only
+DerAccessAs                    : String(50)
+EventActionVariableAccess      : CONTAINS
+IsEventActionRevision          : Byte
+EventHandlerRevisionRowPointer : GUID, read-only
+```
+
+The strongest first search field is the raw action configuration:
+
+```text
+Parameters
+```
+
+`ExpandedParameters` and `SubstitutedParameters` are derived/read-only fields and remain later fallback paths. No meaning is assigned to numeric `ActionType` values before matching tenant rows are returned.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventactions-idoinfo-properties.md
+```
+
+## Current Small Step — Filter Raw EventActions.Parameters
+
+Run this read-only REST v1 request:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventActions
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActions/adv?props=EventName,EventHandlerSequence,Sequence,Description,ActionType,DerActionTypeText,Parameters,ExpandedParameters,SubstitutedParameters,AccessAs,EventHandlerRowPointer,RowPointer&filter=Parameters%20LIKE%20%27%25CreateCoAndLines%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete response, especially the published `Properties` list.
+Capture the complete JSON response, including an empty result.
 
-The purpose is to identify actual tenant fields that may hold:
+### Interpretation Rules
 
 ```text
-action type
-action description
-method or function name
-target IDO
-parameters
-expression or script text
-parent event/handler identifiers
-sequence or action GUID
+- A returned row proves only that its raw Parameters contains CreateCoAndLines.
+- Do not infer ActionType meaning from its number alone.
+- Do not execute the action.
+- Do not query ExpandedParameters, SubstitutedParameters, or EventActionRevisions in the same step.
+- If zero rows return, derived parameter fields become a later separate fallback.
 ```
-
-These are search objectives only, not assumed property names.
 
 ## Safety Boundary
 
@@ -172,9 +183,7 @@ These are search objectives only, not assumed property names.
 - Read metadata only.
 - Do not invoke CreateCoAndLines again.
 - Do not guess a Customer Order JSON property.
-- Do not load or edit EventActions rows yet.
-- Do not inspect EventActionRevisions in the same step.
-- Do not edit form handlers, event actions, scripts, events, or metadata.
+- Do not edit event actions, handlers, scripts, events, or metadata.
 - Do not create Process/Reprocess logic yet.
 - Do not import CSV or create the controlled receive API method.
 ```
