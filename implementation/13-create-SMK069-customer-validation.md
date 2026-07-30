@@ -3,19 +3,21 @@
 ## Current Status
 
 ```text
-Base form and Preview    : COMPLETED
-process_status display   : VERIFIED
-process_status read-only : VERIFIED
-Method type              : CONFIRMED — Stored Procedure - Standard Method
-Customer validation SP   : CREATED IN TENANT
-IDO method attributes    : CONFIGURED
-Generated parameters     : VERIFIED
-IDO method persisted     : VERIFIED
-Invalid test customer    : VERIFIED — TEST000002 / TST0002 NOT FOUND
-Execution test           : NOT STARTED
-Process/Reprocess         : NOT STARTED
-Customer Order creation  : NOT STARTED
-API ingestion             : NOT STARTED
+Base form and Preview       : COMPLETED
+process_status display      : VERIFIED
+process_status read-only    : VERIFIED
+Method type                 : CONFIRMED — Stored Procedure - Standard Method
+Customer validation SP      : CREATED IN TENANT
+IDO method attributes       : CONFIGURED
+Generated parameters        : VERIFIED
+IDO method persisted        : VERIFIED
+Invalid test customer       : VERIFIED — TEST000002 / TST0002 NOT FOUND
+Stored-procedure logic test : VERIFIED
+IDO-layer invocation test   : NOT STARTED
+Valid-customer test         : NOT STARTED
+Process/Reprocess            : NOT STARTED
+Customer Order creation     : NOT STARTED
+API ingestion               : NOT STARTED
 ```
 
 ## Validation Requirement
@@ -52,7 +54,7 @@ validation_msg = Customer <cust_num> tidak ditemukan di customer_mst.
 
 ## Architecture Rule
 
-Customer validation must be implemented once as reusable server-side logic. It will later be called by:
+Customer validation is implemented once as reusable server-side logic. It will later be called by:
 
 ```text
 Error Processing form
@@ -65,8 +67,6 @@ Do not duplicate customer lookup logic inside the form.
 
 ## Confirmed Tenant Method Configuration
 
-Tenant screenshots confirm:
-
 ```text
 IDO Name      : ue_SMK069TempSales
 Method Type   : Stored Procedure - Standard Method
@@ -74,8 +74,6 @@ Stored Proc.  : SMK069ValidateCustomerSp
 Method Name   : ue_SMK069ValidateCustomerSp
 Transactional : checked
 ```
-
-The stored procedure must exist before it can be selected in the wizard. Its presence in the Stored Procedure dropdown confirms that `dbo.SMK069ValidateCustomerSp` has been created and is visible to Mongoose metadata.
 
 ## Confirmed Tenant Naming Rule
 
@@ -150,25 +148,15 @@ It does not update `co_mst` or `coitem_mst`.
 | 2 | `CoNum` | `VARIANT` |
 | 3 | `Infobar` | `VARIANT` |
 
-The order matches the stored-procedure contract:
+Direction follows the stored procedure definition:
 
 ```text
-1. SiteRef  — input
-2. CoNum    — input
-3. Infobar  — output
-```
-
-The tenant screen does not expose separate direction, SQL data type, or length columns in the visible parameter grid. Direction follows the stored-procedure definition:
-
-```sql
-@SiteRef dbo.SiteType,
-@CoNum   dbo.CoNumType,
-@Infobar dbo.InfobarType OUTPUT
+SiteRef : input
+CoNum   : input
+Infobar : output
 ```
 
 The **Custom Load Method Output Properties** area is blank. This is correct because `ue_SMK069ValidateCustomerSp` is a Stored Procedure Standard Method, not a custom load method.
-
-No generated parameter was manually changed.
 
 ## Persistence Evidence
 
@@ -187,8 +175,6 @@ This confirms that the IDO method metadata was saved successfully. Do not recrea
 
 ## Invalid Customer Test Case Evidence
 
-A database query confirmed:
-
 ```text
 SiteRef       : DEFAULT
 co_num        : TEST000002
@@ -196,62 +182,72 @@ cust_num      : TST0002
 CustomerCheck : NOT FOUND
 ```
 
-Therefore, `DEFAULT + TEST000002` is the controlled invalid-customer case for the first execution test.
+Therefore, `DEFAULT + TEST000002` is the controlled invalid-customer case.
 
-## Current Small Step — Execute Validation Logic Once
+## Stored-Procedure Logic Test Evidence
 
-To isolate stored-procedure logic from any later IDO/API invocation issue, perform only the first invalid-customer execution against the application database:
-
-```sql
-DECLARE
-    @ReturnCode int,
-    @Infobar dbo.InfobarType;
-
-EXEC @ReturnCode = dbo.SMK069ValidateCustomerSp
-    @SiteRef = N'DEFAULT',
-    @CoNum   = N'TEST000002',
-    @Infobar = @Infobar OUTPUT;
-
-SELECT
-    @ReturnCode AS ReturnCode,
-    @Infobar AS Infobar;
-
-SELECT
-    SiteRef,
-    co_num,
-    co_line,
-    cust_num,
-    process_status,
-    validation_msg
-FROM dbo.ue_SMK069_temp_sales_mst
-WHERE SiteRef = N'DEFAULT'
-  AND co_num = N'TEST000002'
-ORDER BY co_line;
-```
-
-Expected result:
+The procedure was executed directly in the application database with:
 
 ```text
-ReturnCode    = 0
-Infobar       = Customer TST0002 tidak ditemukan di customer_mst.
+SiteRef : DEFAULT
+CoNum   : TEST000002
+```
+
+Observed result:
+
+```text
+ReturnCode     : 0
+Infobar        : Customer TST0002 tidak ditemukan di customer_mst.
+process_status : E
+validation_msg : Customer TST0002 tidak ditemukan di customer_mst.
+```
+
+This confirms that the stored-procedure business logic works correctly for an invalid customer. It does not yet prove IDO or REST invocation.
+
+## Current Small Step — Invoke Through the IDO REST Layer
+
+Use the Mongoose `InvokeMethod` REST operation with the existing Mongoose API base URL and security token:
+
+```http
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/ue_SMK069TempSales/ue_SMK069ValidateCustomerSp?parms=DEFAULT,TEST000002,
+Authorization: {{mongooseSecurityToken}}
+```
+
+Parameter order:
+
+```text
+1. DEFAULT
+2. TEST000002
+3. blank output placeholder for Infobar
+```
+
+Expected response:
+
+```text
+ReturnValue = 0
+returned Infobar = Customer TST0002 tidak ditemukan di customer_mst.
+```
+
+After the request, confirm the staging row remains:
+
+```text
 process_status = E
-validation_msg populated with the same customer-not-found message
+validation_msg = Customer TST0002 tidak ditemukan di customer_mst.
 ```
 
-This is a controlled logic test of the server-side procedure. It does not replace the later IDO-method and REST/API invocation tests.
+Do not test a valid customer in the same step.
 
-## Next Step After SQL Logic Confirmation
+## Next Step After IDO Invocation Confirmation
 
-After the invalid result is confirmed:
+After the IDO method is proven callable through Mongoose:
 
 ```text
-- invoke ue_SMK069ValidateCustomerSp through the IDO layer;
-- verify the same Error result;
-- then prepare and test one valid customer separately.
+- prepare one staged order using a real customer_mst customer;
+- execute the same method separately;
+- verify process_status becomes V;
+- verify validation_msg becomes NULL.
 ```
-
-The tests must be performed one at a time.
 
 ## Stop Point
 
-Do not create the Process button, Customer Order, CSV importer, service receive method, or REST endpoint during this step.
+Do not create the Process button, Customer Order, CSV importer, service receive method, or final external REST endpoint during this step.
