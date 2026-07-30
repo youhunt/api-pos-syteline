@@ -13,6 +13,7 @@ IDO method persisted        : VERIFIED
 Invalid test customer       : VERIFIED — TEST000002 / TST0002 NOT FOUND
 Stored-procedure logic test : VERIFIED
 IDO REST invocation test    : VERIFIED
+Valid customer candidate    : C000001 — EXISTENCE NOT YET VERIFIED
 Valid-customer test         : NOT STARTED
 Process/Reprocess            : NOT STARTED
 Customer Order creation     : NOT STARTED
@@ -223,16 +224,6 @@ Observed response:
 }
 ```
 
-Verified interpretation:
-
-```text
-MessageCode  = 0
-ReturnValue  = 0
-Parameter 1  = DEFAULT
-Parameter 2  = TEST000002
-Parameter 3  = Customer TST0002 tidak ditemukan di customer_mst.
-```
-
 This proves that the saved custom method is callable through Mongoose and returns the expected output parameter.
 
 Detailed evidence:
@@ -241,40 +232,81 @@ Detailed evidence:
 tests/evidence/2026-07-30-smk069-invalid-customer-ido-rest.md
 ```
 
-## Current Small Step — Select One Real Customer
+## Parameter Semantics Correction
 
-Do not modify staging data yet. First retrieve one customer that actually exists for site `DEFAULT`:
+The IDO method parameters are positional:
+
+```text
+Parameter 1 : SiteRef
+Parameter 2 : CoNum
+Parameter 3 : Infobar output placeholder
+```
+
+`cust_num` is not passed directly to this validation method. The procedure reads `cust_num` from the staged rows selected by `SiteRef + co_num`.
+
+An attempted call used:
+
+```text
+DEFAULT, C000001, <blank Infobar>
+```
+
+and returned:
+
+```json
+{
+  "Message": null,
+  "MessageCode": 0,
+  "Parameters": [
+    "DEFAULT",
+    "C000001",
+    "Data staging tidak ditemukan untuk SiteRef DEFAULT dan CO Number C000001."
+  ],
+  "ReturnValue": "16"
+}
+```
+
+This response is correct because `C000001` was interpreted as `CoNum`, not as `cust_num`. No staging order exists with `co_num = C000001`.
+
+For the valid-customer test, the correct pattern will be:
+
+```text
+1. put a real cust_num such as C000001 into staged order TEST000001;
+2. call the method with DEFAULT, TEST000001, <blank Infobar>;
+3. let the stored procedure read C000001 from the staging row.
+```
+
+## Current Small Step — Verify Candidate Customer
+
+Do not modify staging yet. First confirm that candidate customer `C000001` exists for site `DEFAULT`:
 
 ```sql
-SELECT TOP (10)
+SELECT
     c.site_ref,
     c.cust_num,
     c.cust_seq,
     c.name
 FROM dbo.customer_mst AS c
 WHERE c.site_ref = N'DEFAULT'
-  AND c.cust_seq = 0
-ORDER BY c.cust_num;
+  AND c.cust_num = N'C000001'
+  AND c.cust_seq = 0;
 ```
-
-Choose one returned `cust_num` for the controlled valid-customer test.
 
 Expected result:
 
 ```text
-At least one row with site_ref = DEFAULT and cust_seq = 0
+Exactly one customer row for DEFAULT / C000001 / cust_seq 0
 ```
 
-Do not update `TEST000001`, invoke the method, create Process logic, or create a Customer Order during this step.
+Do not update `TEST000001` or invoke the method in this same step.
 
-## Next Step After a Real Customer Is Selected
+## Next Step After Customer Confirmation
 
-After one real customer is confirmed:
+After `C000001` is confirmed:
 
 ```text
-1. assign that customer temporarily to TEST000001;
+1. assign C000001 temporarily to all TEST000001 staging lines;
 2. reset TEST000001 process_status to N and clear validation_msg;
-3. invoke ue_SMK069ValidateCustomerSp through the IDO REST layer;
+3. invoke ue_SMK069ValidateCustomerSp with DEFAULT, TEST000001, blank Infobar;
 4. verify process_status becomes V;
 5. verify validation_msg becomes NULL.
 ```
