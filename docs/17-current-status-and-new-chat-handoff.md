@@ -21,13 +21,13 @@ POS sample CSV / REST payload
 → co_mst + coitem_mst
 ```
 
-The official POS payload/file format is not yet available. The final target remains a controlled API integration.
+The official POS payload/file layout is not yet available. The final target remains controlled API integration.
 
 ## Confirmed Requirement Corrections
 
 ```text
 Header total = SUM(unit_price * qty_ordered)
-Cost         = obtained from item_mst
+Cost         = obtained from item_mst during Customer Order processing
 ```
 
 `cost` is not stored in staging. Standard `SiteRef` is used; no duplicate `site_ref` column exists.
@@ -55,18 +55,17 @@ Primary key                        : SiteRef + co_num + co_line
 [COMPLETED] process_status display mapping and read-only verification
 [COMPLETED] dbo.SMK069ValidateCustomerSp
 [COMPLETED] ue_SMK069ValidateCustomerSp transactional IDO method
-[COMPLETED] invalid-customer SQL and Mongoose REST tests
-[COMPLETED] valid-customer Mongoose REST and persisted staging tests
+[COMPLETED] invalid-customer and valid-customer SQL/Mongoose REST tests
 [COMPLETED] mandatory customer validation requirement
 [CONFIRMED] standard Customer Order header IDO = SL.SLCos
 [CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
 [REVIEWED]  SL.SLCos method-name list
-[CONFIRMED] CreateCoAndLines is Extension Class - Standard Method, not SP
+[CONFIRMED] CreateCoAndLines = Extension Class - Standard Method, not SP
 [CONFIRMED] CoAndLineInfoJson = input-only
 [CONFIRMED] CoResult = input/output + message parameter
-[CONFIRMED] effective method contexts = SLCos, SLCos_FT, ZIT_SLCos
-[CONFIRMED] IdoCollections exposes extension/inheritance metadata properties
-[NEXT]      load metadata rows for SLCos, SLCos_FT, and ZIT_SLCos
+[CONFIRMED] collection hierarchy: SLCos base; SLCos_FT and ZIT_SLCos extend SLCos
+[CONFIRMED] base extension owner metadata = Customer.SLCos, assembly Customer
+[NEXT]      inspect Customer assembly metadata/source availability read-only
 [NOT STARTED] custom Process/Reprocess method
 [NOT STARTED] Customer Order creation
 [NOT STARTED] sample CSV import
@@ -92,9 +91,9 @@ Invalid customer → process_status E + validation_msg
 Valid customer   → process_status V + validation_msg NULL
 ```
 
-The method is reusable by the form, CSV/import path, controlled API receive method, and Process/Reprocess action.
+The validation method is reusable by the form, CSV/import path, controlled API receive method, and Process/Reprocess action.
 
-## Standard Customer Order Entity Discovery
+## Confirmed Standard Customer Order Objects
 
 ```text
 Header primary collection : SL.SLCos
@@ -119,8 +118,6 @@ Transactional : unchecked / false
 Stored Proc.  : not applicable / blank
 ```
 
-Parameter metadata:
-
 | Sequence | Parameter | Data Type | InputFlag | OutputFlag | MessageFlag |
 | ---: | --- | --- | ---: | ---: | ---: |
 | 1 | `CoAndLineInfoJson` | `VARIANT` | 1 | 0 | 0 |
@@ -140,71 +137,39 @@ tests/evidence/2026-07-30-create-co-and-lines-parameters.md
 tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md
 ```
 
-## Confirmed CreateCoAndLines Effective Method Rows
+## Confirmed Collection Hierarchy and Extension Owner
 
-A read-only `IdoMethods` load returned:
+Tenant `IdoCollections` metadata returned:
 
-| CollectionName | BaseCollectionName | MethodType | TxnFlag | StoredProcName | MethodDesc | DerOutriggerProfile |
-| --- | --- | ---: | ---: | --- | --- | --- |
-| `SLCos` | `SLCos` | 2 | 0 | NULL | NULL | NULL |
-| `SLCos` | `SLCos_FT` | 2 | 0 | NULL | NULL | NULL |
-| `SLCos` | `ZIT_SLCos` | 2 | 0 | NULL | NULL | NULL |
+| Collection | Extends | Ext Class | Namespace | Assembly | Server | Access As | Runtime Identity |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `SLCos` | NULL | `SLCos` | `Customer` | `Customer` | `Customer` | `BaseSyteLine` | `Customer.SLCos` |
+| `SLCos_FT` | `SLCos` | NULL | NULL | NULL | `WarehouseMobility` | `BaseSyteLine` | `WarehouseMobility.SLCos_FT` |
+| `ZIT_SLCos` | `SLCos` | NULL | NULL | NULL | `ZITSL` | `ZIT` | `ZITSL.ZIT_SLCos` |
 
-All rows returned the same `_ItemId`. Safe interpretation:
+Confirmed hierarchy:
 
 ```text
-- one effective method metadata record is represented across three collection/base contexts;
-- the inheritance relationship is not yet confirmed;
-- do not assume which layer owns the extension implementation;
-- the method rows do not reveal the JSON schema.
+SLCos
+├── SLCos_FT extends SLCos
+└── ZIT_SLCos extends SLCos
 ```
+
+Technical conclusion:
+
+```text
+Base Customer Order extension class : Customer.SLCos
+Custom assembly                     : Customer
+```
+
+`SLCos_FT` and `ZIT_SLCos` inherit from `SLCos` and do not publish their own extension class, namespace, or assembly in the returned metadata.
 
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-create-co-and-lines-method-row.md
-```
-
-## IdoCollections Metadata Discovery
-
-The tenant `IdoCollections` IDOInfo response exposes:
-
-```text
-CollectionName
-Caption
-CaptionOrName
-CollectionDesc
-Extends
-ExtClassName
-ExtClassNamespace
-CustomAssemblyName
-ServerName
-AccessAs
-OutriggerProfile
-DerServerPlusCollection
-ReplaceFlag
-DevelopmentFlag
-DerSpMethodsAllowed
-```
-
-Related nested metadata includes:
-
-```text
-Methods
-Properties
-Tables
-Rules
-DataRules
-Filters
-EventHandlerAppliesToObjects
-```
-
-These fields are sufficient to compare `SLCos`, `SLCos_FT`, and `ZIT_SLCos` and identify the inheritance chain, extension class, namespace, custom assembly, server project, access-as alias, outrigger profile, and server-plus collection reference.
-
-Evidence:
-
-```text
 tests/evidence/2026-07-30-idocollections-idoinfo-properties.md
+tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md
 ```
 
 No standard business method has been executed and no Customer Order has been created.
@@ -221,22 +186,29 @@ No standard business method has been executed and no Customer Order has been cre
 - failure CoResult shape
 - whether header and lines are created atomically
 - whether another standard validation method must run first
-- actual inheritance and implementation ownership across SLCos, SLCos_FT, and ZIT_SLCos
+- whether source code for assembly Customer is available in this tenant
 ```
 
 ## Immediate Next Step
 
-Perform only this read-only request:
+Open the standard **IDO Extension Class Assemblies** form and filter:
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,Extends,ExtClassName,ExtClassNamespace,CustomAssemblyName,ServerName,AccessAs,OutriggerProfile,DerServerPlusCollection,ReplaceFlag,DevelopmentFlag&filter=CollectionName%20%3D%20%27SLCos%27%20OR%20CollectionName%20%3D%20%27SLCos_FT%27%20OR%20CollectionName%20%3D%20%27ZIT_SLCos%27
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
+```text
+Assembly Name = Customer
 ```
 
-Send the complete JSON response.
+Read only. Capture:
 
-Do not invoke `CreateCoAndLines`, inspect another business method, create Process logic, create Customer Orders, import CSV, or create the receive API method during this step.
+```text
+Assembly Name
+Assembly Type
+Language
+References
+Source Code availability/button state
+Binary or DLL information, if displayed
+```
+
+Do not check out, edit, build, import, save, resynchronize, or invoke `CreateCoAndLines`.
 
 ## API Direction
 
@@ -262,7 +234,7 @@ Direct SQL insertion into `co_mst` or `coitem_mst` remains prohibited.
 6. Never direct-insert into `co_mst` or `coitem_mst`.
 7. Item mapping and broader item validation remain postponed.
 8. Distinguish Stored Procedure methods from Extension Class methods.
-9. Treat collection hierarchy conclusions as pending until collection rows confirm them.
+9. Do not invoke `CreateCoAndLines` until the JSON contract and controlled test conditions are confirmed.
 
 ## Repository Documents to Read First
 
@@ -276,7 +248,7 @@ implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 implementation/13-create-SMK069-customer-validation.md
 implementation/14-discover-standard-customer-order-processing.md
 implementation/15-idomethodparameters-metadata-fallback.md
-tests/evidence/2026-07-30-idocollections-idoinfo-properties.md
+tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md
 CHANGELOG.md
 ```
 
@@ -292,15 +264,15 @@ Current status:
 - CreateCoAndLines is an Extension Class - Standard Method, Transactional unchecked, and not a Stored Procedure;
 - CoAndLineInfoJson is input-only;
 - CoResult is input/output and MessageFlag = 1;
-- the method row is represented with BaseCollectionName SLCos, SLCos_FT, and ZIT_SLCos using the same _ItemId;
-- IdoCollections exposes Extends, ExtClassName, ExtClassNamespace, CustomAssemblyName, ServerName, AccessAs, OutriggerProfile, and DerServerPlusCollection;
-- the exact JSON schema, collection hierarchy, and result contract remain unconfirmed;
+- SLCos is the base collection with extension class Customer.SLCos in assembly Customer;
+- SLCos_FT and ZIT_SLCos both extend SLCos and do not publish their own extension class/assembly;
+- the exact JSON schema and result contract remain unconfirmed;
 - no standard business method has been executed;
-- custom Process/Reprocess, Customer Order creation, controlled service receive method, and final POS API are not complete.
+- custom Process/Reprocess, Customer Order creation, controlled receive service, and final POS API are not complete.
 
 Target remains:
 POS/Postman/CSV → controlled service IDO → staging → validation → reusable processing → standard Customer Order processing.
 
 Next step only:
-Load read-only IdoCollections metadata rows for SLCos, SLCos_FT, and ZIT_SLCos using the documented Advanced LoadCollection request. Do not invoke CreateCoAndLines or create a Customer Order.
+Open IDO Extension Class Assemblies, filter Assembly Name = Customer, and capture Assembly Type, Language, References, Source Code availability, and binary/DLL information. Do not edit, build, save, or invoke CreateCoAndLines.
 ```
