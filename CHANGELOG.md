@@ -6,7 +6,7 @@ All notable changes to this repository will be documented in this file.
 
 ### Added
 
-- Staging-table, IDO, form, validation, Customer Order discovery, and controlled runtime-probe documentation.
+- Staging-table, IDO, Error Processing form, validation, Customer Order discovery, and controlled runtime-probe documentation.
 - Evidence confirming standard Customer Order IDOs:
 
 ```text
@@ -14,9 +14,15 @@ Header : SL.SLCos
 Lines  : SL.SLCoitems
 ```
 
-- Evidence confirming `CreateCoAndLines` metadata, parameters, parameter directions, collection hierarchy, extension owner, and binary-only assembly.
-- `implementation/16-controlled-createcoandlines-runtime-probe.md` for controlled DEV contract discovery.
-- `implementation/17-createcoandlines-nonbusiness-marker-probe.md` for distinguishing empty-object validation from required-business-structure validation.
+- Evidence confirming `CreateCoAndLines` metadata, parameters, directions, collection hierarchy, extension owner, and binary-only assembly.
+- Controlled discovery documents:
+
+```text
+implementation/16-controlled-createcoandlines-runtime-probe.md
+implementation/17-createcoandlines-nonbusiness-marker-probe.md
+implementation/18-discover-createcoandlines-call-sites.md
+```
+
 - Runtime evidence:
 
 ```text
@@ -27,6 +33,7 @@ tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-creat
 tests/evidence/2026-07-30-createcoandlines-empty-object-blank-order-failure.md
 tests/evidence/2026-07-30-createcoandlines-empty-object-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failure.md
+tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
 ```
 
 ### Changed
@@ -34,7 +41,7 @@ tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failur
 - Header total confirmed as `SUM(unit_price * qty_ordered)`.
 - Cost remains outside staging and is obtained from `item_mst` during Customer Order processing.
 - Standard `SiteRef` is used; no duplicate `site_ref` column.
-- Customer validation is completed for valid and invalid branches.
+- Customer validation is complete for valid and invalid branches.
 - Confirmed standard Customer Order entity IDOs:
 
 ```text
@@ -42,7 +49,7 @@ Header : SL.SLCos
 Lines  : SL.SLCoitems
 ```
 
-- Confirmed `CreateCoAndLines` classification:
+- Confirmed `CreateCoAndLines` classification and parameter contract:
 
 ```text
 IDO Name      : SLCos
@@ -50,11 +57,7 @@ Method Name   : CreateCoAndLines
 Method Type   : Extension Class - Standard Method
 Transactional : false
 Stored Proc.  : not applicable
-```
 
-- Confirmed parameter contract:
-
-```text
 CoAndLineInfoJson : input-only
 CoResult          : input/output + message parameter
 ```
@@ -71,24 +74,7 @@ Assembly        : Customer — Binary Only
 ```
 
 - Confirmed runtime environment as DEV and disposable testing as allowed.
-- Completed raw malformed probe and confirmed `CoAndLineInfoJson` requires Base64 content.
-- Completed first post-probe read-only check; no Customer Order was found in the checked 30-minute window.
-- Completed Base64 `ew==` probe, which decodes to malformed `{`.
-- Confirmed the decoded content is parsed as a JSON object / Newtonsoft `JObject`.
-- Completed the second read-only recent-order verification after the `ew==` probe; it returned zero rows with no SQL error.
-- Completed the empty-object probe using Base64 `e30=`, which decodes to `{}`.
-- Confirmed the empty object passed Base64 decoding and `JObject` parsing but failed non-blank order-input validation with:
-
-```text
-The input for order creation cannot be blank
-```
-
-- Completed the third read-only recent-order verification after the empty-object probe; it returned zero rows with no SQL error.
-- Completed the non-business marker probe using decoded payload `{"probe":true}`.
-- Confirmed that an arbitrary non-empty top-level member still returns `The input for order creation cannot be blank`.
-- Confirmed that the method therefore requires one or more specific business members or a specific nested order structure; exact names remain unknown.
-- Confirmed that this marker failure branch preserved the submitted `probe` property and added `Status` and `Message` in `CoResult`.
-- Refined the public processing sequence to:
+- Confirmed public input processing sequence:
 
 ```text
 Base64 decode
@@ -98,9 +84,21 @@ Base64 decode
 → Customer Order and line processing
 ```
 
-- Confirmed again that `MessageCode = 0` does not establish business success; parse `CoResult` and evaluate `Status`.
-- Confirmed `CoResult` failure records do not always contain `ErrrorMessage`.
-- Added a fourth read-only no-order verification gate before any further contract probe.
+- Confirmed `MessageCode = 0` does not establish business success; parse `CoResult` and evaluate `Status`.
+- Confirmed `CoResult` is a JSON-array string and failure records may or may not contain `ErrrorMessage`.
+- Completed four controlled probes:
+
+```text
+Probe 1 : raw {                         → invalid Base64
+Probe 2 : ew==                          → decoded { → JObject parser failure
+Probe 3 : e30=                          → decoded {} → blank order input
+Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
+```
+
+- Confirmed an arbitrary non-empty property does not satisfy the required order-input contract.
+- Completed four post-probe read-only `dbo.co_mst` checks; every check returned zero rows with no SQL error.
+- Stopped guessing business-schema property names.
+- Pivoted to read-only discovery of standard form/event/script metadata that calls `SLCos.CreateCoAndLines`.
 
 ### Current SMK069 Status
 
@@ -116,18 +114,12 @@ Base64 decode
 [CONFIRMED] CoResult = input/output + message
 [CONFIRMED] implementation owner = Customer.SLCos
 [CONFIRMED] assembly Customer = Binary Only
-[COMPLETED] raw malformed runtime probe
+[COMPLETED] four controlled malformed/non-business probes
 [CONFIRMED] input transport = Base64
-[COMPLETED] first no-order verification = zero rows
-[COMPLETED] malformed decoded JSON probe
-[CONFIRMED] decoded payload must be JSON object / JObject
-[COMPLETED] second no-order verification = zero rows
-[COMPLETED] empty JSON object probe
-[CONFIRMED] non-blank expected order structure is required
-[COMPLETED] third no-order verification = zero rows
-[COMPLETED] non-business marker probe
-[CONFIRMED] arbitrary non-empty property does not satisfy order-input contract
-[NEXT] fourth read-only no-order verification
+[CONFIRMED] decoded payload = JSON object / JObject
+[CONFIRMED] specific order structure is required
+[COMPLETED] four no-order checks = zero rows
+[NEXT] discover standard metadata call sites for CreateCoAndLines
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled receive API method
@@ -137,9 +129,9 @@ Base64 decode
 
 ### Planned
 
-- Repeat the read-only recent-order check after the non-business marker probe.
-- Do not guess a business-schema member until the no-order gate is closed and the next discovery path is selected.
-- Determine exact JSON property names, required header/line fields, `co_num` behavior, and success `CoResult` shape.
+- Discover metadata collections related to form events and event handlers.
+- Locate standard tenant call sites for `SLCos.CreateCoAndLines` without editing metadata.
+- Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
 ## [0.1.0] — 2026-07-23
