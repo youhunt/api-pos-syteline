@@ -23,6 +23,7 @@ implementation/19-controlled-sp-direct-order-processing.md
 tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
 tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
 tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
+tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
 ```
 
 ### Changed
@@ -84,7 +85,9 @@ RowPointer              : GUID, read-only
 - Confirmed `EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'` completed successfully with zero rows.
 - Attempted `EventActionRevisions.ExpandedParameters LIKE '%CreateCoAndLines%'`; the tenant returned `MessageCode 450` and `IllegalFilterException` with `Items = null`.
 - Classified the `ExpandedParameters` attempt as a rejected filter, not a zero-row result.
-- Selected `EventHandlerRevisions` IDOInfo discovery as the next read-only step.
+- Confirmed `EventHandlerRevisions` publishes handler context and child `EventActionRevisions`/`EventActions`, but no direct call-site text property comparable to `MethodToCall` or `Parameters`.
+- Concluded that a direct `CreateCoAndLines` filter on `EventHandlerRevisions` is not supported by the published property contract.
+- Selected tenant `Script` metadata collection discovery as the next read-only path.
 
 ### Current SMK069 Status
 
@@ -100,9 +103,11 @@ RowPointer              : GUID, read-only
 [CONFIRMED] EventActionRevisions property metadata
 [COMPLETED] EventActionRevisions.Parameters search = zero rows
 [FAILED] EventActionRevisions.ExpandedParameters filter = IllegalFilterException
+[CONFIRMED] EventHandlerRevisions property metadata
+[NOT AVAILABLE] direct handler-revision text search
 [RESUMED] CreateCoAndLines metadata discovery
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] read EventHandlerRevisions property metadata
+[NEXT] discover tenant metadata collections containing Script
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -112,9 +117,9 @@ RowPointer              : GUID, read-only
 
 ### Planned
 
-- Read `EventHandlerRevisions` IDOInfo property metadata.
-- Filter handler revisions only after tenant-published property names are confirmed.
-- Search form metadata or scripts only as later separate steps when required by tenant evidence.
+- Discover tenant metadata collections whose names contain `Script`.
+- Inspect the selected script metadata collection property contract before loading or filtering rows.
+- Search form metadata only as a later separate path when required by tenant evidence.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Keep the controlled stored-procedure design as a deferred fallback; do not execute direct inserts while metadata discovery is active.
 
