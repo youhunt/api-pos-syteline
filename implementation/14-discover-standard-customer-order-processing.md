@@ -4,16 +4,17 @@
 
 ```text
 Customer validation              : FULLY COMPLETED
-Process/Reprocess design         : STARTED — DISCOVERY ONLY
-Standard Customer Order IDO      : CONFIRMED — SL.SLCos
-Standard Customer Order line IDO : CONFIRMED — SL.SLCoitems
-SL.SLCos method list             : REVIEWED
-CreateCoAndLines parameters      : NOT YET REVIEWED
-Standard header creation process : NOT YET CONFIRMED
-Standard line creation process   : NOT YET CONFIRMED
-Customer Order creation          : NOT STARTED
-Form Process button              : NOT STARTED
-Controlled API receive method    : NOT STARTED
+Process/Reprocess design          : STARTED — DISCOVERY ONLY
+Standard Customer Order IDO       : CONFIRMED — SL.SLCos
+Standard Customer Order line IDO  : CONFIRMED — SL.SLCoitems
+SL.SLCos method list              : REVIEWED
+CreateCoAndLines method attributes: PARTIALLY CONFIRMED
+CreateCoAndLines parameters       : NOT YET REVIEWED
+Standard header creation process  : NOT YET CONFIRMED
+Standard line creation process    : NOT YET CONFIRMED
+Customer Order creation           : NOT STARTED
+Form Process button               : NOT STARTED
+Controlled API receive method     : NOT STARTED
 ```
 
 ## Objective
@@ -158,15 +159,37 @@ Evidence:
 tests/evidence/2026-07-30-slcoss-header-method-list.md
 ```
 
+## Confirmed `CreateCoAndLines` Method Attributes
+
+Tenant metadata confirms:
+
+```text
+IDO Name      : SLCos
+Method Name   : CreateCoAndLines
+Method Type   : Extension Class - Standard Method
+Transactional : not enabled / false according to the method list
+Stored Proc.  : not applicable; this is not a Stored Procedure method
+```
+
+Important distinction:
+
+```text
+CreateCoAndLines is implemented by the standard SL.SLCos extension class.
+It must not be documented or configured as a Stored Procedure method.
+There is no Stored Procedure name to capture for this method.
+```
+
+The implementation-class source code is not exposed by the IDO Methods screen. The supported public contract is represented by the method name, method type, transactional setting, and generated parameter metadata.
+
 ## Discovery Decision
 
-The tenant clearly provides dedicated Customer Order business methods. However, method names alone do not prove the supported SMK069 creation sequence.
+The tenant clearly provides dedicated Customer Order business methods. However, method names and method type alone do not prove the supported SMK069 creation sequence.
 
 Still unknown:
 
 ```text
 - CreateCoAndLines parameter contract
-- whether CreateCoAndLines accepts a serialized dataset, XML, JSON, or scalar values
+- whether CreateCoAndLines accepts serialized data, XML, JSON, IDO datasets, or scalar values
 - whether it creates both SL.SLCos and SL.SLCoitems records atomically
 - how Customer Order numbering is generated or accepted
 - minimum required header and line values
@@ -178,30 +201,28 @@ Still unknown:
 
 Do not implement the custom Process/Reprocess method until these tenant-specific details are confirmed.
 
-## Current Small Step — Inspect `CreateCoAndLines`
+## Current Small Step — Inspect Only the Parameters
 
-Perform only this discovery step:
+Remain on `SL.SLCos` method `CreateCoAndLines` and perform only this discovery step:
 
-1. remain in **IDO Methods** for `SL.SLCos`;
-2. select method `CreateCoAndLines`;
-3. do not edit, resync, save, or execute it;
-4. capture the full Method Attributes area;
-5. capture all generated parameter rows, including sequence and user data type;
-6. capture any output-property area if populated;
-7. send the screenshot or copy the parameter table.
+1. do not edit, resync, save, or execute the method;
+2. capture all parameter rows;
+3. include parameter name, sequence, and user data type;
+4. include parameter direction if the tenant screen exposes it;
+5. include any output-property area if populated;
+6. send the screenshot or copy the parameter table.
 
 Required evidence:
 
 ```text
-Method Name
-Method Type
-Transactional setting
-Stored Procedure / implementation reference
 Parameter Name
 Sequence
 User Data Type
+Input/output direction, if visible
 Custom Load Method Output Properties, if any
 ```
+
+Do not look for a Stored Procedure field or value; it is not applicable to this Extension Class method.
 
 Do not inspect another method in the same step.
 
