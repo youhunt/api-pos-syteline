@@ -53,7 +53,18 @@ CoNextKeyDelSp
 SumCoSp
 ```
 
-- Selected `CreateCoAndLines` as the next method for parameter inspection because its name explicitly references both Customer Order header and lines.
+- Corrected the `CreateCoAndLines` implementation classification:
+
+```text
+IDO Name      : SLCos
+Method Name   : CreateCoAndLines
+Method Type   : Extension Class - Standard Method
+Transactional : false / not enabled according to tenant metadata
+Stored Proc.  : not applicable
+```
+
+- Removed the incorrect requirement to capture a Stored Procedure name for `CreateCoAndLines`.
+- Limited the next discovery step to its generated parameter rows and output metadata.
 - Kept the supported Customer Order creation sequence unconfirmed until method parameters and behavior are reviewed.
 
 ### Current SMK069 Status
@@ -71,6 +82,7 @@ SumCoSp
 [CONFIRMED] standard Customer Order header IDO = SL.SLCos
 [CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
 [REVIEWED] SL.SLCos method-name list
+[CONFIRMED] CreateCoAndLines is Extension Class - Standard Method, not Stored Procedure
 [NEXT] inspect CreateCoAndLines parameter contract
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
@@ -80,7 +92,7 @@ SumCoSp
 
 ### Planned
 
-- Inspect `CreateCoAndLines` Method Attributes and complete parameter list without modifying or executing it.
+- Inspect only the `CreateCoAndLines` generated parameters: name, sequence, user data type, direction if visible, and output properties if populated.
 - Determine whether `CreateCoAndLines` is a supported combined header-and-line creation boundary.
 - Inspect `NewCustomerOrderValidSp` only after `CreateCoAndLines` has been evaluated.
 - Inspect `SL.SLCoitems` methods separately after header-method review.
