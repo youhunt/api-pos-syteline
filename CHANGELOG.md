@@ -37,6 +37,7 @@ tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
 tests/evidence/2026-07-30-event-handler-metadata-collections.md
 tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
 tests/evidence/2026-07-30-eventhandlers-methodtocall-createcoandlines-no-match.md
+tests/evidence/2026-07-30-event-action-metadata-collections.md
 ```
 
 ### Changed
@@ -114,30 +115,21 @@ QueuedEventHandlers
 ```
 
 - Confirmed all six are published from `MGCore` with `AccessAs = Core`.
-- Confirmed `EventHandlers` publishes call-site-relevant properties:
-
-```text
-EventName
-Sequence
-MethodToCall
-IDOCollections
-AppliesToObjects
-EventActions : CONTAINS
-InitialAction
-InitialActionSequence
-Description
-Purpose
-AccessAs
-Active
-Synchronous
-Transactional
-TriggeringProperty
-```
-
+- Confirmed `EventHandlers` publishes call-site-relevant properties including `MethodToCall` and child `EventActions`.
 - Completed the read-only `EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'` search.
 - Confirmed the request succeeded but returned zero rows, so no parent handler stores the target directly in `MethodToCall`.
-- Preserved child event actions, event-handler revisions, form metadata, and scripts as separate later discovery paths.
-- Selected read-only discovery of the actual event-action collection name as the next step; the `CONTAINS` property name is not assumed to be a loadable IDO name.
+- Confirmed tenant event-action metadata collections:
+
+```text
+EventAction_GenericParms
+EventActionRevisions
+EventActions
+EventActionStates
+EventActionVariableAccess
+```
+
+- Selected `EventActions` as the primary child-action metadata candidate based on the tenant description `Event Actions`.
+- Kept generic parameters, revisions, state/status, and variable-access collections as separate later paths whose properties remain uninspected.
 
 ### Current SMK069 Status
 
@@ -161,7 +153,8 @@ TriggeringProperty
 [CONFIRMED] candidate event metadata IDOs
 [CONFIRMED] EventHandlers property metadata
 [COMPLETED] parent MethodToCall search = zero rows
-[NEXT] discover actual event-action metadata collection name
+[CONFIRMED] event-action metadata collections
+[NEXT] read EventActions property metadata
 [PENDING] locate exact standard CreateCoAndLines call site
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
@@ -172,9 +165,9 @@ TriggeringProperty
 
 ### Planned
 
-- Discover tenant metadata collections whose names contain `EventAction`.
-- Inspect the confirmed event-action collection property metadata in a later separate step.
+- Read `EventActions` IDOInfo property metadata.
 - Locate standard tenant call sites for `SLCos.CreateCoAndLines` without editing metadata.
+- Inspect revision, generic-parameter, form, or script metadata only as later separate steps when tenant evidence requires them.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
