@@ -12,9 +12,9 @@ All notable changes to this repository will be documented in this file.
 - Completed `ue_SMK069APISalesErrorProcessing` base form and Preview documentation.
 - `dbo.SMK069ValidateCustomerSp` and `ue_SMK069ValidateCustomerSp` implementation documentation.
 - Evidence for invalid-customer direct SQL and Mongoose IDO REST tests.
-- Evidence file `tests/evidence/2026-07-30-smk069-valid-customer-ido-rest-response.md` for the successful valid-customer API response.
-- Evidence file `tests/evidence/2026-07-30-smk069-valid-customer-staging-result.md` confirming the persisted Valid result.
-- `implementation/14-discover-standard-customer-order-processing.md` for tenant-specific standard Customer Order IDO and method discovery.
+- Evidence for valid-customer Mongoose REST response and persisted Valid staging result.
+- `implementation/14-discover-standard-customer-order-processing.md` for tenant-specific standard Customer Order discovery.
+- `tests/evidence/2026-07-30-standard-customer-order-header-ido.md` confirming the standard Customer Order header IDO.
 
 ### Changed
 
@@ -24,45 +24,19 @@ All notable changes to this repository will be documented in this file.
 - Confirmed tenant naming: stored procedure without `ue_`, custom IDO method with automatic `ue_`.
 - Confirmed validation method parameters: `SiteRef`, `CoNum`, and output `Infobar`.
 - Clarified that `cust_num` is read from staging and is not passed as method parameter 2.
-- Completed invalid-customer SQL and IDO REST validation tests.
-- Updated staging test customers to real customer values:
+- Completed invalid-customer SQL and Mongoose REST validation tests.
+- Completed valid-customer Mongoose REST and persisted staging tests.
+- Marked the first mandatory customer validation requirement fully completed.
+- Recorded that `SL.SLCustomers / oCustomers` belongs to the Customers form and is not the Customer Order header IDO.
+- Confirmed the correct standard Customer Orders form primary IDO as:
 
 ```text
-DEFAULT | TEST000001 | C000001 | line 1
-DEFAULT | TEST000001 | C000001 | line 2
-DEFAULT | TEST000002 | C000002 | line 1
+Primary Collection : SL.SLCos
+Collection          : SL.SLCos
+Collection Name     : blank / not assigned
 ```
 
-- Recorded valid-customer Mongoose IDO REST response for `DEFAULT + TEST000002`:
-
-```json
-{
-  "Message": null,
-  "MessageCode": 0,
-  "Parameters": [
-    "DEFAULT",
-    "TEST000002",
-    ""
-  ],
-  "ReturnValue": "0"
-}
-```
-
-- Verified the persisted valid-customer staging result:
-
-```text
-SiteRef        : DEFAULT
-co_num         : TEST000002
-co_line        : 1
-cust_num       : C000002
-process_status : V
-validation_msg : NULL
-```
-
-- Marked the first mandatory customer validation requirement fully completed for both valid and invalid branches.
-- Advanced development to tenant-specific discovery of the standard Customer Order IDO and supported business process before creating custom Process/Reprocess logic.
-- Recorded that the first discovery screenshot showed `SL.SLCustomers` with collection `oCustomers`, which belongs to the standard Customers form and is not the Customer Order header IDO.
-- Kept the standard Customer Order header IDO status as not confirmed; the correct Customer Orders form must still be inspected.
+- Advanced discovery to identifying the standard Customer Order line secondary collection before inspecting business methods.
 
 ### Current SMK069 Status
 
@@ -73,15 +47,12 @@ validation_msg : NULL
 [COMPLETED] process_status display and read-only verification
 [COMPLETED] dbo.SMK069ValidateCustomerSp
 [COMPLETED] ue_SMK069ValidateCustomerSp transactional IDO method
-[COMPLETED] generated parameter review
-[COMPLETED] invalid-customer direct SQL test
-[COMPLETED] invalid-customer Mongoose IDO REST test
-[COMPLETED] valid-customer Mongoose IDO REST response
-[COMPLETED] valid-customer persisted staging result
+[COMPLETED] invalid-customer direct SQL and Mongoose REST tests
+[COMPLETED] valid-customer Mongoose REST and persisted staging tests
 [COMPLETED] mandatory customer validation requirement
-[IN PROGRESS] standard Customer Order IDO/business-process discovery
-[NOT CONFIRMED] standard Customer Order header IDO
-[PENDING] custom Process/reprocess method
+[CONFIRMED] standard Customer Order header IDO = SL.SLCos
+[IN PROGRESS] standard Customer Order line IDO/business-process discovery
+[PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
 [PENDING] final external POS REST API contract
 [PENDING] Customer Order header and line creation
@@ -89,8 +60,8 @@ validation_msg : NULL
 
 ### Planned
 
-- Open the correct standard Customer Orders form in Design Mode and identify its exact primary collection IDO in this tenant.
-- Inspect supported standard Customer Order methods after the tenant IDO is confirmed.
+- Inspect secondary collections on the standard Customer Orders form and confirm the exact line IDO from tenant evidence.
+- Inspect supported standard Customer Order methods after the line IDO is confirmed.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts to standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
 - Create Customer Order header and lines using supported SyteLine business processing.
