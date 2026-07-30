@@ -33,6 +33,7 @@ Lines  : SL.SLCoitems
 - `tests/evidence/2026-07-30-customer-assembly-binary-only.md` confirming that standard assembly `Customer` is published as Binary Only.
 - `implementation/16-controlled-createcoandlines-runtime-probe.md` for the controlled DEV runtime contract probe.
 - `tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md` recording the first `CreateCoAndLines` runtime response and Base64 requirement.
+- `tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md` recording the zero-row read-only `co_mst` verification after the first runtime probe.
 
 ### Changed
 
@@ -122,7 +123,10 @@ Symbol File Name : Customer.pdb
 - Confirmed from the tenant response that `CoAndLineInfoJson` expects Base64-encoded content rather than raw JSON.
 - Confirmed that `MessageCode = 0` does not establish business success; `CoResult` returned `Status = Fail`.
 - Recorded the failure result as a string containing a JSON array with `Status`, `Message`, and the exact key `ErrrorMessage`.
-- Added a separate read-only no-order verification gate before the next Base64 malformed-content probe.
+- Completed the separate read-only `dbo.co_mst` check after the raw malformed probe.
+- Confirmed the verification query executed without SQL error and returned zero rows for the 30-minute window.
+- Confirmed that no unexpected Customer Order was created by the first malformed probe within the checked window.
+- Authorized the next controlled probe using Base64 `ew==`, which decodes to malformed JSON `{`; no valid Customer Order payload is authorized yet.
 
 ### Current SMK069 Status
 
@@ -148,7 +152,8 @@ Symbol File Name : Customer.pdb
 [CONFIRMED] runtime test boundary = DEV, disposable testing allowed
 [COMPLETED] raw malformed CreateCoAndLines probe
 [CONFIRMED] CoAndLineInfoJson transport content must be Base64
-[NEXT] read-only verification that no unexpected Customer Order was created
+[COMPLETED] post-probe no-order verification = zero rows
+[NEXT] invoke Base64 ew== malformed decoded-content probe
 [PENDING] decoded JSON schema discovery
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled service IDO receive method
@@ -158,8 +163,8 @@ Symbol File Name : Customer.pdb
 
 ### Planned
 
-- Perform a read-only Customer Order check around the first runtime-probe timestamp.
-- Only after no-order verification, send Base64 `ew==`, which decodes to malformed JSON `{`, to reach the JSON parser without using real order values.
+- Send only Base64 `ew==`, which decodes to malformed JSON `{`, to move from Base64 decoding into JSON parsing without real order data.
+- Capture the complete tenant response and perform another separate read-only Customer Order check.
 - Determine the exact decoded JSON schema and `CoResult` behavior without guessed valid order properties.
 - Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
 - Design the controlled service IDO receive method shared by CSV and REST API ingestion.
