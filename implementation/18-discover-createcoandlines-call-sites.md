@@ -5,15 +5,16 @@
 ```text
 Environment                         : DEV
 Controlled malformed probes         : COMPLETED
-All four no-order checks            : COMPLETED — ZERO ROWS
-Base64 input requirement            : CONFIRMED
-Decoded payload type                : JSON object / JObject
-Specific order structure required   : CONFIRMED
-Exact business JSON schema          : NOT YET CONFIRMED
-Further property-name guessing      : STOPPED
-Standard call-site discovery        : STARTED — READ-ONLY
-Candidate event metadata IDOs       : CONFIRMED
-EventHandlers property discovery    : NEXT
+All four no-order checks             : COMPLETED — ZERO ROWS
+Base64 input requirement             : CONFIRMED
+Decoded payload type                 : JSON object / JObject
+Specific order structure required    : CONFIRMED
+Exact business JSON schema           : NOT YET CONFIRMED
+Further property-name guessing       : STOPPED
+Standard call-site discovery         : STARTED — READ-ONLY
+Candidate event metadata IDOs        : CONFIRMED
+EventHandlers property discovery     : COMPLETED
+Filtered MethodToCall search         : NEXT
 ```
 
 ## Why the Discovery Path Changes
@@ -51,60 +52,87 @@ Read-only tenant metadata returned the following collections:
 | `IdoEventHandlerAppliesToTasks` | NULL | `MGCore` | `Core` |
 | `QueuedEventHandlers` | Event Queue | `MGCore` | `Core` |
 
-Response status:
-
-```text
-Message        : Success
-MessageCode    : 0
-MoreRowsExists : false
-```
-
 Evidence:
 
 ```text
 tests/evidence/2026-07-30-event-handler-metadata-collections.md
 ```
 
-## Interpretation
+## Completed Step — EventHandlers Property Metadata
 
-The first metadata IDO to inspect is:
+REST v1 IDOInfo confirmed that `EventHandlers` publishes the following call-site-relevant properties:
 
 ```text
-EventHandlers
+EventName
+Sequence
+MethodToCall
+IDOCollections
+AppliesToObjects
+EventActions                 : CONTAINS
+InitialAction
+InitialActionSequence
+Description
+Purpose
+AccessAs
+Active
+Synchronous
+Transactional
+TriggeringProperty
+EditableByWizard
+Obsolete
+Suspend
 ```
 
-`EventHandlerRevisions` is also relevant, but it will not be inspected in the same small step. The other discovered IDOs appear to concern status, applicability, task/object association, or queued execution; their exact property contracts remain uninspected.
+The strongest parent-row property for the first search is:
 
-No handler-content property name is assumed yet.
+```text
+MethodToCall
+```
 
-## Current Small Step — Read EventHandlers Property Metadata
+Context properties to return with each match are:
 
-Use REST v1 IDOInfo:
+```text
+EventName
+Sequence
+Description
+Purpose
+IDOCollections
+AppliesToObjects
+AccessAs
+Active
+InitialAction
+InitialActionSequence
+MethodToCall
+```
+
+`EventActions` is published as `CONTAINS`; its child-property schema has not yet been inspected and must not be guessed.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
+```
+
+## Current Small Step — Filter EventHandlers by MethodToCall
+
+Run this read-only REST v1 request:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventHandlers
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventHandlers/adv?props=EventName,Sequence,Description,Purpose,IDOCollections,AppliesToObjects,AccessAs,Active,InitialAction,InitialActionSequence,MethodToCall&filter=MethodToCall%20LIKE%20%27%25CreateCoAndLines%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete response, especially the published `Properties` list.
+Capture the complete JSON response, including an empty result.
 
-The property list will determine whether `EventHandlers` exposes fields for:
+### Interpretation Rules
 
 ```text
-HandlerName
-EventName
-ActionType
-ActionText
-MethodName
-IDOName
-Script
-Parameters
-Description
-Revision
+- A returned row is evidence only that the parent handler MethodToCall references the target text.
+- Do not infer action parameters from the parent row.
+- Do not inspect EventHandlerRevisions or EventActions in the same step.
+- If zero rows are returned, the next separate path will inspect EventActions metadata or other script/form metadata.
 ```
-
-These names are search objectives only, not assumed tenant property names.
 
 ## Safety Boundary
 
@@ -112,8 +140,8 @@ These names are search objectives only, not assumed tenant property names.
 - Read metadata only.
 - Do not invoke CreateCoAndLines again.
 - Do not guess a Customer Order JSON property.
+- Do not edit form handlers, event actions, scripts, events, or metadata.
 - Do not query EventHandlerRevisions in the same step.
-- Do not edit form handlers, scripts, events, or metadata.
 - Do not create Process/Reprocess logic yet.
 - Do not import CSV or create the controlled receive API method.
 ```
