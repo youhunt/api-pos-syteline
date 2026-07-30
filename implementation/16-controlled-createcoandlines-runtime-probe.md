@@ -3,48 +3,57 @@
 ## Status
 
 ```text
-Environment                         : DEV
-Disposable Customer Order testing  : ALLOWED
-Safety gate                         : PASSED
-Raw-JSON malformed probe            : COMPLETED
-Base64 input requirement            : CONFIRMED
-No-order read-only verification     : COMPLETED — ZERO ROWS
-Base64 malformed-content probe      : AUTHORIZED — NOT YET EXECUTED
-Valid Customer Order probe          : NOT READY
-Decoded JSON schema                 : NOT YET CONFIRMED
-Customer Order creation             : NOT STARTED
+Environment                        : DEV
+Disposable testing                 : ALLOWED
+Raw malformed probe                : COMPLETED
+Base64 requirement                 : CONFIRMED
+First no-order check               : COMPLETED — ZERO ROWS
+Base64 malformed JSON probe        : COMPLETED
+Decoded payload type               : JSON object / JObject
+Second no-order check              : PENDING
+Empty-object probe                 : NOT YET AUTHORIZED
+Valid Customer Order probe         : NOT READY
+Exact JSON schema                  : NOT YET CONFIRMED
+Customer Order creation            : NOT STARTED
 ```
 
-## Confirmed Method Contract
+## Confirmed Method
 
 ```text
-IDO Name       : SLCos
-Method Name    : CreateCoAndLines
-Method Type    : Extension Class - Standard Method
-Implementation : Customer.SLCos in binary-only assembly Customer
-Transactional  : false
+IDO             : SLCos
+Method          : CreateCoAndLines
+Method Type     : Extension Class - Standard Method
+Implementation  : Customer.SLCos
+Assembly        : Customer — Binary Only
+Transactional   : false
 ```
 
-| Sequence | Parameter | Direction |
-| ---: | --- | --- |
-| 1 | `CoAndLineInfoJson` | input-only |
-| 2 | `CoResult` | input/output + message |
-
-## First Runtime Probe — Completed
-
-Submitted values:
+Parameters:
 
 ```text
-CoAndLineInfoJson = {
-CoResult          = blank
+CoAndLineInfoJson : input-only
+CoResult          : input/output + message
 ```
 
-Request:
+## Probe 1 Result
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/SLCos/CreateCoAndLines?parms=%7B,
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
+Raw `{` failed before JSON parsing because the method expects Base64 content.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
+tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
+```
+
+## Probe 2 Result
+
+Submitted:
+
+```text
+CoAndLineInfoJson : ew==
+Decoded content   : {
+CoResult initial  : blank
 ```
 
 Tenant response:
@@ -54,143 +63,44 @@ Tenant response:
   "Message": null,
   "MessageCode": 0,
   "Parameters": [
-    "{",
-    "[{\"ErrrorMessage\":\"The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters. \",\"Status\":\"Fail\",\"Message\":\"Error occurred during customer order/line creation\"}]"
+    "ew==",
+    "[{\"ErrrorMessage\":\"Error reading JObject from JsonReader. Path '', line 1, position 1.\",\"Status\":\"Fail\",\"Message\":\"Error occurred during customer order/line creation\"}]"
   ],
   "ReturnValue": null
 }
 ```
 
-Evidence:
+Confirmed contract:
 
 ```text
-tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
+CoAndLineInfoJson
+1. Base64 decode
+2. parse decoded content as a JSON object / JObject
+3. validate Customer Order schema and process
 ```
 
-## Confirmed Discovery
-
-```text
-CoAndLineInfoJson = Base64-encoded content
-```
-
-`MessageCode = 0` confirms only that the Mongoose method invocation reached the method layer. It does not establish Customer Order creation success.
-
-The business result is carried in `CoResult`, which was returned as a string containing a JSON array:
-
-```json
-[
-  {
-    "ErrrorMessage": "...",
-    "Status": "Fail",
-    "Message": "Error occurred during customer order/line creation"
-  }
-]
-```
-
-The exact tenant key is `ErrrorMessage` with three consecutive `r` characters. Do not silently normalize this key before additional result branches are verified.
-
-## No-Order Verification — Completed
-
-The following read-only query was executed after the first probe:
-
-```sql
-SELECT TOP (20)
-       co_num,
-       cust_num,
-       order_date,
-       CreateDate,
-       CreatedBy,
-       RecordDate,
-       UpdatedBy
-FROM dbo.co_mst
-WHERE RecordDate >= DATEADD(MINUTE, -30, GETDATE())
-   OR CreateDate >= DATEADD(MINUTE, -30, GETDATE())
-ORDER BY COALESCE(RecordDate, CreateDate) DESC;
-```
-
-Tenant result:
-
-```text
-SQL error                         : none
-Rows returned                    : 0
-Unexpected recent Customer Order : not found
-```
-
-Therefore the deliberately malformed raw-input probe did not create a Customer Order within the 30-minute verification window.
+`MessageCode = 0` does not mean business success. The business result remains in `CoResult`, which is a string containing a JSON array. The exact failure key is `ErrrorMessage`.
 
 Evidence:
 
 ```text
-tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
+tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
 ```
 
-## Current Small Step — Base64 Malformed JSON Probe
-
-The next probe is now authorized because:
+## Remaining Unknowns
 
 ```text
-- environment is DEV;
-- disposable testing is allowed;
-- the first malformed probe failed at Base64 decoding;
-- the post-probe Customer Order check returned zero rows.
+- exact JSON property names and nesting
+- required header fields
+- required line fields
+- date and numeric formats
+- co_num generation behavior
+- success CoResult shape
+- atomicity of header and line creation
 ```
 
-Use only the Base64 representation of malformed JSON `{`:
+## Current Small Step
 
-```text
-Raw decoded content : {
-Base64 value        : ew==
-CoResult initial    : blank
-```
+Repeat the read-only `dbo.co_mst` recent-order query used after probe 1. Send the result, including an empty result. Do not invoke `CreateCoAndLines` again during this step.
 
-Postman request:
-
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/method/SLCos/CreateCoAndLines
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
-```
-
-Postman Params:
-
-```text
-Key   : parms
-Value : ew==,
-```
-
-Expected encoded URL fragment:
-
-```text
-?parms=ew%3D%3D,
-```
-
-Purpose:
-
-```text
-- pass the Base64 decoder;
-- reach the decoded-content JSON parser or validation layer;
-- capture the next tenant error without using real order data.
-```
-
-Capture the complete response:
-
-```text
-HTTP status
-Message
-MessageCode
-ReturnValue
-Parameters
-```
-
-## Safety Boundary
-
-```text
-- Use exactly ew== as parameter 1.
-- Keep parameter 2 blank by retaining the trailing comma.
-- Do not use valid Customer Order values.
-- Do not guess JSON property names.
-- Do not retry with another payload in the same step.
-- Do not create Process/Reprocess logic.
-- Do not import CSV or create the controlled receive API method.
-- After the response, perform another separate read-only Customer Order check before advancing.
-```
+Only after the second no-order check succeeds may a future probe submit Base64 `e30=`, which decodes to the empty JSON object `{}`. That probe is not authorized yet.
