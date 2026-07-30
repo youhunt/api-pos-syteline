@@ -15,7 +15,9 @@ Metadata call-site discovery                      : RESUMED BY USER
 Current EventActions fields                       : EXHAUSTED — ZERO ROWS
 EventActionRevisions.Parameters search            : COMPLETED — ZERO ROWS
 EventActionRevisions.ExpandedParameters filter    : FAILED — ILLEGAL FILTER
-EventHandlerRevisions property discovery          : NEXT
+EventHandlerRevisions property discovery          : COMPLETED
+Direct handler-revision text search               : NOT AVAILABLE
+Script metadata collection discovery              : NEXT
 ```
 
 ## Confirmed Runtime Findings
@@ -111,14 +113,6 @@ tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-ma
 
 ## Failed Step — EventActionRevisions.ExpandedParameters Filter
 
-Request:
-
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/EventActionRevisions/adv?props=ActionType,Description,EventHandlerRowPointer,Sequence,Parameters,ExpandedParameters,RowPointer&filter=ExpandedParameters%20LIKE%20%27%25CreateCoAndLines%25%27
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
-```
-
 Tenant result:
 
 ```text
@@ -144,17 +138,64 @@ Evidence:
 tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
 ```
 
-## Current Small Step — Read EventHandlerRevisions Property Metadata
+## Confirmed EventHandlerRevisions Properties
 
-Before filtering handler revisions, inspect the tenant-published property contract:
+Tenant IDOInfo confirmed these relevant properties:
+
+```text
+EventActionRevisions          : CONTAINS
+EventActions                  : CONTAINS
+AccessAs                      : String(50)
+AppliesToInitiators           : String(255)
+AppliesToObjects              : String(255)
+AppliesToSites                : String(255)
+Description                   : String(40)
+EventInitialStateRowPointer   : GUID, read-only
+InitialEventActionRowPointer  : GUID, read-only
+EventName                     : String(50), read-only
+EventRevision                 : Long Integer, read-only
+EventRevisionRowPointer       : GUID, read-only
+InitialStateName              : String(50), read-only
+InitialActionSequence         : Short Integer, read-only
+Sequence                      : Short Integer
+IgnoreFailure                 : Byte
+InWorkflow                    : Byte
+Suspend                       : Byte
+Synchronous                   : Byte
+Transactional                 : Byte
+RowPointer                    : GUID, read-only
+```
+
+`EventHandlerRevisions` does not expose a direct text property comparable to `MethodToCall` or `Parameters`. Its call-bearing content is represented through the child collections `EventActionRevisions` and `EventActions`, whose relevant paths have already been tested.
+
+Therefore, no direct `CreateCoAndLines` filter is authorized on `EventHandlerRevisions` itself.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
+```
+
+## Current Small Step — Discover Script Metadata Collections
+
+Use tenant collection metadata rather than guessing script IDO names:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/EventHandlerRevisions
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25Script%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete JSON response, especially `Properties`.
+Capture the complete JSON response, including an empty result.
+
+## Interpretation Rules
+
+```text
+- A returned collection is only a candidate metadata source.
+- Do not infer its property contract from its name.
+- Do not load script rows until the actual candidate collection is selected.
+- Do not search form metadata in the same step.
+```
 
 ## Safety Boundary
 
@@ -163,6 +204,5 @@ Capture the complete JSON response, especially `Properties`.
 - Do not invoke CreateCoAndLines.
 - Do not guess Customer Order JSON properties.
 - Do not edit revisions, actions, handlers, scripts, events, or metadata.
-- Do not filter EventHandlerRevisions until its actual property contract is confirmed.
 - Do not implement Process/Reprocess or direct table inserts yet.
 ```
