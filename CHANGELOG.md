@@ -23,7 +23,7 @@ implementation/17-createcoandlines-nonbusiness-marker-probe.md
 implementation/18-discover-createcoandlines-call-sites.md
 ```
 
-- Runtime evidence:
+- Runtime and metadata evidence:
 
 ```text
 tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
@@ -35,6 +35,7 @@ tests/evidence/2026-07-30-createcoandlines-empty-object-probe-no-order-created.m
 tests/evidence/2026-07-30-createcoandlines-nonbusiness-marker-blank-order-failure.md
 tests/evidence/2026-07-30-createcoandlines-marker-probe-no-order-created.md
 tests/evidence/2026-07-30-event-handler-metadata-collections.md
+tests/evidence/2026-07-30-eventhandlers-idoinfo-properties.md
 ```
 
 ### Changed
@@ -112,7 +113,28 @@ QueuedEventHandlers
 ```
 
 - Confirmed all six are published from `MGCore` with `AccessAs = Core`.
-- Selected `EventHandlers` as the next IDO for property-metadata inspection; `EventHandlerRevisions` remains a later separate step.
+- Confirmed `EventHandlers` publishes call-site-relevant properties:
+
+```text
+EventName
+Sequence
+MethodToCall
+IDOCollections
+AppliesToObjects
+EventActions : CONTAINS
+InitialAction
+InitialActionSequence
+Description
+Purpose
+AccessAs
+Active
+Synchronous
+Transactional
+TriggeringProperty
+```
+
+- Selected `MethodToCall` as the first parent-handler search field for `CreateCoAndLines`.
+- Kept `EventActions` and `EventHandlerRevisions` as later separate discovery steps; their content/property contracts are not guessed.
 
 ### Current SMK069 Status
 
@@ -134,7 +156,8 @@ QueuedEventHandlers
 [CONFIRMED] specific order structure is required
 [COMPLETED] four no-order checks = zero rows
 [CONFIRMED] candidate event metadata IDOs
-[NEXT] read EventHandlers property metadata
+[CONFIRMED] EventHandlers property metadata
+[NEXT] filter EventHandlers.MethodToCall for CreateCoAndLines
 [PENDING] locate exact standard CreateCoAndLines call site
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
@@ -145,8 +168,9 @@ QueuedEventHandlers
 
 ### Planned
 
-- Read `EventHandlers` IDOInfo property metadata.
+- Filter `EventHandlers.MethodToCall` for `CreateCoAndLines` using a read-only REST v1 load.
 - Locate standard tenant call sites for `SLCos.CreateCoAndLines` without editing metadata.
+- Inspect `EventActions` or another metadata source only in a later separate step when parent-handler results require it.
 - Extract the exact JSON-building and Base64-encoding contract from tenant evidence.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
