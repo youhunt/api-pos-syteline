@@ -19,7 +19,9 @@ EventHandlerRevisions property discovery          : COMPLETED
 Direct handler-revision text search               : NOT AVAILABLE
 Script-name collection discovery                  : COMPLETED — NO USEFUL APP SCRIPT CANDIDATE
 Script-description collection discovery           : COMPLETED — NO USEFUL APP SCRIPT CANDIDATE
-Form metadata collection discovery                : NEXT
+Form metadata collection discovery                : COMPLETED
+Selected form metadata candidate                  : FormsAndObjects
+FormsAndObjects property discovery                : NEXT
 ```
 
 ## Confirmed Runtime Findings
@@ -128,6 +130,66 @@ tests/evidence/2026-07-30-script-named-metadata-collections.md
 tests/evidence/2026-07-30-script-description-metadata-collections.md
 ```
 
+## Form Metadata Discovery
+
+The tenant-wide search:
+
+```text
+CollectionName LIKE '%Form%'
+```
+
+completed successfully with:
+
+```text
+Message        : Success
+MessageCode    : 0
+MoreRowsExists : false
+```
+
+The broad substring produced many unrelated results because `Form` also occurs inside:
+
+```text
+Performance
+Formula
+Information
+Format
+ProForma
+```
+
+The relevant tenant-published candidates are:
+
+| CollectionName | CollectionDesc | ServerName | AccessAs |
+| --- | --- | --- | --- |
+| `FormsAndObjects` | Wrapper for FormControl and FormSync | `MGCore` | `Core` |
+| `FormAliases` | NULL | `MGCore` | `Core` |
+| `AppForms` | IDO for Widget Forms | `MGCore` | `Core` |
+| `DocTypeFormProperties` | NULL | `MGCore` | `Core` |
+| `WSFormExtensionHints` | NULL | `MGCore` | `Core` |
+
+Selected candidate:
+
+```text
+FormsAndObjects
+```
+
+Selection reason:
+
+```text
+CollectionDesc = Wrapper for FormControl and FormSync
+ServerName     = MGCore
+AccessAs       = Core
+```
+
+This is the strongest tenant-confirmed candidate for classic form/object metadata. `AppForms` is explicitly widget-oriented, while `FormAliases` appears limited to aliases.
+
+No claim is made yet that `FormsAndObjects` contains script text or a `CreateCoAndLines` reference. Its actual property contract must be read first.
+
+Evidence:
+
+```text
+tests/evidence/2026-07-30-form-named-metadata-collections.md
+```
+
 ## Decision History
 
 ```text
@@ -137,17 +199,17 @@ tests/evidence/2026-07-30-script-description-metadata-collections.md
 
 The stored-procedure option remains documented in `implementation/19-controlled-sp-direct-order-processing.md`, but it is deferred and is not the active path.
 
-## Current Small Step — Discover Form Metadata Collections
+## Current Small Step — Read FormsAndObjects Property Metadata
 
-Search actual tenant-published collection names rather than guessing a form metadata IDO:
+Read the tenant-published property contract before loading or filtering form rows:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoCollections/adv?props=CollectionName,CaptionOrName,CollectionDesc,ServerName,AccessAs&filter=CollectionName%20LIKE%20%27%25Form%25%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/idoinfo/FormsAndObjects
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Capture the complete JSON response, including `MoreRowsExists`. If many rows return, do not open any candidate collection yet; the next step will select one tenant-confirmed form metadata candidate.
+Capture the complete JSON response, especially `Properties`.
 
 ## Safety Boundary
 
@@ -156,6 +218,6 @@ Capture the complete JSON response, including `MoreRowsExists`. If many rows ret
 - Do not invoke CreateCoAndLines.
 - Do not guess Customer Order JSON properties.
 - Do not edit revisions, actions, handlers, scripts, forms, events, or metadata.
-- Do not load form rows in the same step.
+- Do not load FormsAndObjects rows until its property contract is confirmed.
 - Do not implement Process/Reprocess or direct table inserts yet.
 ```
