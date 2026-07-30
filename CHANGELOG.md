@@ -23,6 +23,7 @@ tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
 tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
 tests/evidence/2026-07-30-createcoandlines-base64-malformed-probe-no-order-created.md
+tests/evidence/2026-07-30-createcoandlines-empty-object-blank-order-failure.md
 ```
 
 ### Changed
@@ -71,19 +72,27 @@ Assembly        : Customer — Binary Only
 - Completed first post-probe read-only check; no Customer Order was found in the checked 30-minute window.
 - Completed Base64 `ew==` probe, which decodes to malformed `{`.
 - Confirmed the decoded content is parsed as a JSON object / Newtonsoft `JObject`.
-- Confirmed the public processing sequence is currently:
+- Completed the second read-only recent-order verification after the `ew==` probe; it returned zero rows with no SQL error.
+- Completed the empty-object probe using Base64 `e30=`, which decodes to `{}`.
+- Confirmed the empty object passed Base64 decoding and JObject parsing but failed non-blank order-input validation with:
+
+```text
+The input for order creation cannot be blank
+```
+
+- Refined the public processing sequence to:
 
 ```text
 Base64 decode
 → JSON object / JObject parse
-→ schema validation and Customer Order processing
+→ non-blank order-input validation
+→ Customer Order schema validation
+→ Customer Order and line processing
 ```
 
 - Confirmed again that `MessageCode = 0` does not establish business success; `CoResult` returned `Status = Fail`.
-- Recorded the exact returned failure key `ErrrorMessage`.
-- Completed the second read-only recent-order verification after the `ew==` probe.
-- Confirmed the second verification returned zero rows with no SQL error, so no unexpected Customer Order was found in the checked 30-minute window.
-- Authorized the next controlled probe using Base64 `e30=`, which decodes to empty JSON object `{}`; no valid order values or guessed schema properties are authorized.
+- Confirmed `CoResult` failure records do not always contain `ErrrorMessage`; the empty-object branch returned only `Status` and `Message`.
+- Added a third read-only no-order verification gate before any non-empty contract probe.
 
 ### Current SMK069 Status
 
@@ -105,7 +114,9 @@ Base64 decode
 [COMPLETED] malformed decoded JSON probe
 [CONFIRMED] decoded payload must be JSON object / JObject
 [COMPLETED] second no-order verification = zero rows
-[NEXT] empty JSON object probe using Base64 e30=
+[COMPLETED] empty JSON object probe
+[CONFIRMED] non-blank order input is required
+[NEXT] third read-only no-order verification
 [PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
 [PENDING] controlled receive API method
@@ -115,8 +126,8 @@ Base64 decode
 
 ### Planned
 
-- Submit only Base64 `e30=`, which decodes to `{}`, to reach schema validation without customer, item, site, order, date, quantity, or price values.
-- Capture the complete tenant response and perform another separate read-only Customer Order check.
+- Repeat the read-only recent-order check after the empty-object probe.
+- Only after a zero-row result, design one controlled non-empty marker-object probe without customer, item, site, order, date, quantity, or price values.
 - Determine exact JSON property names, required header/line fields, `co_num` behavior, and success `CoResult` shape.
 - Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
