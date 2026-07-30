@@ -23,7 +23,9 @@ Selected form metadata candidate                  : FormsAndObjects
 FormsAndObjects property discovery                : COMPLETED
 Direct FormsAndObjects text search                : NOT AUTHORIZED
 FormsAndObjects IDOInfo Methods section           : NOT EXPOSED
-IdoMethods row discovery for FormsAndObjects      : NEXT
+IdoMethods rows for FormsAndObjects               : COMPLETED — 37 METHODS
+Pseudo-code method candidates                     : CONFIRMED
+Pseudo-code parameter metadata                    : NEXT
 ```
 
 ## Confirmed Runtime Contract
@@ -165,19 +167,47 @@ The response exposed `Properties` but no `Methods` section. Repeating this endpo
 
 This does **not** prove that `FormsAndObjects` has no methods. It means only that the tenant's IDOInfo response does not expose them in a `Methods` array.
 
-The already confirmed `IdoMethods` metadata contract publishes:
+## FormsAndObjects Method Metadata
+
+The tenant successfully loaded `IdoMethods` rows for `FormsAndObjects`:
 
 ```text
-CollectionName
-MethodName
-BaseCollectionName
-MethodDesc
-MethodType
-TxnFlag
-StoredProcName
-DerOutriggerProfile
-DerSpMethodsAllowed
+Message        : Success
+MessageCode    : 0
+MoreRowsExists : false
+Rows returned  : 37
+MethodType 2   : 17
+MethodType 3   : 20
+TxnFlag 0      : 37
+StoredProcName : NULL for all rows
 ```
+
+The most relevant discovery methods are:
+
+| Method | Tenant description |
+| --- | --- |
+| `FormControlListCustomLoad` | Load drop down lists of forms or objects |
+| `FormReferencedObjects` | Load referenced objects based on form |
+| `TreeLoadObjects` | Load individual objects for Utilities tree |
+| `UtilitiesListNames` | Get names of objects for drop down lists on Utilities tab |
+| `UtilitiesLoadObjects` | Load objects for utilities form |
+| `UtilitiesLoadObjects2` | Load objects for utilities form |
+| `UtilitiesGeneratePseudoCode` | Generate pseudo code for object(s) and store output in SQL temp table |
+| `UtilitiesGeneratePseudoCode2` | Generate pseudo code for object(s) and store output in SQL temp table |
+| `GetUtilitiesOutput` | No tenant description published |
+
+The method names and descriptions suggest this possible workflow:
+
+```text
+UtilitiesListNames
+→ UtilitiesLoadObjects / UtilitiesLoadObjects2
+→ UtilitiesGeneratePseudoCode / UtilitiesGeneratePseudoCode2
+→ GetUtilitiesOutput
+```
+
+This is an inference only. No invocation sequence is confirmed.
+
+The pseudo-code generators are the strongest current candidates for obtaining readable object/form representations that may expose a `CreateCoAndLines` reference. Their parameter contracts must be inspected before either method is selected or invoked.
 
 Evidence:
 
@@ -186,6 +216,7 @@ tests/evidence/2026-07-30-form-named-metadata-collections.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
 tests/evidence/2026-07-30-formsandobjects-idoinfo-no-methods-section.md
 tests/evidence/2026-07-30-idomethods-idoinfo-properties.md
+tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
 ```
 
 ## Decision History
@@ -199,12 +230,12 @@ The stored-procedure option remains documented in `implementation/19-controlled-
 
 ## Current Small Step
 
-Load only scalar `IdoMethods` metadata rows for `FormsAndObjects`:
+Load parameter metadata for both pseudo-code candidates without invoking them:
 
 ```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethods/adv?props=CollectionName,MethodName,BaseCollectionName,MethodDesc,MethodType,TxnFlag,StoredProcName,DerOutriggerProfile,DerSpMethodsAllowed&filter=CollectionName%20%3D%20%27FormsAndObjects%27
+GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethodParameters/adv?props=CollectionName,MethodName,ParameterName,Sequence,DataType,InputFlag,OutputFlag,MessageFlag&filter=CollectionName%20%3D%20%27FormsAndObjects%27%20AND%20MethodName%20LIKE%20%27UtilitiesGeneratePseudoCode%25%27
 Authorization: {{mongooseSecurityToken}}
 Accept: application/json
 ```
 
-Do not invoke a `FormsAndObjects` method, load a form object, invoke `CreateCoAndLines`, guess Customer Order JSON properties, edit metadata, or execute SQL.
+Do not invoke a `FormsAndObjects` method, generate pseudo code, load a form object, invoke `CreateCoAndLines`, guess Customer Order JSON properties, edit metadata, or execute SQL.
