@@ -6,13 +6,7 @@ All notable changes to this repository will be documented in this file.
 
 ### Added
 
-- `SMK_RSC_POS_PaymentMap_mst`, `SMK_RSC_POS_TaxMap_mst`, `SMK_RSC_POS_RevenueMap_mst`, `SMK_RSC_POS_PostingPreview_mst`, `SMK_RSC_POS_Inbound_mst`, and `SMK_RSC_POS_RawLine_mst` designs.
-- Minimum-data-profile, IDO architecture, manual CSV import, and layered testing documentation.
-- `SMK069_temp_sales_mst` implementation documentation and six process-control fields.
-- Completed `ue_SMK069APISalesErrorProcessing` base form and Preview documentation.
-- `dbo.SMK069ValidateCustomerSp` and `ue_SMK069ValidateCustomerSp` implementation documentation.
-- Evidence for invalid-customer and valid-customer SQL/Mongoose REST tests.
-- `implementation/14-discover-standard-customer-order-processing.md` for tenant-specific Customer Order discovery.
+- Staging-table, IDO, form, validation, Customer Order discovery, and controlled runtime-probe documentation.
 - Evidence confirming standard Customer Order IDOs:
 
 ```text
@@ -20,47 +14,27 @@ Header : SL.SLCos
 Lines  : SL.SLCoitems
 ```
 
-- `tests/evidence/2026-07-30-slcoss-header-method-list.md` recording relevant standard header-method candidates.
-- `tests/evidence/2026-07-30-create-co-and-lines-parameters.md` recording standard extension-method parameter names.
-- `implementation/15-idomethodparameters-metadata-fallback.md` documenting metadata-route, collection, and assembly discovery.
-- `tests/evidence/2026-07-30-idomethodparameters-info-endpoint-500.md` recording the generic HTTP 500 response.
-- `tests/evidence/2026-07-30-idomethodparameters-idoinfo-properties.md` confirming published parameter metadata properties.
-- `tests/evidence/2026-07-30-create-co-and-lines-parameter-directions.md` confirming `InputFlag`, `OutputFlag`, and `MessageFlag`.
-- `tests/evidence/2026-07-30-idomethods-idoinfo-properties.md` confirming published method-level metadata properties.
-- `tests/evidence/2026-07-30-create-co-and-lines-method-row.md` recording effective method contexts for `SLCos`, `SLCos_FT`, and `ZIT_SLCos`.
-- `tests/evidence/2026-07-30-idocollections-idoinfo-properties.md` confirming collection-level extension and inheritance metadata properties.
-- `tests/evidence/2026-07-30-idocollections-slcoss-hierarchy.md` confirming the collection hierarchy and `Customer.SLCos` extension-owner metadata.
-- `tests/evidence/2026-07-30-customer-assembly-binary-only.md` confirming that standard assembly `Customer` is published as Binary Only.
-- `implementation/16-controlled-createcoandlines-runtime-probe.md` for the controlled DEV runtime contract probe.
-- `tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md` recording the first `CreateCoAndLines` runtime response and Base64 requirement.
-- `tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md` recording the zero-row read-only `co_mst` verification after the first runtime probe.
+- Evidence confirming `CreateCoAndLines` metadata, parameters, parameter directions, collection hierarchy, extension owner, and binary-only assembly.
+- `implementation/16-controlled-createcoandlines-runtime-probe.md` for controlled DEV contract discovery.
+- Runtime evidence:
+
+```text
+tests/evidence/2026-07-30-createcoandlines-raw-json-base64-failure.md
+tests/evidence/2026-07-30-createcoandlines-raw-probe-no-order-created.md
+tests/evidence/2026-07-30-createcoandlines-base64-malformed-json-parser-failure.md
+```
 
 ### Changed
 
-- Header total calculation confirmed as `SUM(unit_price * qty_ordered)`.
-- `cost` removed from staging; cost is obtained from `item_mst` during Customer Order processing.
-- One standard `SiteRef` is used; no duplicate `site_ref` column.
-- Confirmed tenant naming: stored procedure without `ue_`, custom IDO method with automatic `ue_`.
-- Completed customer validation for valid and invalid branches through SQL and Mongoose REST evidence.
+- Header total confirmed as `SUM(unit_price * qty_ordered)`.
+- Cost remains outside staging and is obtained from `item_mst` during Customer Order processing.
+- Standard `SiteRef` is used; no duplicate `site_ref` column.
+- Customer validation is completed for valid and invalid branches.
 - Confirmed standard Customer Order entity IDOs:
 
 ```text
 Header : SL.SLCos
 Lines  : SL.SLCoitems
-```
-
-- Reviewed the `SL.SLCos` method-name list and identified creation-related candidates:
-
-```text
-CreateCoAndLines
-NewCustomerOrderValidSp
-CreateCoColSp
-CoCustomerValidSp
-CoCustomerValid2Sp
-CoCustSeqValidSp
-VerifyCoCustNumSp
-CoNextKeyDelSp
-SumCoSp
 ```
 
 - Confirmed `CreateCoAndLines` classification:
@@ -69,117 +43,81 @@ SumCoSp
 IDO Name      : SLCos
 Method Name   : CreateCoAndLines
 Method Type   : Extension Class - Standard Method
-Transactional : unchecked / false
+Transactional : false
 Stored Proc.  : not applicable
 ```
 
-- Confirmed parameter direction contract:
+- Confirmed parameter contract:
 
 ```text
-CoAndLineInfoJson : VARIANT, InputFlag=1, OutputFlag=0, MessageFlag=0
-CoResult          : VARIANT, InputFlag=1, OutputFlag=1, MessageFlag=1
+CoAndLineInfoJson : input-only
+CoResult          : input/output + message parameter
 ```
 
-- Confirmed that `CoAndLineInfoJson` is input-only.
-- Confirmed that `CoResult` is input/output and is the framework message parameter.
-- Replaced the failed `/ido/info/IdoMethodParameters` route with successful REST v1 metadata calls.
-- Confirmed that `IdoMethods` exposes method-level metadata but not direct source-code or JSON-schema properties.
-- Completed the filtered `IdoMethods` load for `SLCos / CreateCoAndLines`.
-- Confirmed the actual collection hierarchy:
+- Confirmed collection hierarchy and implementation owner:
 
 ```text
 SLCos
 ├── SLCos_FT extends SLCos
 └── ZIT_SLCos extends SLCos
+
+Extension owner : Customer.SLCos
+Assembly        : Customer — Binary Only
 ```
 
-- Confirmed base extension-owner metadata:
+- Confirmed runtime environment as DEV and disposable testing as allowed.
+- Completed raw malformed probe and confirmed `CoAndLineInfoJson` requires Base64 content.
+- Completed first post-probe read-only check; no Customer Order was found in the checked 30-minute window.
+- Completed Base64 `ew==` probe, which decodes to malformed `{`.
+- Confirmed the decoded content is parsed as a JSON object / Newtonsoft `JObject`.
+- Confirmed the public processing sequence is currently:
 
 ```text
-Collection       : SLCos
-Extension class  : SLCos
-Namespace        : Customer
-Custom assembly  : Customer
-Server project   : Customer
-Runtime identity : Customer.SLCos
+Base64 decode
+→ JSON object / JObject parse
+→ schema validation and Customer Order processing
 ```
 
-- Confirmed that `SLCos_FT` and `ZIT_SLCos` inherit from `SLCos` and do not publish their own extension class, namespace, or custom assembly.
-- Confirmed the standard `Customer` assembly record:
-
-```text
-Assembly Type    : Binary Only
-Revision Num     : 1
-Revision Date    : 5/12/2026
-Access As        : BaseSyteLine
-Filename         : Customer
-Full Name        : Customer, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
-Symbol File Name : Customer.pdb
-```
-
-- Closed the tenant source-code discovery branch because the `Customer` assembly is binary-only and the assembly form does not expose `Customer.SLCos` source code.
-- Confirmed the runtime environment as DEV and disposable Customer Order testing as allowed.
-- Completed the first deliberately malformed `CreateCoAndLines` probe.
-- Confirmed from the tenant response that `CoAndLineInfoJson` expects Base64-encoded content rather than raw JSON.
-- Confirmed that `MessageCode = 0` does not establish business success; `CoResult` returned `Status = Fail`.
-- Recorded the failure result as a string containing a JSON array with `Status`, `Message`, and the exact key `ErrrorMessage`.
-- Completed the separate read-only `dbo.co_mst` check after the raw malformed probe.
-- Confirmed the verification query executed without SQL error and returned zero rows for the 30-minute window.
-- Confirmed that no unexpected Customer Order was created by the first malformed probe within the checked window.
-- Authorized the next controlled probe using Base64 `ew==`, which decodes to malformed JSON `{`; no valid Customer Order payload is authorized yet.
+- Confirmed again that `MessageCode = 0` does not establish business success; `CoResult` returned `Status = Fail`.
+- Recorded the exact returned failure key `ErrrorMessage`.
+- Added a second read-only no-order verification gate before the empty-object `{}` probe.
 
 ### Current SMK069 Status
 
 ```text
-[COMPLETED] SMK069_temp_sales_mst table and process-control columns
+[COMPLETED] staging table and process-control columns
 [COMPLETED] ue_SMK069TempSales IDO
-[COMPLETED] ue_SMK069APISalesErrorProcessing base form and Preview
-[COMPLETED] process_status display and read-only verification
-[COMPLETED] dbo.SMK069ValidateCustomerSp
-[COMPLETED] ue_SMK069ValidateCustomerSp transactional IDO method
-[COMPLETED] invalid-customer and valid-customer tests
-[COMPLETED] mandatory customer validation requirement
-[CONFIRMED] standard Customer Order header IDO = SL.SLCos
-[CONFIRMED] standard Customer Order line IDO = SL.SLCoitems
-[REVIEWED] SL.SLCos method-name list
-[CONFIRMED] CreateCoAndLines is Extension Class - Standard Method
+[COMPLETED] Error Processing base form and Preview
+[COMPLETED] customer validation and tests
+[CONFIRMED] Customer Order header IDO = SL.SLCos
+[CONFIRMED] Customer Order line IDO = SL.SLCoitems
+[CONFIRMED] CreateCoAndLines = Extension Class - Standard Method
 [CONFIRMED] CoAndLineInfoJson = input-only
-[CONFIRMED] CoResult = input/output + message parameter
-[CONFIRMED] SLCos is the base collection
-[CONFIRMED] SLCos_FT and ZIT_SLCos extend SLCos
-[CONFIRMED] extension owner = Customer.SLCos, assembly Customer
-[CONFIRMED] Customer assembly = Binary Only
-[CONFIRMED] runtime test boundary = DEV, disposable testing allowed
-[COMPLETED] raw malformed CreateCoAndLines probe
-[CONFIRMED] CoAndLineInfoJson transport content must be Base64
-[COMPLETED] post-probe no-order verification = zero rows
-[NEXT] invoke Base64 ew== malformed decoded-content probe
-[PENDING] decoded JSON schema discovery
+[CONFIRMED] CoResult = input/output + message
+[CONFIRMED] implementation owner = Customer.SLCos
+[CONFIRMED] assembly Customer = Binary Only
+[COMPLETED] raw malformed runtime probe
+[CONFIRMED] input transport = Base64
+[COMPLETED] first no-order verification = zero rows
+[COMPLETED] malformed decoded JSON probe
+[CONFIRMED] decoded payload must be JSON object / JObject
+[NEXT] second read-only no-order verification
+[PENDING] exact decoded JSON schema
 [PENDING] custom Process/Reprocess method
-[PENDING] controlled service IDO receive method
+[PENDING] controlled receive API method
 [PENDING] final external POS REST API contract
 [PENDING] Customer Order header and line creation
 ```
 
 ### Planned
 
-- Send only Base64 `ew==`, which decodes to malformed JSON `{`, to move from Base64 decoding into JSON parsing without real order data.
-- Capture the complete tenant response and perform another separate read-only Customer Order check.
-- Determine the exact decoded JSON schema and `CoResult` behavior without guessed valid order properties.
-- Add reusable Process/Reprocess logic for `SiteRef + co_num` without direct inserts into standard tables.
-- Design the controlled service IDO receive method shared by CSV and REST API ingestion.
-- Prepare sample CSV import, final API documentation, Postman collection, and deployment runbook.
+- Repeat the read-only recent-order check after the `ew==` probe.
+- Only after a zero-row result, submit Base64 `e30=` for the empty JSON object `{}` to reach schema validation without guessing property names.
+- Determine exact JSON property names, required header/line fields, `co_num` behavior, and success `CoResult` shape.
+- Build reusable Process/Reprocess and controlled receive logic without direct inserts into `co_mst` or `coitem_mst`.
 
 ## [0.1.0] — 2026-07-23
 
 ### Added
 
-- Initial project README.
-- Project overview and scope.
-- Architecture and process flow.
-- SyteLine Cloud naming convention using physical prefix `ue_`.
-- Database design baseline.
-- Draft API contract.
-- Financial posting options.
-- Development roadmap and history.
-- Open questions checklist.
+- Initial project documentation, architecture, database design, API draft, financial posting options, development roadmap, and open-questions checklist.
