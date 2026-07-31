@@ -16,8 +16,9 @@ Primary form call-site candidate                 : CustomerOrdersQuickEntry
 Header binding                                   : SLCos / oSLCos — CONFIRMED
 Line binding                                     : SLCoitems / oLines subcollection — CONFIRMED
 Form Event Handlers search for CreateCoAndLines  : NO MATCH DISPLAYED
-Standard save lifecycle events                   : VISIBLE
-Next step                                        : expand StdFormSave
+StdFormSave responses                            : CONFIRMED
+Strongest source candidate                       : SMK_Save()
+Next step                                        : open SMK_Save() source
 Direct-insert stored procedure                   : DEFERRED FALLBACK
 ```
 
@@ -30,33 +31,29 @@ oSLCos / SLCos
 
 The line grid is a subcollection grid with `Reload After Child Save` enabled and no custom load method.
 
-## Visible Standard Events
+## StdFormSave Responses
 
 ```text
-StdFormSave
-StdFormSaveCompleted
-StdFormSaveCompletedLine
-StdObjectNew
-StdObjectSave
-StdObjectSaveCompleted
-StdObjectSaveCurrentCompleted
-StdObjectSaveLine
+0 Generate event      LineSetValueForPricingEngine(COLID(object.SLCoitems))
+1 Run Script          BdcDeleteVar(COLINE) COLID(object.SLCoitems)
+2 Method Call         MGCore.DefineVariables.DefineVariableSp(...) — UI truncated
+3 Form Script Method  SMK_Save()
+4 Form Script Method  SMK025_UpdateReqDateLineIfEmpty()
 ```
 
-This supports ordinary Mongoose form/object persistence as a serious alternative explanation for the form behavior. It does not yet prove that `CreateCoAndLines` is unused elsewhere.
+All five visible responses are enabled (`Disabled = false`).
+
+This confirms custom form logic in the save chain. It does not yet reveal whether `SMK_Save()` calls `CreateCoAndLines`, builds Base64 JSON, or uses another save mechanism.
 
 ## Next Step Only
 
-Expand only `StdFormSave` and capture every visible handler row, including:
+Open the complete source body for:
 
 ```text
-Sequence
-Response
-Disabled
-Response Parameters
+SMK_Save()
 ```
 
-Do not run Save, create an order, modify the form, invoke `CreateCoAndLines`, or execute direct SQL.
+Do not edit, compile, save, run the form, create an order, invoke `CreateCoAndLines`, or execute direct SQL.
 
 ## Evidence
 
@@ -64,4 +61,5 @@ Do not run Save, create an order, modify the form, invoke `CreateCoAndLines`, or
 tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
 tests/evidence/2026-07-31-customerordersquickentry-createcoandlines-event-search-no-match.md
 tests/evidence/2026-07-31-customerordersquickentry-standard-save-events-visible.md
+tests/evidence/2026-07-31-customerordersquickentry-stdformsave-responses.md
 ```
