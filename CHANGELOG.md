@@ -17,58 +17,62 @@ implementation/19-controlled-sp-direct-order-processing.md
 implementation/20-controlled-cloud-ui-pseudocode-discovery.md
 ```
 
-- Added direct-insert evidence:
+- Direct-insert evidence:
 
 ```text
 tests/evidence/2026-07-31-smk-save-source-and-direct-insert-decision.md
 tests/evidence/2026-07-31-legacy-portal-header-line-direct-insert-flow.md
 ```
 
+- Complete controlled Customer Order processing procedure draft:
+
+```text
+database/procedures/SMK069ProcessCustomerOrderSp.sql
+```
+
 ### Changed
 
 - Header total remains `SUM(unit_price * qty_ordered)`.
-- Cost remains outside staging and is retrieved from master data during Customer Order processing.
+- Cost remains outside staging and is retrieved from `item_mst` during Customer Order processing.
 - Standard `SiteRef` is used; no duplicate `site_ref` column.
-- Customer validation is complete for valid and invalid branches.
-- Standard Customer Order model confirmed:
+- Standard Customer Order model remains:
 
 ```text
 Header : SL.SLCos / dbo.co_mst
 Lines  : SL.SLCoitems / dbo.coitem_mst
 ```
 
-- `CreateCoAndLines` discovery confirmed Base64/JObject transport but did not identify the exact business JSON schema.
-- Controlled malformed/non-business probes created no Customer Order rows.
-- Direct event/action searches returned no call-site rows; one `ExpandedParameters` filter was rejected with `IllegalFilterException`.
-- `CustomerOrdersQuickEntry` confirmed:
-
-```text
-Primary collection : SLCos / oSLCos
-Line subcollection : SLCoitems / oLines
-```
-
-- Form-level `CreateCoAndLines` search displayed no matching handler.
-- `StdFormSave` exposed custom `SMK_Save()` logic.
-- The user-provided complete `SMK_Save()` source proved that it only changes `Stat` to `S` for a request date more than 30 days in the past. It does not build JSON, encode Base64, invoke `CreateCoAndLines`, or create Customer Order data.
-- On 31 July 2026, the user explicitly paused the `CreateCoAndLines` discovery path and activated the controlled stored-procedure/direct-insert path to meet the delivery schedule.
-- `implementation/19-controlled-sp-direct-order-processing.md` is now the active implementation document.
-- The user supplied the complete legacy portal header and line creation flow.
-- Confirmed the header procedure `dbo.TDI_PortalEMotor_InsertCO` generates `@co_num` and returns it through an input/output parameter.
-- Confirmed the portal already reads the generated value with `cmd.Parameters["@co_num"].Value` and uses the same value for every `dbo.coitem_mst` line.
-- Confirmed tenant-specific header numbering patterns:
+- `CreateCoAndLines` discovery is paused because its exact business JSON schema was not found within the delivery boundary.
+- The direct stored-procedure implementation is now active.
+- The legacy portal proved that `@co_num OUTPUT` is generated once and reused for every `coitem_mst` line.
+- Confirmed number patterns:
 
 ```text
 normal    : EMYYMM####
 sparepart : EMPYYMM###
 ```
 
-- Confirmed the legacy `co_mst` header field mapping and the full 26-column `coitem_mst` line insert mapping.
-- The generated order number does not require an identity lookup or second query; it should be generated once and reused for header and all lines in one transaction.
-- The legacy application-side two-stage save must be consolidated so that header, every line, and staging success updates commit or roll back together.
-- The existing global trigger disable/enable and foreign-key `NOCHECK/CHECK` statements will not be retained.
-- The string-concatenated line inserts will be replaced with parameterized or set-based SQL.
-- Order-number generation must be concurrency-safe; unlocked `MAX(co_num) + 1` is not acceptable for the new processor.
-- For reprocessing traceability, the generated SyteLine `co_num` should be stored separately from an external/POS order number when those are different.
+- Confirmed the legacy `co_mst` header mapping and 26-column `coitem_mst` line mapping.
+- Added `dbo.SMK069ProcessCustomerOrderSp` with:
+
+```text
+- one SiteRef + source co_num per execution
+- transaction-owned staging locks
+- customer, warehouse, currency, item, quantity, price, and U/M validation
+- cost/description retrieval from item_mst
+- header totals calculated from staging and item master
+- concurrency-safe final co_num generation using sp_getapplock
+- set-based co_mst and coitem_mst creation
+- no DISABLE TRIGGER
+- no NOCHECK CONSTRAINT
+- idempotent reprocess using co_mst.cust_po = source/POS co_num
+- rollback of header and all lines on failure
+- post-rollback staging E/error_msg/retry_count update
+- @CreatedCoNum, @Success, and @Infobar outputs
+```
+
+- The source/POS `co_num` is not overwritten. It is stored in `co_mst.cust_po`, allowing reprocess lookup without adding a second staging order-number column.
+- `implementation/19-controlled-sp-direct-order-processing.md` now documents the complete procedure contract, controls, and DEV test boundary.
 
 ### Current SMK069 Status
 
@@ -81,26 +85,26 @@ sparepart : EMPYYMM###
 [CONFIRMED] Customer Order line model
 [PAUSED] CreateCoAndLines schema/call-site discovery
 [ACTIVE] controlled stored-procedure/direct-insert implementation
-[CONFIRMED] legacy dbo.TDI_PortalEMotor_InsertCO header mapping
-[CONFIRMED] legacy dbo.coitem_mst line insert mapping
-[CONFIRMED] generated @co_num output handoff to detail lines
-[REQUIRED] consolidate header, lines, and staging updates into one transaction
-[REQUIRED] keep triggers and constraints enabled
-[NEXT] draft dbo.SMK069ProcessCustomerOrderSp from staging
-[PENDING] confirm distinct staging field for generated SyteLine co_num
-[PENDING] implement Process/Reprocess
+[CONFIRMED] legacy header and line mappings
+[COMPLETED] dbo.SMK069ProcessCustomerOrderSp SQL draft
+[NOT EXECUTED] stored procedure deployment and DEV runtime test
+[NEXT] create procedure in DEV and run one controlled valid-order test
+[PENDING] verify triggers accept the mapping while remaining enabled
+[PENDING] test idempotent reprocess
+[PENDING] test invalid-item rollback and staging error update
+[PENDING] connect Process/Reprocess button to the procedure
 [PENDING] implement controlled receive API
 [PENDING] final external POS REST API contract
-[PENDING] DEV header-and-lines creation test
 ```
 
 ### Planned
 
-- Draft `dbo.SMK069ProcessCustomerOrderSp` using the confirmed header and line mappings.
-- Read one source order from staging, generate one final `@co_num`, and reuse it for `co_mst` plus every `coitem_mst` row.
-- Return the generated `co_num` and a controlled error/message output.
-- Keep triggers and constraints enabled.
-- Add transaction control, idempotency, reprocess protection, and concurrency-safe numbering before DEV execution.
+- Deploy `dbo.SMK069ProcessCustomerOrderSp` to DEV only.
+- Confirm tenant item/currency master columns used by the procedure.
+- Run one controlled valid staging order and verify `co_mst` plus all `coitem_mst` rows.
+- Run the same source order again to verify idempotency.
+- Run an invalid-item case to verify rollback and staging error persistence.
+- Connect the verified method to Process/Reprocess.
 
 ## [0.1.0] — 2026-07-23
 
