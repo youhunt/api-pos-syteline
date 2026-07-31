@@ -24,6 +24,7 @@ tests/evidence/2026-07-31-smk-save-source-and-direct-insert-decision.md
 tests/evidence/2026-07-31-legacy-portal-header-line-direct-insert-flow.md
 tests/evidence/2026-07-31-smk069-sp-first-compile-errors-and-fix.md
 tests/evidence/2026-07-31-smk069-sp-compile-success-and-missing-staging-test.md
+tests/evidence/2026-07-31-smk069-invalid-item-runtime.md
 ```
 
 - Controlled Customer Order processing procedure:
@@ -45,35 +46,22 @@ Lines  : SL.SLCoitems / dbo.coitem_mst
 ```
 
 - `CreateCoAndLines` discovery remains paused; controlled direct stored-procedure processing is active.
-- The active procedure contract was simplified by removing:
-
-```text
-@Sparepart
-@PickupDate
-@StartTime
-@EndTime
-```
-
-- The active generated Customer Order pattern is now:
-
-```text
-COYYMM####
-```
-
+- The active procedure contract excludes `@Sparepart`, pickup-date, start-time, and end-time parameters.
+- The active generated Customer Order pattern is `COYYMM####`.
 - Portal-only unavailable `Uf_*` columns remain excluded.
-- Alias types remain valid for procedure parameters and variables, but system types such as `NVARCHAR` are used as `CAST`/`CONVERT` targets.
+- Alias types remain valid for procedure parameters and variables, while system types such as `NVARCHAR` are used as `CAST`/`CONVERT` targets.
 - `dbo.SMK069ProcessCustomerOrderSp` compiled successfully in the tenant.
-- The first controlled execution returned:
+- First runtime validation returned error `50003` because the supplied `SiteRef + source co_num` group was not found. No Customer Order rows were created.
+- A subsequent execution used an existing staging group and returned:
 
 ```text
 Success      : 0
 CreatedCoNum : NULL
-Error        : 50003 — staging SiteRef + source co_num not found
+Error        : 50020 — Item tidak ditemukan pada item_mst: TEST-ITEM-001
 ```
 
-- Verification showed no `co_mst` or `coitem_mst` rows were created.
-- This is classified as a controlled validation failure, not a compile or partial-write failure.
-- The next execution must use an exact existing staging `SiteRef + co_num` pair.
+- The invalid-item result confirms execution reached item-master validation and stopped before `co_mst` or `coitem_mst` insertion.
+- The item validation remains required; the next test must replace the dummy item with an exact `item_mst` item from the same staging `SiteRef`.
 
 ### Current SMK069 Status
 
@@ -88,13 +76,13 @@ Error        : 50003 — staging SiteRef + source co_num not found
 [ACTIVE] controlled stored-procedure/direct-insert implementation
 [CONFIRMED] legacy header and line mappings
 [COMPILED] dbo.SMK069ProcessCustomerOrderSp in tenant
-[COMPLETED] first controlled execution
-[SAFE FAILURE] no matching staging group; no Customer Order rows created
-[NEXT] list exact staging SiteRef + co_num groups
+[COMPLETED] staging-group-not-found controlled test
+[COMPLETED] invalid-item controlled test
+[SAFE FAILURE] TEST-ITEM-001 rejected before Customer Order insertion
+[NEXT] select an exact item_mst item for the same SiteRef and update the dummy staging item
 [PENDING] execute one valid staging order
 [PENDING] verify trigger-compatible header and line creation
 [PENDING] test idempotent reprocess
-[PENDING] test invalid-item rollback and staging error update
 [PENDING] connect Process/Reprocess button
 [PENDING] implement controlled receive API
 [PENDING] final external POS REST API contract
@@ -102,11 +90,10 @@ Error        : 50003 — staging SiteRef + source co_num not found
 
 ### Planned
 
-- Query available staging groups.
-- Execute the procedure with one exact existing `SiteRef + source co_num` pair.
-- Verify one `co_mst` header and all expected `coitem_mst` lines.
+- Query actual `item_mst` candidates for the exact staging site.
+- Replace only `TEST-ITEM-001` in the disposable staging order with one exact returned item.
+- Execute the same source order and verify one `co_mst` header plus all expected `coitem_mst` lines.
 - Re-run the same source order to verify idempotency.
-- Run an invalid-item case to verify rollback and error persistence.
 - Connect the verified procedure to Process/Reprocess.
 
 ## [0.1.0] — 2026-07-23
