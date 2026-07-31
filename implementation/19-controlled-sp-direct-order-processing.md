@@ -10,59 +10,109 @@ Direct target tables              : dbo.co_mst and dbo.coitem_mst
 Legacy header procedure           : dbo.TDI_PortalEMotor_InsertCO — PROVIDED
 Legacy line insert mapping        : PROVIDED
 Generated co_num handoff          : CONFIRMED THROUGH OUTPUT PARAMETER
-Implementation status             : READY FOR CONSOLIDATION
+Consolidated procedure draft      : COMPLETED
+SQL file                          : database/procedures/SMK069ProcessCustomerOrderSp.sql
 SQL executed                      : NO
+DEV verification                 : PENDING
 ```
-
-The user supplied the complete legacy portal flow used to create Customer Orders. The portal:
-
-```text
-1. Calls dbo.TDI_PortalEMotor_InsertCO.
-2. Receives the generated @co_num OUTPUT value.
-3. Inserts every line into dbo.coitem_mst using that same co_num.
-```
-
-The header-to-line relationship is therefore already known:
-
-```text
-co_mst.co_num = generated @co_num
-coitem_mst.co_num = the same generated @co_num
-```
-
-No identity lookup or secondary query is required.
 
 ## Active Flow
 
 ```text
 POS/API data
 → dbo.ue_SMK069_temp_sales_mst staging
-→ validate one source order/site group
 → dbo.SMK069ProcessCustomerOrderSp
-→ generate final @co_num once
+→ validate one SiteRef + source co_num group
+→ generate final SyteLine co_num once
 → insert dbo.co_mst header
-→ insert all dbo.coitem_mst lines using @co_num
-→ update staging process_status and generated order reference
+→ insert all dbo.coitem_mst lines with the same co_num
+→ update staging to P
 → commit
 ```
 
 Failure flow:
 
 ```text
-any validation or SQL failure
-→ rollback header, lines, and staging success changes
-→ update staging to E in controlled error handling
+validation or SQL failure
+→ rollback header, lines, and success-status changes
+→ update staging to E after rollback
 → store error_msg
 → increment retry_count
 ```
 
-## Confirmed Legacy Header Mapping
+## Confirmed Relationship
 
-The supplied `dbo.TDI_PortalEMotor_InsertCO` populates:
+```text
+co_mst.co_num     = generated @CreatedCoNum
+coitem_mst.co_num = the same @CreatedCoNum
+```
+
+The source/POS `co_num` remains in staging and is stored in `co_mst.cust_po`. This provides idempotency without adding or overwriting a staging primary-key column.
+
+On Reprocess, the procedure searches:
+
+```text
+site_ref + cust_num + cust_po(source co_num)
+```
+
+If a matching Customer Order already exists and its lines match staging, the procedure returns the existing SyteLine `co_num` and synchronizes staging to `P`. If the line count or line contents differ, processing fails safely instead of creating a duplicate.
+
+## Implemented Procedure Contract
+
+```sql
+CREATE OR ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp
+    @SiteRef       SiteType,
+    @SourceCoNum   CoNumType,
+    @Sparepart     ListYesNoType = 0,
+    @CustSeq       CustSeqType = 0,
+    @PickupDate    DateType = NULL,
+    @StartTime     NVARCHAR(8) = NULL,
+    @EndTime       NVARCHAR(8) = NULL,
+    @ProcessedBy   UsernameType = NULL,
+    @CreatedCoNum  CoNumType OUTPUT,
+    @Success       ListYesNoType OUTPUT,
+    @Infobar       InfobarType OUTPUT
+```
+
+The complete SQL is stored in:
+
+```text
+database/procedures/SMK069ProcessCustomerOrderSp.sql
+```
+
+## Implemented Controls
+
+```text
+1. SET NOCOUNT ON and SET XACT_ABORT ON.
+2. Explicit TRY / TRANSACTION / COMMIT / CATCH / ROLLBACK.
+3. No trigger disable/enable.
+4. No NOCHECK/CHECK constraint changes.
+5. Staging rows locked with UPDLOCK + HOLDLOCK.
+6. One customer, order date, warehouse, terms, and tax context per source order.
+7. Customer/customer sequence validation.
+8. Warehouse validation.
+9. Default customer-currency validation.
+10. Item and item-site validation.
+11. Positive quantity and nonnegative price validation.
+12. Missing line U/M falls back to item_mst.u_m.
+13. Cost, material cost, and description retrieved from item_mst.
+14. Header price = SUM(unit_price * qty_ordered).
+15. Header cost and material cost calculated from item master times quantity.
+16. Concurrency-safe numbering with transaction-owned sp_getapplock.
+17. Normal number pattern EMYYMM####.
+18. Spare-part number pattern EMPYYMM###.
+19. Set-based insertion of all coitem_mst rows.
+20. Header, lines, and staging success status commit together.
+21. Failure status is written after rollback so it remains visible.
+22. Output parameters return success, created co_num, and Infobar.
+```
+
+## Confirmed Header Mapping
 
 ```text
 co_num
 cust_num
-cust_po
+cust_po                  ← source/POS co_num
 cust_seq
 whse
 order_date
@@ -83,16 +133,7 @@ Uf_StartTime
 Uf_EndTime
 ```
 
-Tenant-specific number patterns:
-
-```text
-normal    : EMYYMM####
-sparepart : EMPYYMM###
-```
-
-## Confirmed Legacy Line Mapping
-
-The portal inserts these `dbo.coitem_mst` fields:
+## Confirmed Line Mapping
 
 ```text
 co_num
@@ -123,82 +164,28 @@ Uf_price_aft_disc2
 Uf_price_aft_disc3
 ```
 
-The legacy application correctly reads the output value after executing the header procedure:
+## Safety Boundary Before DEV Execution
 
-```csharp
-co_num = Convert.ToString(cmd.Parameters["@co_num"].Value);
-```
-
-It then uses that value for every line.
-
-## Required Consolidation
-
-The fastest safe implementation is one server-side transaction:
+The procedure has been drafted from tenant-confirmed staging and legacy mappings but has not been executed. Before the first controlled DEV call:
 
 ```text
-BEGIN TRANSACTION
-→ validate customer, site, warehouse, items, and source order
-→ generate @co_num once under a concurrency-safe lock
-→ insert co_mst
-→ insert all coitem_mst rows set-wise from staging using @co_num
-→ update staging status and generated order reference
-→ COMMIT
+1. Create/alter the procedure in DEV only.
+2. Confirm item_mst exposes unit_cost, matl_cost, description, and u_m in this tenant.
+3. Confirm customer_currency_mst contains the expected default currency row.
+4. Confirm triggers accept the known header and line mappings while remaining enabled.
+5. Select one disposable SiteRef + source co_num staging order.
+6. Capture pre-test co_mst/coitem_mst counts.
+7. Execute once and inspect @Success, @CreatedCoNum, and @Infobar.
+8. Verify header and every line.
+9. Test the same source order again to confirm idempotency.
+10. Test an invalid item to confirm rollback and staging E status.
 ```
-
-This avoids sending line inserts one by one from the client and guarantees that header and all lines either succeed together or fail together.
-
-## Non-Negotiable Controls
-
-```text
-1. SET NOCOUNT ON and SET XACT_ABORT ON.
-2. Explicit BEGIN TRY / BEGIN TRANSACTION / COMMIT / CATCH / ROLLBACK.
-3. Triggers remain enabled.
-4. Foreign keys and other constraints remain enabled.
-5. No ALTER TABLE DISABLE TRIGGER.
-6. No NOCHECK CONSTRAINT.
-7. One source order/site only per execution.
-8. Header and every required line succeed or none are committed.
-9. Idempotency and reprocess protection.
-10. Customer, sequence, warehouse, site, item, and item/site validation.
-11. Cost retrieved from tenant master data where required.
-12. Header total derived from SUM(unit_price * qty_ordered).
-13. Parameterized or set-based SQL only; no SQL string concatenation.
-14. Concurrency-safe order-number generation; do not use an unlocked MAX + 1.
-15. Maintain process_status, validation_msg, error_msg, retry_count, processed_date, and processed_by.
-```
-
-## Legacy Statements Not Retained
-
-```sql
-ALTER TABLE co_mst DISABLE TRIGGER ...
-ALTER TABLE co_mst ENABLE TRIGGER ...
-ALTER TABLE co_mst NOCHECK CONSTRAINT ...
-ALTER TABLE co_mst CHECK CONSTRAINT ...
-```
-
-The legacy application-side string-built `INSERT INTO coitem_mst` is also not retained in its current form. Its confirmed column mapping will be reused inside parameterized/set-based SQL.
-
-## Generated Number Persistence
-
-The generated `@co_num` exists in the processing procedure and is directly reused for line insertion.
-
-For Process/Reprocess traceability, the final SyteLine order number should also be persisted on staging. If the current staging `co_num` field contains the external/POS order number, it must not be overwritten; use a distinct generated-order field such as:
-
-```text
-created_co_num
-```
-
-The exact staging field name remains a design decision and must be confirmed before tenant metadata is changed.
-
-## Current Small Step
-
-Draft `dbo.SMK069ProcessCustomerOrderSp` using the confirmed header and line mappings. The procedure should read one source order from staging, generate one `@co_num`, insert header and all lines in one transaction, and return the generated number plus an error/message output.
-
-Do not execute the procedure until the staging-to-line field mapping and generated-order staging field are confirmed.
 
 ## Evidence
 
 ```text
 tests/evidence/2026-07-31-smk-save-source-and-direct-insert-decision.md
 tests/evidence/2026-07-31-legacy-portal-header-line-direct-insert-flow.md
+database/tables/SMK069_temp_sales_mst.md
+database/procedures/SMK069ProcessCustomerOrderSp.sql
 ```
