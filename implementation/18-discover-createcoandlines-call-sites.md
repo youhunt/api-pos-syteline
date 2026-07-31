@@ -18,7 +18,9 @@ Header binding                                   : SLCos / oSLCos — CONFIRMED
 Line binding                                     : SLCoitems / oLines subcollection — CONFIRMED
 CreateCoAndLines form-handler search              : COMPLETED — NO MATCH DISPLAYED
 Standard form/object save lifecycle              : VISIBLE
-Next step                                        : expand StdFormSave
+StdFormSave response chain                       : CONFIRMED
+Strongest source candidate                       : form script SMK_Save()
+Next step                                        : open SMK_Save() source
 ```
 
 ## Confirmed Runtime Contract
@@ -87,7 +89,7 @@ oSLCos / SLCos
 
 A top-level `Secondary Collection 2: SLAppsParms` also exists; its role remains uninspected.
 
-The form-level Event Handlers search for `CreateCoAndLines` displayed no matching row. The visible handler list then showed these standard lifecycle events:
+The form-level Event Handlers search for `CreateCoAndLines` displayed no matching row. The visible handler list showed these standard lifecycle events:
 
 ```text
 StdFormSave
@@ -100,15 +102,29 @@ StdObjectSaveCurrentCompleted
 StdObjectSaveLine
 ```
 
-This supports the possibility that the form uses ordinary standard parent/child collection persistence rather than a form handler explicitly named `CreateCoAndLines`. The responses attached to these events are not yet confirmed.
+## StdFormSave Response Chain
+
+The expanded `StdFormSave` event exposed five enabled responses:
+
+| Sequence | Response | Visible Response Parameters |
+| ---: | --- | --- |
+| 0 | `Generate event` | `LineSetValueForPricingEngine( COLID(object.SLCoitems) )` |
+| 1 | `Run Script` | `BdcDeleteVar(COLINE) COLID(object.SLCoitems)` |
+| 2 | `Method Call` | `MGCore.DefineVariables.DefineVariableSp( PARMS(VAR C...` — UI truncated |
+| 3 | `Form Script Method` | `SMK_Save()` |
+| 4 | `Form Script Method` | `SMK025_UpdateReqDateLineIfEmpty()` |
+
+This proves the form performs custom pre-save logic. `SMK_Save()` is now the strongest tenant-confirmed source candidate for discovering whether the form constructs or invokes `CreateCoAndLines`, or uses another custom save mechanism. Its contents are not yet known.
+
+Do not reconstruct the truncated sequence-2 method parameters by guessing.
 
 ## Active Discovery Plan
 
 ```text
-1. Expand StdFormSave and capture its handler responses.
-2. Follow only the exact next event or method referenced by those responses.
-3. Determine whether the chain reaches StdObjectSave/StdObjectSaveLine, an IDO method, or script logic.
-4. Confirm whether CustomerOrdersQuickEntry uses CreateCoAndLines or ordinary SLCos/SLCoitems Save.
+1. Open the complete SMK_Save() form-script method body.
+2. Search inside it for CreateCoAndLines, InvokeIDO, Base64, JSON, SLCos, and SLCoitems.
+3. Follow only directly referenced helper methods.
+4. Confirm whether the form uses CreateCoAndLines or ordinary/custom SLCos/SLCoitems persistence.
 5. Build one minimal valid DEV payload only after the exact contract is confirmed.
 6. Invoke CreateCoAndLines once under controlled conditions when justified.
 7. Verify both co_mst and coitem_mst.
@@ -117,22 +133,13 @@ This supports the possibility that the form uses ordinary standard parent/child 
 
 ## Current Small Step
 
-In Design Mode, expand only:
+Open only the form-script method:
 
 ```text
-StdFormSave
+SMK_Save()
 ```
 
-Capture all visible child handler rows and columns:
-
-```text
-Sequence
-Response
-Disabled
-Response Parameters
-```
-
-Do not execute Save at runtime, modify the form, create an order, invoke `CreateCoAndLines`, or execute direct SQL.
+Capture its complete source body. Do not edit, compile, save, execute the form, create an order, invoke `CreateCoAndLines`, or execute direct SQL.
 
 ## Evidence
 
@@ -141,4 +148,5 @@ tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candida
 tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
 tests/evidence/2026-07-31-customerordersquickentry-createcoandlines-event-search-no-match.md
 tests/evidence/2026-07-31-customerordersquickentry-standard-save-events-visible.md
+tests/evidence/2026-07-31-customerordersquickentry-stdformsave-responses.md
 ```
