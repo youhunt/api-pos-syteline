@@ -1,69 +1,75 @@
-# Implementation 20 — Controlled Cloud UI Pseudo-Code Discovery
+# Implementation 20 — Controlled Cloud UI CreateCoAndLines Discovery
 
 ## Status
 
 ```text
 Environment                         : Infor Cloud tenant
-Active direction                    : controlled Cloud UI execution
-Passive metadata-only discovery     : paused
-FormsAndObjects method metadata     : confirmed
-Pseudo-code generator parameters    : confirmed
-GetUtilitiesOutput parameters       : confirmed
-Method invocation                   : not started
+Active Customer Order path          : SL.SLCos.CreateCoAndLines
+Direct-insert stored procedure      : fallback only
+Form Control Utilities tab          : inspected — device sync only
+Device/form synchronization         : not executed
+CreateCoAndLines invocation          : not started
+Exact business JSON schema          : not confirmed
 ```
 
-## Confirmed Method Flow Candidate
-
-Tenant metadata supports this candidate flow:
+## Confirmed Runtime Contract
 
 ```text
-UtilitiesListNames
-→ UtilitiesLoadObjects / UtilitiesLoadObjects2
-→ UtilitiesGeneratePseudoCode / UtilitiesGeneratePseudoCode2
-→ GetUtilitiesOutput(SessionID, SegmentNumber)
+CoAndLineInfoJson
+→ Base64 decode
+→ JSON object / JObject parse
+→ expected nonblank order structure
+→ business validation
+→ Customer Order processing
 ```
 
-This sequence is still an inference. No method has been invoked.
+`CoResult` is an input/output message parameter returned as a JSON-array string. Framework `MessageCode = 0` does not by itself establish business success.
 
-## Why Start in Cloud UI
+## Cloud UI Observation
 
-The pseudo-code generators require tenant-specific `VARIANT` values:
+The tenant `Form Control` screenshot showed that its visible `Utilities` tab contains only device-type synchronization actions:
 
 ```text
-SourceConfig
-TargetConfig
-Source
-DatabaseName
-Type
-Scope
-RelativePosition or Options
-ObjectList
-Version
-CompareIncludeSettings
+Sync Dev from Master
+Sync Master from Dev
+Sync Archive from Master
+Sync Master from Archive
 ```
 
-Their valid values and serialization formats are not published in the metadata contract. The Cloud `Form Control` UI is expected to populate these values safely and consistently with the tenant configuration.
+This is not the object pseudo-code surface inferred from `FormsAndObjects.UtilitiesGeneratePseudoCode%`. The Utilities-tab path is therefore stopped. No Sync action was executed.
 
-## First Controlled Step
+## Active Discovery Plan
 
-1. Open the Infor Cloud application.
-2. Use global form search and open `Form Control`.
-3. Open the `Utilities` tab/section.
-4. Do not click Generate, Process, Import, Export, Update, or Delete.
-5. Capture one screenshot showing all visible fields, dropdowns, defaults, and buttons in the Utilities section.
+```text
+1. Enumerate tenant form names from Form Control > Forms.
+2. Identify the standard Customer Order entry form or another tenant-confirmed form that calls SL.SLCos.CreateCoAndLines.
+3. Retrieve/read the selected form definition without modifying or checking it out.
+4. Extract the exact JSON construction and Base64-encoding behavior.
+5. Build one minimal valid DEV payload.
+6. Invoke CreateCoAndLines once under controlled conditions.
+7. Verify both co_mst and coitem_mst.
+8. Reuse the confirmed contract for SMK069 Process/Reprocess.
+```
 
-The screenshot will determine the next single action and the tenant-valid object type/scope/configuration values.
+## Immediate Next Step
+
+In the currently open `Form Control` form:
+
+1. Select the `Forms` tab.
+2. Keep `Scope = Site`.
+3. Click `Refresh List`.
+4. Capture a screenshot showing the resulting list and available search/filter fields.
+5. Do not select `Check out`, `Check in`, `Get`, `Unlock`, `Archive`, `Restore`, or `Delete`.
 
 ## Safety Boundary
 
 ```text
 - No production order processing.
-- No CreateCoAndLines call.
-- No metadata modification.
-- No form synchronization or upgrade action.
-- No import/export action.
-- No pseudo-code generation before the visible defaults are reviewed.
-- No direct SQL execution.
+- No CreateCoAndLines call yet.
+- No form checkout or modification.
+- No device synchronization.
+- No archive/restore/delete action.
+- No direct SQL insert.
 ```
 
 ## Evidence
@@ -72,4 +78,5 @@ The screenshot will determine the next single action and the tenant-valid object
 tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
 tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
 tests/evidence/2026-07-31-formsandobjects-getutilitiesoutput-parameters.md
+tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
 ```
