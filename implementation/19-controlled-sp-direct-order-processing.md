@@ -12,9 +12,11 @@ SQL file                          : database/procedures/SMK069ProcessCustomerOrd
 Runtime 1                         : 50003 — staging group not found
 Runtime 2                         : 50020 — dummy item not found
 Runtime 3                         : 50000 — DeleteRemoteNotesSp replication rule missing
+DeleteRemoteNotesSp existence     : CONFIRMED
+Remote call chain                 : CONFIRMED THROUGH TransferNotesToSiteSp
 Customer Order rows created       : NOT CONFIRMED
-Current blocker                   : standard SyteLine trigger/replication configuration
-Next step                         : identify exact DeleteRemoteNotesSp caller and active session/site context
+Current blocker                   : runtime replication rule resolution for target DEFAULT
+Next step                         : identify exact TransferNotesToSiteSp caller during co_mst insert
 ```
 
 ## Active Flow
@@ -27,7 +29,7 @@ POS/API data
 → validate customer, warehouse, currency, and item master data
 → generate one final SyteLine co_num
 → insert dbo.co_mst
-→ standard SyteLine trigger/replication logic
+→ standard SyteLine note-transfer/replication logic
 → insert all dbo.coitem_mst rows using the same co_num
 → update staging to P
 → commit
@@ -191,32 +193,81 @@ Not one Replication Rule where Disabled is No and Target Site is DEFAULT exists
 for Replication Category Object that has [Object Name: DeleteRemoteNotesSp].
 ```
 
-This confirms execution progressed beyond staging and item validation into standard SyteLine trigger/replication logic during the direct `co_mst` insert. The standard path attempted to use `DeleteRemoteNotesSp` through Replication Category `Object`, targeting `DEFAULT`, but the database did not contain exactly one active matching rule.
+This confirms execution progressed beyond staging and item validation into standard SyteLine trigger/replication logic during the direct `co_mst` insert.
 
-This must not be resolved by globally disabling triggers or by inserting an unverified replication rule.
+## Tenant-confirmed DeleteRemoteNotesSp Call Chain
+
+The tenant contains:
+
+```text
+dbo.DeleteRemoteNotesSp
+dbo.InitDatarep_object_categorySp
+dbo.TransferNotesToSiteSp
+```
+
+`DeleteRemoteNotesSp` exists and is described as a procedure intended to run at a remote site to remove record-specific notes.
+
+`InitDatarep_object_categorySp` contains a system metadata entry for:
+
+```text
+category       : A/R
+object_name    : DeleteRemoteNotesSp
+object_type    : 2
+to_object_name : DeleteRemoteNotesSp
+retain_site    : 1
+```
+
+`TransferNotesToSiteSp` contains the relevant remote path:
+
+```sql
+EXEC @Severity = dbo.RemoteMethodCallSp
+    @Site       = @ToSite,
+    @IdoName    = 'SL.SLObjectNotes',
+    @MethodName = 'DeleteRemoteNotesSp',
+    ...;
+```
+
+Therefore the procedure is not missing. The failure occurs because `RemoteMethodCallSp` cannot resolve exactly one enabled runtime Replication Rule for target site `DEFAULT`, category `Object`, and method `DeleteRemoteNotesSp`.
+
+The initialization metadata entry does not prove that the required enabled runtime rule exists in the backup database.
+
+Do not resolve this by globally disabling triggers or inserting an unverified replication rule.
 
 ## Current Small Step
 
-Identify the exact caller and current session context with read-only SQL:
+Identify the exact object that invokes `TransferNotesToSiteSp` during the `co_mst` insert:
 
 ```sql
 SELECT
-    OBJECT_SCHEMA_NAME(m.object_id) AS SchemaName,
-    OBJECT_NAME(m.object_id) AS ObjectName,
-    o.type_desc AS ObjectType
+    OBJECT_SCHEMA_NAME(o.object_id) AS SchemaName,
+    o.name AS ObjectName,
+    o.type_desc AS ObjectType,
+    OBJECT_SCHEMA_NAME(t.parent_id) AS ParentSchema,
+    OBJECT_NAME(t.parent_id) AS ParentObject,
+    SUBSTRING
+    (
+        m.definition,
+        CASE
+            WHEN CHARINDEX(N'TransferNotesToSiteSp', m.definition) > 700
+            THEN CHARINDEX(N'TransferNotesToSiteSp', m.definition) - 700
+            ELSE 1
+        END,
+        2400
+    ) AS ReferenceBlock
 FROM sys.sql_modules AS m
 JOIN sys.objects AS o
   ON o.object_id = m.object_id
-WHERE m.definition LIKE N'%DeleteRemoteNotesSp%'
-ORDER BY ObjectType, SchemaName, ObjectName;
-
-SELECT
-    DB_NAME() AS CurrentDatabase,
-    CONTEXT_INFO() AS ContextInfoBinary,
-    CONVERT(VARCHAR(128), CONTEXT_INFO()) AS ContextInfoText;
+LEFT JOIN sys.triggers AS t
+  ON t.object_id = o.object_id
+WHERE m.definition LIKE N'%TransferNotesToSiteSp%'
+  AND o.object_id <> OBJECT_ID(N'dbo.TransferNotesToSiteSp')
+ORDER BY
+    o.type_desc,
+    SchemaName,
+    ObjectName;
 ```
 
-Use the tenant result to determine whether `DEFAULT` is the intended site, an incomplete session fallback, or missing replication metadata in the backup database.
+The caller and surrounding condition are required before deciding whether the backup replication configuration is incomplete or a note-transfer branch is being entered unexpectedly.
 
 ## Evidence
 
@@ -227,6 +278,7 @@ tests/evidence/2026-07-31-smk069-sp-first-compile-errors-and-fix.md
 tests/evidence/2026-07-31-smk069-sp-compile-success-and-missing-staging-test.md
 tests/evidence/2026-07-31-smk069-invalid-item-runtime.md
 tests/evidence/2026-07-31-smk069-replication-rule-delete-remote-notes-runtime.md
+tests/evidence/2026-07-31-delete-remote-notes-call-chain.md
 database/tables/SMK069_temp_sales_mst.md
 database/procedures/SMK069ProcessCustomerOrderSp.sql
 ```
