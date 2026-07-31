@@ -9,12 +9,12 @@ Previous CreateCoAndLines path    : PAUSED
 Direct target tables              : dbo.co_mst and dbo.coitem_mst
 Consolidated procedure            : COMPILED IN TENANT
 SQL file                          : database/procedures/SMK069ProcessCustomerOrderSp.sql
-First controlled execution        : COMPLETED
-First execution result            : CONTROLLED ERROR 50003 — STAGING GROUP NOT FOUND
-Second controlled execution       : COMPLETED
-Second execution result           : CONTROLLED ERROR 50020 — ITEM NOT FOUND
-Customer Order rows created       : NO
-Next step                         : replace dummy item with an exact item_mst item from the same SiteRef
+Runtime 1                         : 50003 — staging group not found
+Runtime 2                         : 50020 — dummy item not found
+Runtime 3                         : 50000 — DeleteRemoteNotesSp replication rule missing
+Customer Order rows created       : NOT CONFIRMED
+Current blocker                   : standard SyteLine trigger/replication configuration
+Next step                         : identify exact DeleteRemoteNotesSp caller and active session/site context
 ```
 
 ## Active Flow
@@ -27,6 +27,7 @@ POS/API data
 → validate customer, warehouse, currency, and item master data
 → generate one final SyteLine co_num
 → insert dbo.co_mst
+→ standard SyteLine trigger/replication logic
 → insert all dbo.coitem_mst rows using the same co_num
 → update staging to P
 → commit
@@ -35,7 +36,7 @@ POS/API data
 Failure flow:
 
 ```text
-validation or SQL failure
+validation, trigger, replication, or SQL failure
 → rollback header, lines, and success-status changes
 → update matching staging rows to E after rollback
 → store error_msg
@@ -137,7 +138,7 @@ Portal-only unavailable `Uf_*` fields are not used.
 ```text
 1. SET NOCOUNT ON and SET XACT_ABORT ON.
 2. Explicit TRY / TRANSACTION / COMMIT / CATCH / ROLLBACK.
-3. No trigger disable/enable.
+3. No global trigger disable/enable.
 4. No NOCHECK/CHECK constraint changes.
 5. Staging group locked with UPDLOCK + HOLDLOCK.
 6. Customer, date, warehouse, terms, tax, item, quantity, price, and U/M validation.
@@ -148,11 +149,10 @@ Portal-only unavailable `Uf_*` fields are not used.
 11. Idempotent reprocess through site_ref + cust_num + cust_po.
 12. Failure status written after rollback when matching staging rows exist.
 13. Output parameters return success, generated co_num, and Infobar.
+14. SQL session site context is supplied before standard table insert and restored afterward.
 ```
 
 ## Compile Corrections Confirmed
-
-The following tenant compile problems were resolved:
 
 ```text
 - Alias types cannot be CAST/CONVERT targets in this environment.
@@ -181,29 +181,42 @@ CreatedCoNum : NULL
 Infobar      : Error 50020 pada line 259: Item tidak ditemukan pada item_mst: TEST-ITEM-001
 ```
 
-This proves the selected staging group now exists and execution reached item-master validation. `TEST-ITEM-001` is not a valid `item_mst` item for the same staging `SiteRef`. Processing stopped before header or line insertion.
+This confirmed execution reached item-master validation and stopped before header/line creation.
+
+### Runtime 3 — standard replication path blocked
+
+```text
+Error 50000 pada dbo.RaiseErrorSp line 121:
+Not one Replication Rule where Disabled is No and Target Site is DEFAULT exists
+for Replication Category Object that has [Object Name: DeleteRemoteNotesSp].
+```
+
+This confirms execution progressed beyond staging and item validation into standard SyteLine trigger/replication logic during the direct `co_mst` insert. The standard path attempted to use `DeleteRemoteNotesSp` through Replication Category `Object`, targeting `DEFAULT`, but the database did not contain exactly one active matching rule.
+
+This must not be resolved by globally disabling triggers or by inserting an unverified replication rule.
 
 ## Current Small Step
 
-Read actual item candidates from `item_mst` for the exact staging site:
+Identify the exact caller and current session context with read-only SQL:
 
 ```sql
-DECLARE @SiteRef SiteType = N'<EXACT_STAGING_SITE>';
+SELECT
+    OBJECT_SCHEMA_NAME(m.object_id) AS SchemaName,
+    OBJECT_NAME(m.object_id) AS ObjectName,
+    o.type_desc AS ObjectType
+FROM sys.sql_modules AS m
+JOIN sys.objects AS o
+  ON o.object_id = m.object_id
+WHERE m.definition LIKE N'%DeleteRemoteNotesSp%'
+ORDER BY ObjectType, SchemaName, ObjectName;
 
-SELECT TOP (20)
-    site_ref,
-    LTRIM(RTRIM(item)) AS item,
-    description,
-    u_m,
-    unit_cost,
-    matl_cost
-FROM dbo.item_mst
-WHERE site_ref = @SiteRef
-  AND NULLIF(LTRIM(RTRIM(item)), N'') IS NOT NULL
-ORDER BY item;
+SELECT
+    DB_NAME() AS CurrentDatabase,
+    CONTEXT_INFO() AS ContextInfoBinary,
+    CONVERT(VARCHAR(128), CONTEXT_INFO()) AS ContextInfoText;
 ```
 
-Choose one exact returned item and update only the dummy staging line before running the procedure again. Do not remove the item validation.
+Use the tenant result to determine whether `DEFAULT` is the intended site, an incomplete session fallback, or missing replication metadata in the backup database.
 
 ## Evidence
 
@@ -213,6 +226,7 @@ tests/evidence/2026-07-31-legacy-portal-header-line-direct-insert-flow.md
 tests/evidence/2026-07-31-smk069-sp-first-compile-errors-and-fix.md
 tests/evidence/2026-07-31-smk069-sp-compile-success-and-missing-staging-test.md
 tests/evidence/2026-07-31-smk069-invalid-item-runtime.md
+tests/evidence/2026-07-31-smk069-replication-rule-delete-remote-notes-runtime.md
 database/tables/SMK069_temp_sales_mst.md
 database/procedures/SMK069ProcessCustomerOrderSp.sql
 ```
