@@ -6,8 +6,8 @@
 Environment                         : Infor Cloud tenant
 Active Customer Order path          : SL.SLCos.CreateCoAndLines
 Direct-insert stored procedure      : fallback only
-Form Control Utilities tab          : inspected — device sync only
-Device/form synchronization         : not executed
+Form Control Utilities tab          : device sync only — stopped
+Primary call-site candidate         : CustomerOrdersQuickEntry
 CreateCoAndLines invocation          : not started
 Exact business JSON schema          : not confirmed
 ```
@@ -25,9 +25,9 @@ CoAndLineInfoJson
 
 `CoResult` is an input/output message parameter returned as a JSON-array string. Framework `MessageCode = 0` does not by itself establish business success.
 
-## Cloud UI Observation
+## Cloud UI Correction
 
-The tenant `Form Control` screenshot showed that its visible `Utilities` tab contains only device-type synchronization actions:
+The tenant `Form Control > Utilities` screenshot showed only:
 
 ```text
 Sync Dev from Master
@@ -36,30 +36,40 @@ Sync Archive from Master
 Sync Master from Archive
 ```
 
-This is not the object pseudo-code surface inferred from `FormsAndObjects.UtilitiesGeneratePseudoCode%`. The Utilities-tab path is therefore stopped. No Sync action was executed.
+That path is unrelated to Customer Order creation and is stopped. No synchronization action was executed.
+
+## CustomerOrdersQuickEntry Candidate
+
+The user identified `CustomerOrdersQuickEntry` and confirmed that it contains both Customer Order header data and Customer Order item/detail lines.
+
+This is the strongest current form candidate for discovering the standard header-plus-line workflow required by SMK069. The form may invoke `SL.SLCos.CreateCoAndLines` or another standard save/event sequence; this is not yet confirmed.
 
 ## Active Discovery Plan
 
 ```text
-1. Enumerate tenant form names from Form Control > Forms.
-2. Identify the standard Customer Order entry form or another tenant-confirmed form that calls SL.SLCos.CreateCoAndLines.
-3. Retrieve/read the selected form definition without modifying or checking it out.
-4. Extract the exact JSON construction and Base64-encoding behavior.
-5. Build one minimal valid DEV payload.
-6. Invoke CreateCoAndLines once under controlled conditions.
-7. Verify both co_mst and coitem_mst.
-8. Reuse the confirmed contract for SMK069 Process/Reprocess.
+1. Inspect CustomerOrdersQuickEntry collection definitions.
+2. Confirm header and line IDO bindings.
+3. Inspect form events/scripts for New, Save, Process, or Submit.
+4. Identify CreateCoAndLines or the equivalent standard sequence.
+5. Extract JSON construction and Base64 encoding when present.
+6. Build one minimal valid DEV payload.
+7. Invoke CreateCoAndLines once under controlled conditions.
+8. Verify co_mst and coitem_mst.
+9. Reuse the contract for SMK069 Process/Reprocess.
 ```
 
 ## Immediate Next Step
 
-In the currently open `Form Control` form:
+Open `CustomerOrdersQuickEntry` in Design Mode and capture the collection definitions showing:
 
-1. Select the `Forms` tab.
-2. Keep `Scope = Site`.
-3. Click `Refresh List`.
-4. Capture a screenshot showing the resulting list and available search/filter fields.
-5. Do not select `Check out`, `Check in`, `Get`, `Unlock`, `Archive`, `Restore`, or `Delete`.
+```text
+- primary collection;
+- secondary/subcollection names;
+- aliases;
+- parent-child relationship, when visible.
+```
+
+Do not save, customize, check out, submit, or create an order.
 
 ## Safety Boundary
 
@@ -68,15 +78,12 @@ In the currently open `Form Control` form:
 - No CreateCoAndLines call yet.
 - No form checkout or modification.
 - No device synchronization.
-- No archive/restore/delete action.
 - No direct SQL insert.
 ```
 
 ## Evidence
 
 ```text
-tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
-tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
-tests/evidence/2026-07-31-formsandobjects-getutilitiesoutput-parameters.md
 tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
+tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
 ```
