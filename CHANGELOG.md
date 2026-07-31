@@ -26,6 +26,7 @@ tests/evidence/2026-07-31-smk069-sp-first-compile-errors-and-fix.md
 tests/evidence/2026-07-31-smk069-sp-compile-success-and-missing-staging-test.md
 tests/evidence/2026-07-31-smk069-invalid-item-runtime.md
 tests/evidence/2026-07-31-smk069-replication-rule-delete-remote-notes-runtime.md
+tests/evidence/2026-07-31-delete-remote-notes-call-chain.md
 ```
 
 - Controlled Customer Order processing procedure:
@@ -60,10 +61,19 @@ Lines  : SL.SLCoitems / dbo.coitem_mst
 3. 50000 — standard DeleteRemoteNotesSp replication rule for target DEFAULT not found
 ```
 
-- Runtime 3 confirms execution progressed into standard SyteLine trigger/replication processing during the direct `co_mst` insert.
-- The current blocker is not staging or item validation. The standard path requires exactly one active Replication Category `Object` rule for `DeleteRemoteNotesSp`, target `DEFAULT`, but the current database did not provide it.
+- Runtime 3 confirms execution progressed into standard SyteLine note-transfer/replication processing during the direct `co_mst` insert.
+- Tenant source confirms:
+
+```text
+DeleteRemoteNotesSp exists.
+InitDatarep_object_categorySp registers DeleteRemoteNotesSp in system initialization metadata.
+TransferNotesToSiteSp invokes SL.SLObjectNotes.DeleteRemoteNotesSp through RemoteMethodCallSp for remote execution.
+```
+
+- The current blocker is runtime Replication Rule resolution, not a missing stored procedure. The standard framework cannot find exactly one enabled category `Object` rule for target `DEFAULT` and method `DeleteRemoteNotesSp`.
+- The initialization metadata entry does not prove that the required active runtime rule exists in the backup database.
 - No global trigger disabling or unverified replication-rule insertion is approved.
-- The next step is read-only identification of the exact `DeleteRemoteNotesSp` caller and the current SQL session/application site context.
+- The next step is read-only identification of the exact object that invokes `TransferNotesToSiteSp` during the `co_mst` insert.
 
 ### Current SMK069 Status
 
@@ -80,10 +90,11 @@ Lines  : SL.SLCoitems / dbo.coitem_mst
 [COMPILED] dbo.SMK069ProcessCustomerOrderSp in tenant
 [COMPLETED] staging-group-not-found controlled test
 [COMPLETED] invalid-item controlled test
-[REACHED] standard co_mst trigger/replication framework
-[BLOCKED] DeleteRemoteNotesSp replication rule for target DEFAULT not found
-[NEXT] identify exact DeleteRemoteNotesSp caller and session/site context
-[PENDING] decide whether backup configuration, intended site, or direct-insert path must be corrected
+[REACHED] standard co_mst note-transfer/replication framework
+[CONFIRMED] DeleteRemoteNotesSp exists and is called remotely by TransferNotesToSiteSp
+[BLOCKED] enabled runtime replication rule for target DEFAULT not found
+[NEXT] identify exact TransferNotesToSiteSp caller and surrounding condition
+[PENDING] decide whether backup replication configuration is incomplete or the note-transfer path is unexpected
 [PENDING] execute one valid staging order
 [PENDING] verify complete co_mst/coitem_mst creation
 [PENDING] test idempotent reprocess
@@ -94,10 +105,10 @@ Lines  : SL.SLCoitems / dbo.coitem_mst
 
 ### Planned
 
-- Run read-only SQL against `sys.sql_modules` to identify every object that references `DeleteRemoteNotesSp`.
-- Read the current SQL `CONTEXT_INFO()` and compare it with the intended application/site context.
-- Determine whether `DEFAULT` is intentional or a fallback caused by incomplete session or backup configuration.
-- Do not modify standard triggers or replication rules until the exact caller and expected tenant configuration are known.
+- Run read-only SQL against `sys.sql_modules` to find every object other than `TransferNotesToSiteSp` that invokes it.
+- Capture the caller type, trigger parent table when applicable, and surrounding condition.
+- Determine whether the backup database lacks required replication configuration or whether the direct insert enters note-transfer logic unexpectedly.
+- Do not modify standard triggers or replication rules until the exact caller and condition are known.
 
 ## [0.1.0] — 2026-07-23
 
