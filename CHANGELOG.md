@@ -25,6 +25,7 @@ tests/evidence/2026-07-31-legacy-portal-header-line-direct-insert-flow.md
 tests/evidence/2026-07-31-smk069-sp-first-compile-errors-and-fix.md
 tests/evidence/2026-07-31-smk069-sp-compile-success-and-missing-staging-test.md
 tests/evidence/2026-07-31-smk069-invalid-item-runtime.md
+tests/evidence/2026-07-31-smk069-replication-rule-delete-remote-notes-runtime.md
 ```
 
 - Controlled Customer Order processing procedure:
@@ -51,17 +52,18 @@ Lines  : SL.SLCoitems / dbo.coitem_mst
 - Portal-only unavailable `Uf_*` columns remain excluded.
 - Alias types remain valid for procedure parameters and variables, while system types such as `NVARCHAR` are used as `CAST`/`CONVERT` targets.
 - `dbo.SMK069ProcessCustomerOrderSp` compiled successfully in the tenant.
-- First runtime validation returned error `50003` because the supplied `SiteRef + source co_num` group was not found. No Customer Order rows were created.
-- A subsequent execution used an existing staging group and returned:
+- Runtime progression:
 
 ```text
-Success      : 0
-CreatedCoNum : NULL
-Error        : 50020 — Item tidak ditemukan pada item_mst: TEST-ITEM-001
+1. 50003 — staging SiteRef + source co_num not found
+2. 50020 — TEST-ITEM-001 not found in item_mst
+3. 50000 — standard DeleteRemoteNotesSp replication rule for target DEFAULT not found
 ```
 
-- The invalid-item result confirms execution reached item-master validation and stopped before `co_mst` or `coitem_mst` insertion.
-- The item validation remains required; the next test must replace the dummy item with an exact `item_mst` item from the same staging `SiteRef`.
+- Runtime 3 confirms execution progressed into standard SyteLine trigger/replication processing during the direct `co_mst` insert.
+- The current blocker is not staging or item validation. The standard path requires exactly one active Replication Category `Object` rule for `DeleteRemoteNotesSp`, target `DEFAULT`, but the current database did not provide it.
+- No global trigger disabling or unverified replication-rule insertion is approved.
+- The next step is read-only identification of the exact `DeleteRemoteNotesSp` caller and the current SQL session/application site context.
 
 ### Current SMK069 Status
 
@@ -78,10 +80,12 @@ Error        : 50020 — Item tidak ditemukan pada item_mst: TEST-ITEM-001
 [COMPILED] dbo.SMK069ProcessCustomerOrderSp in tenant
 [COMPLETED] staging-group-not-found controlled test
 [COMPLETED] invalid-item controlled test
-[SAFE FAILURE] TEST-ITEM-001 rejected before Customer Order insertion
-[NEXT] select an exact item_mst item for the same SiteRef and update the dummy staging item
+[REACHED] standard co_mst trigger/replication framework
+[BLOCKED] DeleteRemoteNotesSp replication rule for target DEFAULT not found
+[NEXT] identify exact DeleteRemoteNotesSp caller and session/site context
+[PENDING] decide whether backup configuration, intended site, or direct-insert path must be corrected
 [PENDING] execute one valid staging order
-[PENDING] verify trigger-compatible header and line creation
+[PENDING] verify complete co_mst/coitem_mst creation
 [PENDING] test idempotent reprocess
 [PENDING] connect Process/Reprocess button
 [PENDING] implement controlled receive API
@@ -90,11 +94,10 @@ Error        : 50020 — Item tidak ditemukan pada item_mst: TEST-ITEM-001
 
 ### Planned
 
-- Query actual `item_mst` candidates for the exact staging site.
-- Replace only `TEST-ITEM-001` in the disposable staging order with one exact returned item.
-- Execute the same source order and verify one `co_mst` header plus all expected `coitem_mst` lines.
-- Re-run the same source order to verify idempotency.
-- Connect the verified procedure to Process/Reprocess.
+- Run read-only SQL against `sys.sql_modules` to identify every object that references `DeleteRemoteNotesSp`.
+- Read the current SQL `CONTEXT_INFO()` and compare it with the intended application/site context.
+- Determine whether `DEFAULT` is intentional or a fallback caused by incomplete session or backup configuration.
+- Do not modify standard triggers or replication rules until the exact caller and expected tenant configuration are known.
 
 ## [0.1.0] — 2026-07-23
 
