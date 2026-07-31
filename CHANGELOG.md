@@ -36,6 +36,8 @@ tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
 tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
 tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
 tests/evidence/2026-07-31-customerordersquickentry-createcoandlines-event-search-no-match.md
+tests/evidence/2026-07-31-customerordersquickentry-standard-save-events-visible.md
+tests/evidence/2026-07-31-customerordersquickentry-stdformsave-responses.md
 ```
 
 ### Changed
@@ -79,8 +81,10 @@ CoResult             : input/output + message parameter, JSON-array string
 - Confirmed `Reload After Child Save` is enabled, update locking is `Row`, and no custom load method is configured for header or line.
 - Confirmed a top-level `Secondary Collection 2: SLAppsParms` exists; its role remains uninspected.
 - Confirmed the form-level Event Handlers search for `CreateCoAndLines` displayed no matching row.
-- The no-match result does not exclude component-generated events, scripts, inherited logic, or ordinary `SLCos`/`SLCoitems` collection Save.
-- Selected inspection of the `Quick Order Verification` component's generated event as the next controlled step.
+- Confirmed the standard form/object save lifecycle is visible.
+- Expanded `StdFormSave` and confirmed five enabled responses, including pricing-line preparation, variable setup, `SMK_Save()`, and `SMK025_UpdateReqDateLineIfEmpty()`.
+- Selected `SMK_Save()` as the strongest tenant-confirmed source candidate for locating the actual Customer Order save/payload mechanism.
+- The sequence-2 `DefineVariableSp` parameters were truncated in the UI and were not reconstructed by guessing.
 
 ### Current SMK069 Status
 
@@ -101,8 +105,9 @@ CoResult             : input/output + message parameter, JSON-array string
 [CONFIRMED] CustomerOrdersQuickEntry SLCos/oSLCos header binding
 [CONFIRMED] CustomerOrdersQuickEntry SLCoitems/oLines subcollection binding
 [COMPLETED] form-level CreateCoAndLines handler search = no match displayed
+[CONFIRMED] StdFormSave contains custom SMK_Save() logic
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] inspect Quick Order Verification component event
+[NEXT] open complete SMK_Save() source
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -112,9 +117,9 @@ CoResult             : input/output + message parameter, JSON-array string
 
 ### Planned
 
-- Inspect the `Quick Order Verification` component's event-generation property without clicking it at runtime or modifying the form.
-- Inspect that exact generated event handler and its responses.
-- If no direct reference exists, inspect form/global script references.
+- Open `SMK_Save()` source without saving, compiling, or executing the form.
+- Search only within the confirmed script for `CreateCoAndLines`, Base64/JSON construction, IDO invocation, and helper calls.
+- Follow directly referenced helper methods separately.
 - Extract the exact JSON-building and Base64-encoding contract when tenant evidence exposes it.
 - Keep direct SQL inserts as a deferred fallback.
 
