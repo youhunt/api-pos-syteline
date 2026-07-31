@@ -14,7 +14,10 @@ All post-probe co_mst checks                     : ZERO ROWS
 Direct event/action text searches                : EXHAUSTED / ZERO ROWS
 Form Control Utilities tab                       : DEVICE SYNC ONLY — STOPPED
 Primary form call-site candidate                 : CustomerOrdersQuickEntry
-CustomerOrdersQuickEntry bindings                : NEXT
+CustomerOrdersQuickEntry header binding          : SLCos / oSLCos — CONFIRMED
+CustomerOrdersQuickEntry line binding            : SLCoitems / oLines subcollection — CONFIRMED
+CreateCoAndLines form reference                  : NOT YET CONFIRMED
+Next step                                        : inspect form event handlers/scripts
 ```
 
 ## Confirmed Runtime Contract
@@ -67,90 +70,65 @@ EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 
 ## FormsAndObjects Findings
 
-Tenant discovery selected `FormsAndObjects` because it is described as:
+`FormsAndObjects` was inspected because it is described as `Wrapper for FormControl and FormSync`. Its property contract is utility-oriented and does not expose obvious persistent properties named `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
+
+`IdoMethods` confirmed 37 methods, including pseudo-code utilities. Their method and parameter contracts were documented, but the visible `Form Control > Utilities` screen contained only device-type synchronization actions. That UI path was stopped without executing Sync.
+
+## CustomerOrdersQuickEntry Findings
+
+The user identified `CustomerOrdersQuickEntry` as a standard tenant form containing Customer Order header and item/detail lines.
+
+Design Mode evidence confirms:
 
 ```text
-Wrapper for FormControl and FormSync
+Primary Collection      : SLCos
+Primary Collection Name : oSLCos
+Custom Load Method      : blank
+
+Line Binding Type       : SubCollection Grid
+Parent Collection       : primary collection
+Subcollection Property  : SLCoitems
+Line Collection Name    : oLines
+Custom Load Method      : blank
+Reload After Child Save : enabled
+Update Locking          : Row
 ```
 
-Its property contract is utility-oriented and does not expose obvious persistent properties named `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
+A top-level `Secondary Collection 2: SLAppsParms` is also present, but its alias and role were not captured in this step.
 
-`IdoMethods` confirmed 37 methods. Relevant names included:
+Confirmed relationship:
 
 ```text
-UtilitiesListNames
-UtilitiesLoadObjects / UtilitiesLoadObjects2
-UtilitiesGeneratePseudoCode / UtilitiesGeneratePseudoCode2
-GetUtilitiesOutput
+oSLCos / SLCos
+└── oLines / SLCoitems
 ```
 
-Both pseudo-code generators have 12 `VARIANT` parameters. Their only parameter-name difference is sequence 7:
-
-```text
-UtilitiesGeneratePseudoCode  : RelativePosition
-UtilitiesGeneratePseudoCode2 : Options
-```
-
-`SegmentCount` is input/output. `GetUtilitiesOutput` accepts only `SessionID` and `SegmentNumber`.
-
-## Cloud UI Correction
-
-The tenant `Form Control > Utilities` screenshot showed only device-type synchronization buttons:
-
-```text
-Sync Dev from Master
-Sync Master from Dev
-Sync Archive from Master
-Sync Master from Archive
-```
-
-Therefore that visible Utilities tab is not a Customer Order or form-source discovery surface. No synchronization action was executed, and that path is stopped.
-
-## CustomerOrdersQuickEntry Candidate
-
-On 31 July 2026, the user identified the tenant form:
-
-```text
-CustomerOrdersQuickEntry
-```
-
-and confirmed that it contains both Customer Order header data and Customer Order item/detail lines.
-
-This is now the strongest call-site candidate because it represents the same business boundary required by SMK069:
-
-```text
-one Customer Order header
-+ one or more Customer Order lines
-```
-
-The exact collection bindings and execution mechanism are not yet confirmed. Do not yet claim that the form invokes `CreateCoAndLines`; it may use that method or another standard save/event sequence.
+This proves the form uses the standard header-plus-line data model required by SMK069. It does not prove that it calls `CreateCoAndLines`. Because standard Save is enabled for the subcollection and no custom load method is configured, the form may use normal parent/child persistence or additional form event/script logic.
 
 ## Active Discovery Plan
 
 ```text
-1. Inspect CustomerOrdersQuickEntry collection definitions.
-2. Confirm the primary header collection and line subcollection.
-3. Inspect form events/scripts around New, Save, Process, or Submit.
-4. Identify CreateCoAndLines or the equivalent standard call sequence.
-5. Extract the exact JSON-building and Base64-encoding contract when present.
-6. Build one minimal valid DEV payload.
-7. Invoke CreateCoAndLines once under controlled conditions.
-8. Verify both co_mst and coitem_mst.
-9. Reuse the verified contract for SMK069 Process/Reprocess.
+1. Search CustomerOrdersQuickEntry form events/scripts for CreateCoAndLines.
+2. If found, capture the event, script, parameter construction, and Base64 encoding.
+3. If not found, inspect New, Save, and Quick Order Verification event sequences.
+4. Determine whether the form uses CreateCoAndLines or ordinary SLCos/SLCoitems collection save.
+5. Build one minimal valid DEV payload only after the exact contract is confirmed.
+6. Invoke CreateCoAndLines once under controlled conditions.
+7. Verify both co_mst and coitem_mst.
+8. Reuse the verified contract for SMK069 Process/Reprocess.
 ```
 
 ## Current Small Step
 
-Open `CustomerOrdersQuickEntry` in Design Mode and capture only the collection definitions showing:
+Open the form-level Event Handlers/Scripts for `CustomerOrdersQuickEntry` and search for:
 
 ```text
-- primary collection;
-- secondary/subcollection names;
-- collection aliases;
-- parent-child relationship, when visible.
+CreateCoAndLines
 ```
 
-Do not save, customize, check out, submit, or create an order in this step.
+Capture the matching handler/script and its actions or code. If the search returns no match, capture that result only; do not inspect another event in the same step.
+
+Do not save, customize, check out, submit, or create an order.
 
 ## Evidence
 
@@ -164,6 +142,7 @@ tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
 tests/evidence/2026-07-31-formsandobjects-getutilitiesoutput-parameters.md
 tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
 tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
+tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
 ```
 
 ## Safety Boundary
