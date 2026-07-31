@@ -12,8 +12,9 @@ Exact business JSON schema                       : NOT CONFIRMED
 Controlled malformed probes                      : COMPLETED
 All post-probe co_mst checks                     : ZERO ROWS
 Direct event/action text searches                : EXHAUSTED / ZERO ROWS
-Form Control Utilities tab                       : DEVICE SYNC ONLY
-Current discovery target                         : tenant form list / standard CO form call site
+Form Control Utilities tab                       : DEVICE SYNC ONLY — STOPPED
+Primary form call-site candidate                 : CustomerOrdersQuickEntry
+CustomerOrdersQuickEntry bindings                : NEXT
 ```
 
 ## Confirmed Runtime Contract
@@ -103,43 +104,53 @@ Sync Archive from Master
 Sync Master from Archive
 ```
 
-Therefore the visible Utilities tab is not the expected pseudo-code generation interface. No synchronization action was executed, and that UI path is stopped.
+Therefore that visible Utilities tab is not a Customer Order or form-source discovery surface. No synchronization action was executed, and that path is stopped.
 
-## User Decision
+## CustomerOrdersQuickEntry Candidate
 
-On 31 July 2026, the user explicitly reconfirmed:
+On 31 July 2026, the user identified the tenant form:
 
 ```text
-Continue with SL.SLCos.CreateCoAndLines.
+CustomerOrdersQuickEntry
 ```
 
-The direct-insert stored-procedure path remains fallback only.
+and confirmed that it contains both Customer Order header data and Customer Order item/detail lines.
+
+This is now the strongest call-site candidate because it represents the same business boundary required by SMK069:
+
+```text
+one Customer Order header
++ one or more Customer Order lines
+```
+
+The exact collection bindings and execution mechanism are not yet confirmed. Do not yet claim that the form invokes `CreateCoAndLines`; it may use that method or another standard save/event sequence.
 
 ## Active Discovery Plan
 
 ```text
-1. Enumerate tenant form names through Form Control > Forms.
-2. Identify the standard Customer Order entry form or another confirmed form call site.
-3. Retrieve/read the selected form definition without checking it out or modifying it.
-4. Extract the exact JSON-building and Base64-encoding contract.
-5. Build one minimal valid DEV payload.
-6. Invoke CreateCoAndLines once under controlled conditions.
-7. Verify both co_mst and coitem_mst.
-8. Reuse the verified contract for SMK069 Process/Reprocess.
+1. Inspect CustomerOrdersQuickEntry collection definitions.
+2. Confirm the primary header collection and line subcollection.
+3. Inspect form events/scripts around New, Save, Process, or Submit.
+4. Identify CreateCoAndLines or the equivalent standard call sequence.
+5. Extract the exact JSON-building and Base64-encoding contract when present.
+6. Build one minimal valid DEV payload.
+7. Invoke CreateCoAndLines once under controlled conditions.
+8. Verify both co_mst and coitem_mst.
+9. Reuse the verified contract for SMK069 Process/Reprocess.
 ```
 
 ## Current Small Step
 
-In the already open `Form Control` screen:
+Open `CustomerOrdersQuickEntry` in Design Mode and capture only the collection definitions showing:
 
 ```text
-1. Select the Forms tab.
-2. Keep Scope = Site.
-3. Click Refresh List.
-4. Capture the resulting form list and visible search/filter controls.
+- primary collection;
+- secondary/subcollection names;
+- collection aliases;
+- parent-child relationship, when visible.
 ```
 
-Do not use `Check out`, `Check in`, `Get`, `Unlock`, `Archive`, `Restore`, `Delete`, or any Sync action in this step.
+Do not save, customize, check out, submit, or create an order in this step.
 
 ## Evidence
 
@@ -152,14 +163,15 @@ tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
 tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
 tests/evidence/2026-07-31-formsandobjects-getutilitiesoutput-parameters.md
 tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
+tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
 ```
 
 ## Safety Boundary
 
 ```text
 - No CreateCoAndLines invocation yet.
+- No Customer Order creation.
 - No form checkout or metadata modification.
 - No FormSync/device synchronization.
 - No direct insert into co_mst or coitem_mst.
-- No production Customer Order creation.
 ```
