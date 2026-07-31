@@ -11,13 +11,13 @@ Decoded payload type                             : JSON object / JObject
 Exact business JSON schema                       : NOT CONFIRMED
 Controlled malformed probes                      : COMPLETED
 All post-probe co_mst checks                     : ZERO ROWS
-Direct event/action text searches                : EXHAUSTED / ZERO ROWS
+Direct event/action metadata searches            : EXHAUSTED / ZERO ROWS
 Form Control Utilities tab                       : DEVICE SYNC ONLY — STOPPED
 Primary form call-site candidate                 : CustomerOrdersQuickEntry
 CustomerOrdersQuickEntry header binding          : SLCos / oSLCos — CONFIRMED
 CustomerOrdersQuickEntry line binding            : SLCoitems / oLines subcollection — CONFIRMED
-CreateCoAndLines form reference                  : NOT YET CONFIRMED
-Next step                                        : inspect form event handlers/scripts
+CreateCoAndLines form-handler search              : COMPLETED — NO MATCH DISPLAYED
+Next step                                        : inspect Quick Order Verification component event
 ```
 
 ## Confirmed Runtime Contract
@@ -94,7 +94,7 @@ Reload After Child Save : enabled
 Update Locking          : Row
 ```
 
-A top-level `Secondary Collection 2: SLAppsParms` is also present, but its alias and role were not captured in this step.
+A top-level `Secondary Collection 2: SLAppsParms` is also present, but its alias and role were not captured.
 
 Confirmed relationship:
 
@@ -103,15 +103,35 @@ oSLCos / SLCos
 └── oLines / SLCoitems
 ```
 
-This proves the form uses the standard header-plus-line data model required by SMK069. It does not prove that it calls `CreateCoAndLines`. Because standard Save is enabled for the subcollection and no custom load method is configured, the form may use normal parent/child persistence or additional form event/script logic.
+This proves the form uses the standard header-plus-line data model required by SMK069. It does not prove that it calls `CreateCoAndLines`. Because standard Save is enabled for the subcollection and no custom load method is configured, the form may use normal parent/child persistence or additional form/component logic.
+
+## Form Event Search Result
+
+The tenant filtered the form-level `Event Handlers` tab using:
+
+```text
+CreateCoAndLines
+```
+
+The result grid displayed no matching rows.
+
+This confirms only that the visible form-level handler search did not surface a direct matching entry. It does not rule out:
+
+```text
+- component-generated events;
+- form/global scripts;
+- inherited logic;
+- standard parent-child collection persistence;
+- an event whose name does not contain the method name.
+```
 
 ## Active Discovery Plan
 
 ```text
-1. Search CustomerOrdersQuickEntry form events/scripts for CreateCoAndLines.
-2. If found, capture the event, script, parameter construction, and Base64 encoding.
-3. If not found, inspect New, Save, and Quick Order Verification event sequences.
-4. Determine whether the form uses CreateCoAndLines or ordinary SLCos/SLCoitems collection save.
+1. Inspect the Quick Order Verification button's generated event name.
+2. Inspect that exact event handler and its responses.
+3. If it does not expose CreateCoAndLines, inspect form/global script references.
+4. Determine whether the form uses CreateCoAndLines or ordinary SLCos/SLCoitems Save.
 5. Build one minimal valid DEV payload only after the exact contract is confirmed.
 6. Invoke CreateCoAndLines once under controlled conditions.
 7. Verify both co_mst and coitem_mst.
@@ -120,15 +140,16 @@ This proves the form uses the standard header-plus-line data model required by S
 
 ## Current Small Step
 
-Open the form-level Event Handlers/Scripts for `CustomerOrdersQuickEntry` and search for:
+In Design Mode, select the visible `Quick Order Verification` button and capture its event-generation property, such as:
 
 ```text
-CreateCoAndLines
+Event To Generate
+Event
 ```
 
-Capture the matching handler/script and its actions or code. If the search returns no match, capture that result only; do not inspect another event in the same step.
+or the tenant-equivalent property name.
 
-Do not save, customize, check out, submit, or create an order.
+Do not click the button at runtime, save, customize, check out, submit, or create an order.
 
 ## Evidence
 
@@ -143,6 +164,7 @@ tests/evidence/2026-07-31-formsandobjects-getutilitiesoutput-parameters.md
 tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
 tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
 tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
+tests/evidence/2026-07-31-customerordersquickentry-createcoandlines-event-search-no-match.md
 ```
 
 ## Safety Boundary
