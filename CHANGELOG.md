@@ -17,10 +17,11 @@ implementation/19-controlled-sp-direct-order-processing.md
 implementation/20-controlled-cloud-ui-pseudocode-discovery.md
 ```
 
-- Added direct-insert decision evidence:
+- Added direct-insert evidence:
 
 ```text
 tests/evidence/2026-07-31-smk-save-source-and-direct-insert-decision.md
+tests/evidence/2026-07-31-legacy-portal-header-line-direct-insert-flow.md
 ```
 
 ### Changed
@@ -51,9 +52,23 @@ Line subcollection : SLCoitems / oLines
 - The user-provided complete `SMK_Save()` source proved that it only changes `Stat` to `S` for a request date more than 30 days in the past. It does not build JSON, encode Base64, invoke `CreateCoAndLines`, or create Customer Order data.
 - On 31 July 2026, the user explicitly paused the `CreateCoAndLines` discovery path and activated the controlled stored-procedure/direct-insert path to meet the delivery schedule.
 - `implementation/19-controlled-sp-direct-order-processing.md` is now the active implementation document.
-- The existing `dbo.InsertCO` header logic may be reused only after removing global trigger/constraint changes and placing header, lines, and staging updates in one transaction.
-- Triggers and constraints must remain enabled.
-- The next required input is the tenant-specific `dbo.coitem_mst` line insertion implementation.
+- The user supplied the complete legacy portal header and line creation flow.
+- Confirmed the header procedure `dbo.TDI_PortalEMotor_InsertCO` generates `@co_num` and returns it through an input/output parameter.
+- Confirmed the portal already reads the generated value with `cmd.Parameters["@co_num"].Value` and uses the same value for every `dbo.coitem_mst` line.
+- Confirmed tenant-specific header numbering patterns:
+
+```text
+normal    : EMYYMM####
+sparepart : EMPYYMM###
+```
+
+- Confirmed the legacy `co_mst` header field mapping and the full 26-column `coitem_mst` line insert mapping.
+- The generated order number does not require an identity lookup or second query; it should be generated once and reused for header and all lines in one transaction.
+- The legacy application-side two-stage save must be consolidated so that header, every line, and staging success updates commit or roll back together.
+- The existing global trigger disable/enable and foreign-key `NOCHECK/CHECK` statements will not be retained.
+- The string-concatenated line inserts will be replaced with parameterized or set-based SQL.
+- Order-number generation must be concurrency-safe; unlocked `MAX(co_num) + 1` is not acceptable for the new processor.
+- For reprocessing traceability, the generated SyteLine `co_num` should be stored separately from an external/POS order number when those are different.
 
 ### Current SMK069 Status
 
@@ -66,10 +81,13 @@ Line subcollection : SLCoitems / oLines
 [CONFIRMED] Customer Order line model
 [PAUSED] CreateCoAndLines schema/call-site discovery
 [ACTIVE] controlled stored-procedure/direct-insert implementation
-[AVAILABLE] existing dbo.InsertCO header procedure
-[REQUIRED] refactor dbo.InsertCO without DISABLE TRIGGER or NOCHECK
-[NEXT] obtain previous coitem_mst line insert procedure/code
-[PENDING] build dbo.SMK069ProcessCustomerOrderSp
+[CONFIRMED] legacy dbo.TDI_PortalEMotor_InsertCO header mapping
+[CONFIRMED] legacy dbo.coitem_mst line insert mapping
+[CONFIRMED] generated @co_num output handoff to detail lines
+[REQUIRED] consolidate header, lines, and staging updates into one transaction
+[REQUIRED] keep triggers and constraints enabled
+[NEXT] draft dbo.SMK069ProcessCustomerOrderSp from staging
+[PENDING] confirm distinct staging field for generated SyteLine co_num
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
 [PENDING] final external POS REST API contract
@@ -78,10 +96,11 @@ Line subcollection : SLCoitems / oLines
 
 ### Planned
 
-- Obtain the previous `InsertCOItem`/`InsertCoLine` procedure or direct `INSERT INTO coitem_mst` mapping.
-- Build one controlled processing procedure for header, all lines, and staging status in a single transaction.
+- Draft `dbo.SMK069ProcessCustomerOrderSp` using the confirmed header and line mappings.
+- Read one source order from staging, generate one final `@co_num`, and reuse it for `co_mst` plus every `coitem_mst` row.
+- Return the generated `co_num` and a controlled error/message output.
 - Keep triggers and constraints enabled.
-- Add idempotency and reprocess protection before DEV execution.
+- Add transaction control, idempotency, reprocess protection, and concurrency-safe numbering before DEV execution.
 
 ## [0.1.0] — 2026-07-23
 
