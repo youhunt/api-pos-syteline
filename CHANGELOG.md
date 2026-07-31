@@ -35,6 +35,7 @@ tests/evidence/2026-07-31-formsandobjects-getutilitiesoutput-parameters.md
 tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
 tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
 tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
+tests/evidence/2026-07-31-customerordersquickentry-createcoandlines-event-search-no-match.md
 ```
 
 ### Changed
@@ -77,8 +78,9 @@ CoResult             : input/output + message parameter, JSON-array string
 - Confirmed its line grid is a `SubCollection Grid` using parent `primary collection`, subcollection property `SLCoitems`, and collection name `oLines`.
 - Confirmed `Reload After Child Save` is enabled, update locking is `Row`, and no custom load method is configured for header or line.
 - Confirmed a top-level `Secondary Collection 2: SLAppsParms` exists; its role remains uninspected.
-- The bindings prove the standard header/detail relationship but do not yet prove that the form invokes `CreateCoAndLines`; ordinary parent-child collection Save remains possible.
-- Selected form event/script search for `CreateCoAndLines` as the next controlled step.
+- Confirmed the form-level Event Handlers search for `CreateCoAndLines` displayed no matching row.
+- The no-match result does not exclude component-generated events, scripts, inherited logic, or ordinary `SLCos`/`SLCoitems` collection Save.
+- Selected inspection of the `Quick Order Verification` component's generated event as the next controlled step.
 
 ### Current SMK069 Status
 
@@ -98,8 +100,9 @@ CoResult             : input/output + message parameter, JSON-array string
 [SELECTED] CustomerOrdersQuickEntry as form call-site candidate
 [CONFIRMED] CustomerOrdersQuickEntry SLCos/oSLCos header binding
 [CONFIRMED] CustomerOrdersQuickEntry SLCoitems/oLines subcollection binding
+[COMPLETED] form-level CreateCoAndLines handler search = no match displayed
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] search CustomerOrdersQuickEntry events/scripts for CreateCoAndLines
+[NEXT] inspect Quick Order Verification component event
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -109,8 +112,9 @@ CoResult             : input/output + message parameter, JSON-array string
 
 ### Planned
 
-- Search `CustomerOrdersQuickEntry` form events/scripts for `CreateCoAndLines` without saving or customizing the form.
-- If no direct reference exists, inspect New, Save, and Quick Order Verification event sequences separately.
+- Inspect the `Quick Order Verification` component's event-generation property without clicking it at runtime or modifying the form.
+- Inspect that exact generated event handler and its responses.
+- If no direct reference exists, inspect form/global script references.
 - Extract the exact JSON-building and Base64-encoding contract when tenant evidence exposes it.
 - Keep direct SQL inserts as a deferred fallback.
 
