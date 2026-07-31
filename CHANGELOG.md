@@ -23,6 +23,7 @@ implementation/20-controlled-cloud-ui-pseudocode-discovery.md
 tests/evidence/2026-07-31-smk-save-source-and-direct-insert-decision.md
 tests/evidence/2026-07-31-legacy-portal-header-line-direct-insert-flow.md
 tests/evidence/2026-07-31-smk069-sp-first-compile-errors-and-fix.md
+tests/evidence/2026-07-31-smk069-sp-compile-success-and-missing-staging-test.md
 ```
 
 - Controlled Customer Order processing procedure:
@@ -36,53 +37,43 @@ database/procedures/SMK069ProcessCustomerOrderSp.sql
 - Header total remains `SUM(unit_price * qty_ordered)`.
 - Cost remains outside staging and is retrieved from `item_mst` during Customer Order processing.
 - Standard `SiteRef` is used; no duplicate `site_ref` column.
-- Standard Customer Order model remains:
+- Customer Order model remains:
 
 ```text
 Header : SL.SLCos / dbo.co_mst
 Lines  : SL.SLCoitems / dbo.coitem_mst
 ```
 
-- `CreateCoAndLines` discovery is paused because its exact business JSON schema was not found within the delivery boundary.
-- The direct stored-procedure implementation is active.
-- The legacy portal proved that `@co_num OUTPUT` is generated once and reused for every `coitem_mst` line.
-- Number patterns remain:
+- `CreateCoAndLines` discovery remains paused; controlled direct stored-procedure processing is active.
+- The active procedure contract was simplified by removing:
 
 ```text
-normal    : EMYYMM####
-sparepart : EMPYYMM###
+@Sparepart
+@PickupDate
+@StartTime
+@EndTime
 ```
 
-- Added `dbo.SMK069ProcessCustomerOrderSp` with transaction control, validation, item-master cost retrieval, concurrency-safe numbering, set-based line insertion, idempotent reprocess, rollback, and staging status/error maintenance.
-- The source/POS `co_num` is retained in staging and stored in `co_mst.cust_po` for reprocess lookup.
-- The first tenant compile attempt failed before execution and confirmed these corrections:
+- The active generated Customer Order pattern is now:
 
 ```text
-1. Alias types such as CoNumType, InfobarType, and UsernameType must not be used as CAST/CONVERT target system types.
-2. Portal-only Uf_* columns are not present in the current tenant.
+COYYMM####
 ```
 
-- Replaced alias-type conversion expressions with direct assignment or system-type conversion.
-- Removed unavailable header columns:
+- Portal-only unavailable `Uf_*` columns remain excluded.
+- Alias types remain valid for procedure parameters and variables, but system types such as `NVARCHAR` are used as `CAST`/`CONVERT` targets.
+- `dbo.SMK069ProcessCustomerOrderSp` compiled successfully in the tenant.
+- The first controlled execution returned:
 
 ```text
-Uf_date_pengambilan
-Uf_StartTime
-Uf_EndTime
+Success      : 0
+CreatedCoNum : NULL
+Error        : 50003 — staging SiteRef + source co_num not found
 ```
 
-- Removed unavailable line columns:
-
-```text
-Uf_Item_price
-Uf_net_price
-Uf_price_aft_disc1
-Uf_price_aft_disc2
-Uf_price_aft_disc3
-```
-
-- Removed the unused pickup-date/start-time/end-time procedure parameters.
-- Updated the example execution block to use system types for local output variables.
+- Verification showed no `co_mst` or `coitem_mst` rows were created.
+- This is classified as a controlled validation failure, not a compile or partial-write failure.
+- The next execution must use an exact existing staging `SiteRef + co_num` pair.
 
 ### Current SMK069 Status
 
@@ -96,27 +87,27 @@ Uf_price_aft_disc3
 [PAUSED] CreateCoAndLines schema/call-site discovery
 [ACTIVE] controlled stored-procedure/direct-insert implementation
 [CONFIRMED] legacy header and line mappings
-[FAILED] first stored-procedure compile attempt
-[COMPLETED] corrective SQL revision for alias conversions and missing Uf_* columns
-[NOT EXECUTED] Customer Order processing procedure
-[NEXT] compile the corrected procedure in DEV
-[PENDING] run one controlled valid-order test
-[PENDING] verify triggers accept the mapping while remaining enabled
+[COMPILED] dbo.SMK069ProcessCustomerOrderSp in tenant
+[COMPLETED] first controlled execution
+[SAFE FAILURE] no matching staging group; no Customer Order rows created
+[NEXT] list exact staging SiteRef + co_num groups
+[PENDING] execute one valid staging order
+[PENDING] verify trigger-compatible header and line creation
 [PENDING] test idempotent reprocess
 [PENDING] test invalid-item rollback and staging error update
-[PENDING] connect Process/Reprocess button to the procedure
+[PENDING] connect Process/Reprocess button
 [PENDING] implement controlled receive API
 [PENDING] final external POS REST API contract
 ```
 
 ### Planned
 
-- Compile the corrected `dbo.SMK069ProcessCustomerOrderSp` in DEV without executing it.
-- Resolve only exact tenant compile errors if any remain.
-- After successful compile, run one controlled valid staging order and verify `co_mst` plus all `coitem_mst` rows.
-- Run the same source order again to verify idempotency.
-- Run an invalid-item case to verify rollback and staging error persistence.
-- Connect the verified method to Process/Reprocess.
+- Query available staging groups.
+- Execute the procedure with one exact existing `SiteRef + source co_num` pair.
+- Verify one `co_mst` header and all expected `coitem_mst` lines.
+- Re-run the same source order to verify idempotency.
+- Run an invalid-item case to verify rollback and error persistence.
+- Connect the verified procedure to Process/Reprocess.
 
 ## [0.1.0] — 2026-07-23
 
