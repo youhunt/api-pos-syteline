@@ -4,22 +4,22 @@
 
 ```text
 Decision date                     : 30 July 2026
-Initial user approval             : CONFIRMED
-Later user direction              : RESUME CreateCoAndLines metadata discovery
-Processing direction              : DEFERRED ALTERNATIVE
+Fallback reconfirmed              : 31 July 2026
+Processing direction              : DEFERRED FALLBACK
+Active Customer Order path        : SL.SLCos.CreateCoAndLines
 Direct target tables              : dbo.co_mst and dbo.coitem_mst
 Implementation status             : NOT STARTED
 SQL created                       : NO
 SQL executed                      : NO
 ```
 
-The user previously confirmed that an earlier implementation used a stored procedure with direct inserts into `co_mst` and `coitem_mst`. This alternative remains documented, but it is no longer the active next step because the user subsequently instructed the project to continue metadata discovery for `SLCos.CreateCoAndLines`.
-
-Active work continues in:
+The user reconfirmed that the project should continue with the standard method:
 
 ```text
-implementation/18-discover-createcoandlines-call-sites.md
+SL.SLCos.CreateCoAndLines
 ```
+
+The direct-insert stored-procedure approach remains documented only as a fallback if the standard-method contract cannot be completed within the agreed delivery boundary.
 
 ## Intended Alternative Flow
 
@@ -58,7 +58,7 @@ Direct inserts may bypass standard SyteLine business logic. This path is not con
 
 ```text
 - Do not draft or execute direct-insert SQL now.
-- Do not request the previous stored procedure as the current next step.
-- Continue read-only CreateCoAndLines metadata discovery.
-- Reactivate this document only after a later explicit user decision.
+- Do not disable standard triggers or constraints.
+- Continue the CreateCoAndLines form/call-site discovery path.
+- Reactivate this document only after another explicit user decision.
 ```
