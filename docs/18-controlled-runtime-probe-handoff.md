@@ -1,65 +1,81 @@
-# 18 — Controlled CreateCoAndLines Runtime Probe Handoff
+# 18 — Customer Order Processing Handoff
 
 ## Current Status
 
 ```text
-Environment                                      : DEV / Infor Cloud tenant
-Method                                           : SL.SLCos.CreateCoAndLines
-Runtime transport                                : Base64
-Decoded payload                                  : JSON object / JObject
-Exact business JSON schema                       : NOT CONFIRMED
-Controlled probes                                : COMPLETED
-Post-probe co_mst checks                         : ZERO ROWS
-Direct event/action searches                     : EXHAUSTED / ZERO ROWS
-Form Control Utilities                           : DEVICE SYNC ONLY — STOPPED
-Primary form call-site candidate                 : CustomerOrdersQuickEntry
-Header binding                                   : SLCos / oSLCos — CONFIRMED
-Line binding                                     : SLCoitems / oLines subcollection — CONFIRMED
-Form Event Handlers search for CreateCoAndLines  : NO MATCH DISPLAYED
-StdFormSave responses                            : CONFIRMED
-Strongest source candidate                       : SMK_Save()
-Next step                                        : open SMK_Save() source
-Direct-insert stored procedure                   : DEFERRED FALLBACK
+Environment                         : DEV / Infor Cloud tenant
+CreateCoAndLines discovery          : PAUSED BY USER
+Active implementation path          : controlled stored procedure / direct insert
+Target header table                 : dbo.co_mst
+Target line table                   : dbo.coitem_mst
+Staging table                       : dbo.ue_SMK069_temp_sales_mst
+Existing header procedure           : dbo.InsertCO
+Header procedure reuse              : partial, with safety refactor
+Tenant line insert mapping          : still required
 ```
 
-## Confirmed CustomerOrdersQuickEntry Model
+## Why the Standard-Method Path Was Paused
+
+The tenant confirmed `SL.SLCos.CreateCoAndLines` requires a Base64-encoded JSON object, but the exact business schema was not available. Controlled probes and metadata/form searches did not reveal a valid payload contract.
+
+`CustomerOrdersQuickEntry` confirmed the standard data model:
 
 ```text
 oSLCos / SLCos
 └── oLines / SLCoitems
 ```
 
-The line grid is a subcollection grid with `Reload After Child Save` enabled and no custom load method.
+Its custom `SMK_Save()` source was inspected and proved unrelated to Customer Order creation; it only changes order status for a backdated custom request date.
 
-## StdFormSave Responses
+## Active Processing Contract
 
 ```text
-0 Generate event      LineSetValueForPricingEngine(COLID(object.SLCoitems))
-1 Run Script          BdcDeleteVar(COLINE) COLID(object.SLCoitems)
-2 Method Call         MGCore.DefineVariables.DefineVariableSp(...) — UI truncated
-3 Form Script Method  SMK_Save()
-4 Form Script Method  SMK025_UpdateReqDateLineIfEmpty()
+staging order rows
+→ validate one order and one site
+→ begin transaction
+→ insert co_mst
+→ insert every coitem_mst line
+→ update staging to P
+→ commit
 ```
 
-All five visible responses are enabled (`Disabled = false`).
+Failure:
 
-This confirms custom form logic in the save chain. It does not yet reveal whether `SMK_Save()` calls `CreateCoAndLines`, builds Base64 JSON, or uses another save mechanism.
+```text
+rollback complete order
+→ staging status E
+→ store error_msg
+→ retry_count + 1
+```
+
+## Required Safety Controls
+
+```text
+SET XACT_ABORT ON
+TRY/CATCH and explicit transaction
+triggers remain enabled
+constraints remain enabled
+no partial header/line commit
+idempotency and reprocess protection
+customer/item/site validation
+cost retrieval from master data
+header total = SUM(unit_price * qty_ordered)
+```
 
 ## Next Step Only
 
-Open the complete source body for:
+Obtain the previous tenant-specific line insertion implementation for `dbo.coitem_mst`, preferably:
 
 ```text
-SMK_Save()
+InsertCOItem / InsertCoLine stored procedure
 ```
 
-Do not edit, compile, save, run the form, create an order, invoke `CreateCoAndLines`, or execute direct SQL.
+or its direct `INSERT INTO coitem_mst` code.
+
+Do not guess mandatory line fields and do not execute the old header procedure with triggers or constraints disabled.
 
 ## Evidence
 
 ```text
-tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
-tests/evidence/2026-07-31-customerordersquickentry-createcoandlines-event-search-no-match.md
-tests/evidence/2026-07-31-customerordersquickentry-standard-save-events-visible.md
-tests/evidence/2026-07-31-customerordersquickentry-stdformsave-responses.md
+tests/evidence/2026-07-31-smk-save-source-and-direct-insert-decision.md
 ```
