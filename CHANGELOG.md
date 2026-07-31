@@ -34,6 +34,7 @@ tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
 tests/evidence/2026-07-31-formsandobjects-getutilitiesoutput-parameters.md
 tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
 tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
+tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
 ```
 
 ### Changed
@@ -71,9 +72,13 @@ CoResult             : input/output + message parameter, JSON-array string
 - Confirmed `GetUtilitiesOutput` accepts `SessionID` and `SegmentNumber`.
 - Confirmed the visible `Form Control > Utilities` tab contains only device-type synchronization actions. No Sync action was executed, and that path is stopped.
 - User explicitly reconfirmed `SL.SLCos.CreateCoAndLines` as the active implementation direction; direct SQL insert remains fallback only.
-- User identified `CustomerOrdersQuickEntry` as a tenant form containing both Customer Order header and item/detail lines.
 - Selected `CustomerOrdersQuickEntry` as the strongest current standard call-site candidate.
-- The next controlled step is to inspect its primary and secondary collection bindings before reviewing events or scripts.
+- Confirmed its primary header collection is `SLCos` with collection name `oSLCos`.
+- Confirmed its line grid is a `SubCollection Grid` using parent `primary collection`, subcollection property `SLCoitems`, and collection name `oLines`.
+- Confirmed `Reload After Child Save` is enabled, update locking is `Row`, and no custom load method is configured for header or line.
+- Confirmed a top-level `Secondary Collection 2: SLAppsParms` exists; its role remains uninspected.
+- The bindings prove the standard header/detail relationship but do not yet prove that the form invokes `CreateCoAndLines`; ordinary parent-child collection Save remains possible.
+- Selected form event/script search for `CreateCoAndLines` as the next controlled step.
 
 ### Current SMK069 Status
 
@@ -91,8 +96,10 @@ CoResult             : input/output + message parameter, JSON-array string
 [STOPPED] Form Control Utilities path = device synchronization only
 [ACTIVE] SL.SLCos.CreateCoAndLines standard-method direction
 [SELECTED] CustomerOrdersQuickEntry as form call-site candidate
+[CONFIRMED] CustomerOrdersQuickEntry SLCos/oSLCos header binding
+[CONFIRMED] CustomerOrdersQuickEntry SLCoitems/oLines subcollection binding
 [DEFERRED] direct-insert stored-procedure alternative
-[NEXT] inspect CustomerOrdersQuickEntry collection definitions
+[NEXT] search CustomerOrdersQuickEntry events/scripts for CreateCoAndLines
 [PENDING] exact decoded JSON schema
 [PENDING] implement Process/Reprocess
 [PENDING] implement controlled receive API
@@ -102,9 +109,8 @@ CoResult             : input/output + message parameter, JSON-array string
 
 ### Planned
 
-- Inspect `CustomerOrdersQuickEntry` collection definitions without saving or customizing the form.
-- Confirm the header and line IDO bindings.
-- Inspect the relevant form events/scripts only after collection bindings are confirmed.
+- Search `CustomerOrdersQuickEntry` form events/scripts for `CreateCoAndLines` without saving or customizing the form.
+- If no direct reference exists, inspect New, Save, and Quick Order Verification event sequences separately.
 - Extract the exact JSON-building and Base64-encoding contract when tenant evidence exposes it.
 - Keep direct SQL inserts as a deferred fallback.
 
