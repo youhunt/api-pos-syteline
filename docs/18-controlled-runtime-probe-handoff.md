@@ -15,7 +15,8 @@ Form Control Utilities                           : DEVICE SYNC ONLY — STOPPED
 Primary form call-site candidate                 : CustomerOrdersQuickEntry
 Header binding                                   : SLCos / oSLCos — CONFIRMED
 Line binding                                     : SLCoitems / oLines subcollection — CONFIRMED
-Next step                                        : search form events/scripts for CreateCoAndLines
+Form Event Handlers search for CreateCoAndLines  : NO MATCH DISPLAYED
+Next step                                        : inspect Quick Order Verification component event
 Direct-insert stored procedure                   : DEFERRED FALLBACK
 ```
 
@@ -77,17 +78,21 @@ oSLCos / SLCos
 
 This confirms the standard Customer Order header/detail model. It does not establish that the form calls `CreateCoAndLines`; standard parent-child Save may be used instead.
 
-## Next Step Only
+## Event Search Result
 
-Open the form-level Event Handlers/Scripts for `CustomerOrdersQuickEntry` and search for:
+The form-level `Event Handlers` tab was filtered with:
 
 ```text
 CreateCoAndLines
 ```
 
-Capture the matching event/script and its action/code. If there is no match, capture the no-match result only.
+No matching handler row was displayed. This does not rule out component events, scripts, inherited logic, or ordinary collection Save.
 
-Do not save, customize, check out, submit, or create an order.
+## Next Step Only
+
+Select the visible `Quick Order Verification` button in Design Mode and capture its event-generation property, such as `Event To Generate`, `Event`, or the tenant-equivalent field.
+
+Do not click the button at runtime, save, customize, check out, submit, or create an order.
 
 ## Evidence
 
@@ -95,4 +100,5 @@ Do not save, customize, check out, submit, or create an order.
 tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
 tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
 tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
+tests/evidence/2026-07-31-customerordersquickentry-createcoandlines-event-search-no-match.md
 ```
