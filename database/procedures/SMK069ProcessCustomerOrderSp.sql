@@ -1,22 +1,18 @@
 /*
     Procedure : dbo.SMK069ProcessCustomerOrderSp
-    Purpose   : Convert one staged POS/source order into one Customer Order
-                header (co_mst) and all Customer Order lines (coitem_mst).
+    Tenant    : LENSA_SL_CSI_BAK / DEV
 
-    Important:
-    - @SourceCoNum is the source/POS order number stored in staging.co_num.
-    - The generated SyteLine order number is returned in @CreatedCoNum.
-    - The source/POS number is stored in co_mst.cust_po for idempotency.
-    - Triggers and constraints remain enabled.
-    - Header, lines, and staging success status commit together.
-    - Portal-only Uf_* columns are intentionally not used because they are
-      not present in the current tenant.
+    Tenant-confirmed simplifications:
+    - no @Sparepart parameter
+    - no pickup/start/end-time parameters
+    - no unavailable portal Uf_* columns
+    - generated Customer Order pattern = COYYMM####
+    - source/POS co_num remains in staging and is stored in co_mst.cust_po
 */
 
 CREATE OR ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp
     @SiteRef       SiteType,
     @SourceCoNum   CoNumType,
-    @Sparepart     ListYesNoType = 0,
     @CustSeq       CustSeqType = 0,
     @ProcessedBy   UsernameType = NULL,
     @CreatedCoNum  CoNumType OUTPUT,
@@ -65,14 +61,14 @@ BEGIN
     SET @ProcessedBy = COALESCE
     (
         NULLIF(LTRIM(RTRIM(@ProcessedBy)), N''),
-        SUSER_SNAME()
+        CONVERT(NVARCHAR(128), SUSER_SNAME())
     );
 
     BEGIN TRY
         BEGIN TRANSACTION;
 
         /* =============================================================
-           1. Validate and lock one staging order
+           1. Validate request and lock selected staging order
            ============================================================= */
         IF NULLIF(@SiteRef, N'') IS NULL
             THROW 50001, N'SiteRef wajib diisi.', 1;
@@ -87,7 +83,7 @@ BEGIN
             WHERE SiteRef = @SiteRef
               AND LTRIM(RTRIM(co_num)) = @SourceCoNum
         )
-            THROW 50003, N'Data staging tidak ditemukan.', 1;
+            THROW 50003, N'Data staging untuk SiteRef dan source co_num tersebut tidak ditemukan.', 1;
 
         IF EXISTS
         (
@@ -97,7 +93,7 @@ BEGIN
               AND LTRIM(RTRIM(co_num)) = @SourceCoNum
               AND process_status = N'C'
         )
-            THROW 50004, N'Order staging berstatus Cancelled.', 1;
+            THROW 50004, N'Order staging berstatus Cancelled dan tidak dapat diproses.', 1;
 
         SELECT
             @LineCount      = COUNT(*),
@@ -121,7 +117,7 @@ BEGIN
               AND LTRIM(RTRIM(co_num)) = @SourceCoNum
               AND NULLIF(LTRIM(RTRIM(cust_num)), N'') IS NULL
         )
-            THROW 50006, N'cust_num wajib diisi pada seluruh line.', 1;
+            THROW 50006, N'cust_num wajib diisi pada seluruh line staging.', 1;
 
         IF EXISTS
         (
@@ -171,7 +167,7 @@ BEGIN
               AND LTRIM(RTRIM(co_num)) = @SourceCoNum
               AND NULLIF(LTRIM(RTRIM(item)), N'') IS NULL
         )
-            THROW 50012, N'item wajib diisi pada seluruh line.', 1;
+            THROW 50012, N'item wajib diisi pada seluruh line staging.', 1;
 
         IF EXISTS
         (
@@ -218,7 +214,7 @@ BEGIN
             THROW 50016, N'Satu source co_num hanya boleh memiliki satu tax_code1.', 1;
 
         /* =============================================================
-           2. Validate customer, warehouse, currency, and items
+           2. Validate customer, warehouse, currency, and item master data
            ============================================================= */
         IF NOT EXISTS
         (
@@ -228,7 +224,7 @@ BEGIN
               AND LTRIM(RTRIM(cust_num)) = @CustNum
               AND cust_seq = @CustSeq
         )
-            THROW 50017, N'Customer/customer sequence tidak ditemukan.', 1;
+            THROW 50017, N'Customer/customer sequence tidak ditemukan pada site tersebut.', 1;
 
         SELECT
             @Contact           = contact##1,
@@ -244,9 +240,6 @@ BEGIN
 
         SET @TermsCode = COALESCE(@StageTermsCode, @TermsCode);
         SET @TaxCode = COALESCE(@StageTaxCode, @TaxCode);
-
-        IF ISNULL(@Sparepart, 0) = 1
-            SET @TaxCode = N'PPN11%';
 
         IF NOT EXISTS
         (
@@ -279,7 +272,8 @@ BEGIN
 
         IF @BadItem IS NOT NULL
         BEGIN
-            SET @ThrowMessage = N'Item tidak ditemukan: ' + LTRIM(RTRIM(@BadItem));
+            SET @ThrowMessage = N'Item tidak ditemukan pada item_mst: '
+                              + LTRIM(RTRIM(@BadItem));
             THROW 50020, @ThrowMessage, 1;
         END;
 
@@ -295,7 +289,8 @@ BEGIN
 
         IF @BadItem IS NOT NULL
         BEGIN
-            SET @ThrowMessage = N'U/M kosong untuk item: ' + LTRIM(RTRIM(@BadItem));
+            SET @ThrowMessage = N'U/M kosong pada staging dan item master untuk item: '
+                              + LTRIM(RTRIM(@BadItem));
             THROW 50021, @ThrowMessage, 1;
         END;
 
@@ -320,9 +315,9 @@ BEGIN
 
             IF ISNULL(@ExistingLineCount, 0) <> @LineCount
             BEGIN
-                SET @ThrowMessage = N'Customer Order '
+                SET @ThrowMessage = N'Source order sudah memiliki Customer Order '
                                   + LTRIM(RTRIM(@ExistingCoNum))
-                                  + N' sudah ada, tetapi jumlah line berbeda.';
+                                  + N', tetapi jumlah line tidak sama dengan staging.';
                 THROW 50022, @ThrowMessage, 1;
             END;
 
@@ -344,9 +339,9 @@ BEGIN
                   )
             )
             BEGIN
-                SET @ThrowMessage = N'Customer Order '
+                SET @ThrowMessage = N'Source order sudah memiliki Customer Order '
                                   + LTRIM(RTRIM(@ExistingCoNum))
-                                  + N' sudah ada, tetapi detail line berbeda.';
+                                  + N', tetapi detail line berbeda dengan staging.';
                 THROW 50023, @ThrowMessage, 1;
             END;
 
@@ -366,7 +361,7 @@ BEGIN
             SET @Success = 1;
             SET @Infobar = N'Customer Order '
                          + LTRIM(RTRIM(@CreatedCoNum))
-                         + N' sudah pernah dibuat; staging disinkronkan.';
+                         + N' sudah pernah dibuat; staging disinkronkan menjadi Processed.';
 
             COMMIT TRANSACTION;
             RETURN;
@@ -380,10 +375,10 @@ BEGIN
               AND LTRIM(RTRIM(co_num)) = @SourceCoNum
               AND process_status = N'P'
         )
-            THROW 50024, N'Staging berstatus Processed tetapi CO terkait tidak ditemukan.', 1;
+            THROW 50024, N'Staging berstatus Processed tetapi Customer Order terkait tidak ditemukan.', 1;
 
         /* =============================================================
-           4. Calculate header totals from staging and item_mst
+           4. Calculate header totals from staging and item master
            ============================================================= */
         SELECT
             @HeaderMatlCost = SUM(ISNULL(i.matl_cost, 0) * s.qty_ordered),
@@ -401,18 +396,11 @@ BEGIN
         SET @HeaderPrice = ISNULL(@HeaderPrice, 0);
 
         /* =============================================================
-           5. Generate one concurrency-safe final co_num
+           5. Generate one concurrency-safe Customer Order number
+              Current tenant pattern: COYYMM####
            ============================================================= */
-        IF ISNULL(@Sparepart, 0) = 1
-        BEGIN
-            SET @KeyPrefix = N'EMP' + CONVERT(CHAR(4), @OrderDate, 12);
-            SET @NumberLength = 3;
-        END
-        ELSE
-        BEGIN
-            SET @KeyPrefix = N'EM' + CONVERT(CHAR(4), @OrderDate, 12);
-            SET @NumberLength = 4;
-        END;
+        SET @KeyPrefix = N'CO' + CONVERT(CHAR(4), @OrderDate, 12);
+        SET @NumberLength = 4;
 
         SET @LockResource = N'SMK069_CO_NUM|'
                           + LTRIM(RTRIM(@SiteRef))
@@ -426,7 +414,7 @@ BEGIN
             @LockTimeout = 15000;
 
         IF @LockResult < 0
-            THROW 50025, N'Gagal memperoleh lock nomor Customer Order.', 1;
+            THROW 50025, N'Gagal memperoleh lock untuk pembuatan nomor Customer Order.', 1;
 
         SELECT
             @KeyID = ISNULL
@@ -456,15 +444,17 @@ BEGIN
         IF @KeyID > @MaxKeyID
             THROW 50026, N'Nomor Customer Order untuk prefix tersebut sudah penuh.', 1;
 
-        /* Assignment to alias type is allowed; do not CONVERT to CoNumType. */
-        SET @CreatedCoNum =
+        SET @CreatedCoNum = CONVERT
+        (
+            NVARCHAR(10),
             @KeyPrefix
             + RIGHT
               (
                   REPLICATE(N'0', @NumberLength)
                   + CONVERT(NVARCHAR(20), @KeyID),
                   @NumberLength
-              );
+              )
+        );
 
         IF EXISTS
         (
@@ -476,7 +466,7 @@ BEGIN
             THROW 50027, N'Nomor Customer Order yang dihasilkan sudah digunakan.', 1;
 
         /* =============================================================
-           6. Insert co_mst header — no unavailable portal Uf_* columns
+           6. Insert Customer Order header
            ============================================================= */
         INSERT INTO dbo.co_mst
         (
@@ -522,8 +512,7 @@ BEGIN
         );
 
         /* =============================================================
-           7. Insert all coitem_mst lines using the same @CreatedCoNum
-              Portal-only Uf_* columns are intentionally omitted.
+           7. Insert all Customer Order lines with same @CreatedCoNum
            ============================================================= */
         INSERT INTO dbo.coitem_mst
         (
@@ -579,7 +568,7 @@ BEGIN
           AND LTRIM(RTRIM(s.co_num)) = @SourceCoNum;
 
         IF @@ROWCOUNT <> @LineCount
-            THROW 50028, N'Jumlah line yang dibuat tidak sama dengan staging.', 1;
+            THROW 50028, N'Jumlah Customer Order line yang dibuat tidak sama dengan staging.', 1;
 
         /* =============================================================
            8. Mark staging Processed and commit
@@ -622,8 +611,7 @@ BEGIN
 
         SET @CreatedCoNum = NULL;
         SET @Success = 0;
-        /* Assignment to alias type is allowed; do not CONVERT to InfobarType. */
-        SET @Infobar = @ErrorMessage;
+        SET @Infobar = CONVERT(NVARCHAR(2800), @ErrorMessage);
 
         BEGIN TRY
             UPDATE dbo.ue_SMK069_temp_sales_mst
@@ -639,38 +627,18 @@ BEGIN
               AND LTRIM(RTRIM(co_num)) = @SourceCoNum;
         END TRY
         BEGIN CATCH
-            SET @Infobar = LEFT
+            SET @Infobar = CONVERT
             (
-                @ErrorMessage
-                + N' | Gagal memperbarui status staging: '
-                + ERROR_MESSAGE(),
-                4000
+                NVARCHAR(2800),
+                LEFT
+                (
+                    @ErrorMessage
+                    + N' | Gagal memperbarui status staging: '
+                    + ERROR_MESSAGE(),
+                    4000
+                )
             );
         END CATCH;
     END CATCH;
 END;
 GO
-
-/*
-Controlled DEV execution using system types for local variables:
-
-DECLARE
-    @CreatedCoNum NVARCHAR(10),
-    @Success TINYINT,
-    @Infobar NVARCHAR(4000);
-
-EXEC dbo.SMK069ProcessCustomerOrderSp
-    @SiteRef      = N'PG',
-    @SourceCoNum  = N'CO0001',
-    @Sparepart    = 0,
-    @CustSeq      = 0,
-    @ProcessedBy  = N'<DEV_USER>',
-    @CreatedCoNum = @CreatedCoNum OUTPUT,
-    @Success      = @Success OUTPUT,
-    @Infobar      = @Infobar OUTPUT;
-
-SELECT
-    @Success AS Success,
-    @CreatedCoNum AS CreatedCoNum,
-    @Infobar AS Infobar;
-*/
