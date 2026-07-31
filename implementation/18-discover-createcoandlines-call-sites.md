@@ -3,27 +3,17 @@
 ## Status
 
 ```text
-Environment                                      : DEV
-Controlled malformed probes                      : COMPLETED
-All four no-order checks                          : COMPLETED — ZERO ROWS
-Base64 input requirement                          : CONFIRMED
+Environment                                      : DEV / Infor Cloud tenant
+Active Customer Order path                       : SL.SLCos.CreateCoAndLines
+Direct-insert stored procedure                   : DEFERRED FALLBACK
+Base64 input requirement                         : CONFIRMED
 Decoded payload type                             : JSON object / JObject
-Specific order structure required                 : CONFIRMED
-Exact business JSON schema                        : NOT CONFIRMED
-Business-property guessing                        : STOPPED
-Metadata call-site discovery                      : RESUMED BY USER
-Current EventActions fields                       : EXHAUSTED — ZERO ROWS
-EventActionRevisions.Parameters search            : COMPLETED — ZERO ROWS
-EventActionRevisions.ExpandedParameters filter    : FAILED — ILLEGAL FILTER
-EventHandlerRevisions direct text search          : NOT AVAILABLE
-Script metadata discovery                         : NO USEFUL APP SCRIPT CANDIDATE
-Form metadata collection discovery                : COMPLETED
-Selected form metadata candidate                  : FormsAndObjects
-FormsAndObjects properties                        : CONFIRMED
-FormsAndObjects IDOInfo Methods section            : NOT EXPOSED
-FormsAndObjects IdoMethods rows                   : COMPLETED — 37 METHODS
-Pseudo-code parameter comparison                  : COMPLETED
-GetUtilitiesOutput parameter discovery            : NEXT
+Exact business JSON schema                       : NOT CONFIRMED
+Controlled malformed probes                      : COMPLETED
+All post-probe co_mst checks                     : ZERO ROWS
+Direct event/action text searches                : EXHAUSTED / ZERO ROWS
+Form Control Utilities tab                       : DEVICE SYNC ONLY
+Current discovery target                         : tenant form list / standard CO form call site
 ```
 
 ## Confirmed Runtime Contract
@@ -32,25 +22,35 @@ GetUtilitiesOutput parameter discovery            : NEXT
 CoAndLineInfoJson
 → Base64 decode
 → JSON object / JObject parse
-→ locate expected non-blank order structure
-→ business schema validation
+→ locate expected nonblank order structure
+→ business validation
 → Customer Order and line processing
 ```
 
 Business-result rules:
 
 ```text
-- MessageCode = 0 does not establish business success.
+- MessageCode = 0 is framework success only.
+- CoResult is an input/output message parameter.
 - CoResult is returned as a JSON-array string.
-- Evaluate business Status independently.
-- Failure records may or may not include ErrrorMessage.
+- Business Status must be evaluated independently.
+- ErrrorMessage may be present with three r characters.
 ```
 
-Four controlled malformed/non-business probes were completed. Four post-probe read-only `dbo.co_mst` checks returned zero rows with no SQL error.
+## Controlled Probe History
+
+```text
+Probe 1 : raw {                         → invalid Base64
+Probe 2 : ew==                          → decoded { → JObject parser failure
+Probe 3 : e30=                          → decoded {} → blank order input
+Probe 4 : eyJwcm9iZSI6dHJ1ZX0=         → decoded {"probe":true} → blank order input
+```
+
+Four read-only `dbo.co_mst` checks after the probes returned zero rows and no SQL error.
 
 ## Completed Direct Metadata Searches
 
-The following read-only searches completed successfully and returned zero rows:
+These read-only searches completed successfully and returned zero rows:
 
 ```text
 EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
@@ -60,136 +60,106 @@ EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
 EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
 ```
 
-`EventActionRevisions.ExpandedParameters` could not be evaluated because the tenant rejected the filter with `IllegalFilterException`, `MessageCode = 450`, and `Items = null`. This is a rejected filter, not a zero-row result.
+`EventActionRevisions.ExpandedParameters` could not be filtered because the tenant returned `IllegalFilterException`, `MessageCode = 450`, and `Items = null`. This was a rejected filter, not a zero-row result.
 
-`EventHandlerRevisions` exposes handler context and child action collections, but no direct call-site text property comparable to `MethodToCall` or `Parameters`.
+`EventHandlerRevisions` exposes handler context and child action collections but no direct call-site text property.
 
-## Script and Form Metadata Discovery
+## FormsAndObjects Findings
 
-Searching collection names and descriptions for `Script` did not identify a production form/global-script metadata source.
-
-The broad tenant search for collection names containing `Form` produced many lexical false positives. Relevant tenant-published candidates were:
-
-| CollectionName | CollectionDesc | ServerName | AccessAs |
-| --- | --- | --- | --- |
-| `FormsAndObjects` | Wrapper for FormControl and FormSync | `MGCore` | `Core` |
-| `FormAliases` | NULL | `MGCore` | `Core` |
-| `AppForms` | IDO for Widget Forms | `MGCore` | `Core` |
-| `DocTypeFormProperties` | NULL | `MGCore` | `Core` |
-| `WSFormExtensionHints` | NULL | `MGCore` | `Core` |
-
-`FormsAndObjects` was selected as the strongest tenant-confirmed candidate.
-
-Its IDOInfo response exposes utility-style properties including object selectors, type/scope/configuration fields, action/process controls, XML/binary transfer fields, and output/diagnostic fields. It does not expose an obvious persistent field named `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
-
-Therefore:
+Tenant discovery selected `FormsAndObjects` because it is described as:
 
 ```text
-- do not filter FormsAndObjects directly for CreateCoAndLines;
-- do not assume DerXMLData or DerBinaryData contains form source;
-- discover its method contracts through IdoMethods and IdoMethodParameters.
+Wrapper for FormControl and FormSync
 ```
 
-## FormsAndObjects Method Discovery
+Its property contract is utility-oriented and does not expose obvious persistent properties named `FormName`, `Script`, `EventName`, `MethodToCall`, or `Parameters`.
 
-The tenant's `idoinfo/FormsAndObjects` response exposes `Properties` but no `Methods` array. Method discovery therefore used `IdoMethods`.
-
-Tenant result:
-
-```text
-Message        : Success
-MessageCode    : 0
-MoreRowsExists : false
-Rows returned  : 37
-MethodType 2   : 17
-MethodType 3   : 20
-TxnFlag 0      : 37
-StoredProcName : NULL for all rows
-```
-
-Most relevant methods:
-
-```text
-FormControlListCustomLoad   : Load drop down lists of forms or objects
-FormReferencedObjects       : Load referenced objects based on form
-TreeLoadObjects             : Load individual objects for Utilities tree
-UtilitiesListNames          : Get names of objects for Utilities drop downs
-UtilitiesLoadObjects        : Load objects for utilities form
-UtilitiesLoadObjects2       : Load objects for utilities form
-UtilitiesGeneratePseudoCode : Generate pseudo code and store output in SQL temp table
-UtilitiesGeneratePseudoCode2: Generate pseudo code and store output in SQL temp table
-GetUtilitiesOutput          : no tenant description published
-```
-
-Possible inferred flow:
+`IdoMethods` confirmed 37 methods. Relevant names included:
 
 ```text
 UtilitiesListNames
-→ UtilitiesLoadObjects / UtilitiesLoadObjects2
-→ UtilitiesGeneratePseudoCode / UtilitiesGeneratePseudoCode2
-→ GetUtilitiesOutput
+UtilitiesLoadObjects / UtilitiesLoadObjects2
+UtilitiesGeneratePseudoCode / UtilitiesGeneratePseudoCode2
+GetUtilitiesOutput
 ```
 
-This flow is not confirmed. No method has been invoked.
-
-## Pseudo-Code Generator Parameter Contracts
-
-Both methods expose 12 `VARIANT` parameters.
-
-Common sequence:
-
-| Sequence | Parameter | Direction |
-| ---: | --- | --- |
-| 0 | `SessionID` | input |
-| 1 | `SourceConfig` | input |
-| 2 | `TargetConfig` | input |
-| 3 | `Source` | input |
-| 4 | `DatabaseName` | input |
-| 5 | `Type` | input |
-| 6 | `Scope` | input |
-| 8 | `ObjectList` | input |
-| 9 | `Version` | input |
-| 10 | `SegmentCount` | input/output |
-| 11 | `CompareIncludeSettings` | input |
-
-Only sequence 7 differs:
+Both pseudo-code generators have 12 `VARIANT` parameters. Their only parameter-name difference is sequence 7:
 
 ```text
 UtilitiesGeneratePseudoCode  : RelativePosition
 UtilitiesGeneratePseudoCode2 : Options
 ```
 
-No parameter is marked as a message parameter. The valid values and serialization formats for the `VARIANT` inputs are still unknown.
+`SegmentCount` is input/output. `GetUtilitiesOutput` accepts only `SessionID` and `SegmentNumber`.
 
-The method descriptions state that generated pseudo-code is stored in a SQL temporary table. `GetUtilitiesOutput` is therefore the strongest current candidate for retrieving it, but this remains an inference until its parameter contract is inspected.
+## Cloud UI Correction
 
-Evidence:
-
-```text
-tests/evidence/2026-07-30-form-named-metadata-collections.md
-tests/evidence/2026-07-30-formsandobjects-idoinfo-properties.md
-tests/evidence/2026-07-30-formsandobjects-idoinfo-no-methods-section.md
-tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
-tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
-```
-
-## Decision History
+The tenant `Form Control > Utilities` screenshot showed only device-type synchronization buttons:
 
 ```text
-30 July 2026 — metadata discovery was temporarily stopped for a possible stored-procedure path.
-30 July 2026 — user explicitly requested CreateCoAndLines metadata discovery to continue.
+Sync Dev from Master
+Sync Master from Dev
+Sync Archive from Master
+Sync Master from Archive
 ```
 
-The stored-procedure option remains documented in `implementation/19-controlled-sp-direct-order-processing.md`, but it is deferred and is not the active path.
+Therefore the visible Utilities tab is not the expected pseudo-code generation interface. No synchronization action was executed, and that UI path is stopped.
+
+## User Decision
+
+On 31 July 2026, the user explicitly reconfirmed:
+
+```text
+Continue with SL.SLCos.CreateCoAndLines.
+```
+
+The direct-insert stored-procedure path remains fallback only.
+
+## Active Discovery Plan
+
+```text
+1. Enumerate tenant form names through Form Control > Forms.
+2. Identify the standard Customer Order entry form or another confirmed form call site.
+3. Retrieve/read the selected form definition without checking it out or modifying it.
+4. Extract the exact JSON-building and Base64-encoding contract.
+5. Build one minimal valid DEV payload.
+6. Invoke CreateCoAndLines once under controlled conditions.
+7. Verify both co_mst and coitem_mst.
+8. Reuse the verified contract for SMK069 Process/Reprocess.
+```
 
 ## Current Small Step
 
-Read only the parameter metadata for `GetUtilitiesOutput`:
+In the already open `Form Control` screen:
 
-```http
-GET {{mongooseBaseUrl}}/IDORequestService/MGRESTService.svc/json/IdoMethodParameters/adv?props=CollectionName,MethodName,ParameterName,Sequence,DataType,InputFlag,OutputFlag,MessageFlag&filter=CollectionName%20%3D%20%27FormsAndObjects%27%20AND%20MethodName%20%3D%20%27GetUtilitiesOutput%27
-Authorization: {{mongooseSecurityToken}}
-Accept: application/json
+```text
+1. Select the Forms tab.
+2. Keep Scope = Site.
+3. Click Refresh List.
+4. Capture the resulting form list and visible search/filter controls.
 ```
 
-Do not invoke a `FormsAndObjects` method, generate pseudo-code, create a SQL temporary table, load a form object, invoke `CreateCoAndLines`, edit metadata, guess Customer Order JSON properties, or execute SQL.
+Do not use `Check out`, `Check in`, `Get`, `Unlock`, `Archive`, `Restore`, `Delete`, or any Sync action in this step.
+
+## Evidence
+
+```text
+tests/evidence/2026-07-30-eventactionrevisions-idoinfo-properties.md
+tests/evidence/2026-07-30-eventactionrevisions-parameters-createcoandlines-no-match.md
+tests/evidence/2026-07-30-eventactionrevisions-expandedparameters-illegal-filter.md
+tests/evidence/2026-07-30-eventhandlerrevisions-idoinfo-properties.md
+tests/evidence/2026-07-30-formsandobjects-idomethods-list.md
+tests/evidence/2026-07-30-formsandobjects-pseudocode-method-parameters.md
+tests/evidence/2026-07-31-formsandobjects-getutilitiesoutput-parameters.md
+tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
+```
+
+## Safety Boundary
+
+```text
+- No CreateCoAndLines invocation yet.
+- No form checkout or metadata modification.
+- No FormSync/device synchronization.
+- No direct insert into co_mst or coitem_mst.
+- No production Customer Order creation.
+```
