@@ -13,7 +13,9 @@ Post-probe co_mst checks                         : ZERO ROWS
 Direct event/action searches                     : EXHAUSTED / ZERO ROWS
 Form Control Utilities                           : DEVICE SYNC ONLY — STOPPED
 Primary form call-site candidate                 : CustomerOrdersQuickEntry
-Next step                                        : inspect form collection bindings
+Header binding                                   : SLCos / oSLCos — CONFIRMED
+Line binding                                     : SLCoitems / oLines subcollection — CONFIRMED
+Next step                                        : search form events/scripts for CreateCoAndLines
 Direct-insert stored procedure                   : DEFERRED FALLBACK
 ```
 
@@ -42,49 +44,48 @@ Business result handling:
 
 Four malformed/non-business probes were completed. Four read-only checks of `dbo.co_mst` returned zero rows and no SQL error.
 
-These searches returned zero rows:
+Direct event/action metadata searches for `CreateCoAndLines` returned zero rows. `EventActionRevisions.ExpandedParameters` was rejected with `IllegalFilterException`, not confirmed as zero rows.
+
+The visible `Form Control > Utilities` UI was confirmed to contain only device synchronization actions, so that path was stopped without executing Sync.
+
+## CustomerOrdersQuickEntry Evidence
+
+Design Mode confirms:
 
 ```text
-EventHandlers.MethodToCall LIKE '%CreateCoAndLines%'
-EventActions.Parameters LIKE '%CreateCoAndLines%'
-EventActions.ExpandedParameters LIKE '%CreateCoAndLines%'
-EventActions.SubstitutedParameters LIKE '%CreateCoAndLines%'
-EventActionRevisions.Parameters LIKE '%CreateCoAndLines%'
+Primary collection      : SLCos
+Primary alias/name      : oSLCos
+Header custom load      : blank
+
+Detail binding type     : SubCollection Grid
+Parent collection       : primary collection
+Subcollection property  : SLCoitems
+Detail alias/name       : oLines
+Detail custom load      : blank
+Reload after child save : enabled
+Update locking          : Row
 ```
 
-`EventActionRevisions.ExpandedParameters` was rejected with `IllegalFilterException`, not confirmed as zero rows.
+A top-level `Secondary Collection 2: SLAppsParms` is visible, but its role was not captured.
 
-`FormsAndObjects` method and parameter metadata was inspected. The visible `Form Control > Utilities` UI was then confirmed to contain only device synchronization actions, so that UI path was stopped without executing any Sync action.
-
-## CustomerOrdersQuickEntry Direction
-
-The user identified `CustomerOrdersQuickEntry` and confirmed that it visibly contains both:
+Confirmed relationship:
 
 ```text
-Customer Order header
-Customer Order item/detail lines
+oSLCos / SLCos
+└── oLines / SLCoitems
 ```
 
-It is now the strongest tenant-specific candidate for discovering either:
-
-```text
-SL.SLCos.CreateCoAndLines
-```
-
-or an equivalent standard header-plus-line save/event sequence.
-
-No claim is made yet about its actual IDO collections or invoked method.
+This confirms the standard Customer Order header/detail model. It does not establish that the form calls `CreateCoAndLines`; standard parent-child Save may be used instead.
 
 ## Next Step Only
 
-Open `CustomerOrdersQuickEntry` in Design Mode and capture the form collection definitions showing:
+Open the form-level Event Handlers/Scripts for `CustomerOrdersQuickEntry` and search for:
 
 ```text
-- primary collection;
-- secondary/subcollection names;
-- aliases;
-- parent-child relationship, when visible.
+CreateCoAndLines
 ```
+
+Capture the matching event/script and its action/code. If there is no match, capture the no-match result only.
 
 Do not save, customize, check out, submit, or create an order.
 
@@ -93,4 +94,5 @@ Do not save, customize, check out, submit, or create an order.
 ```text
 tests/evidence/2026-07-31-user-reconfirms-createcoandlines-path.md
 tests/evidence/2026-07-31-customerordersquickentry-selected-as-call-site-candidate.md
+tests/evidence/2026-07-31-customerordersquickentry-collection-bindings.md
 ```
