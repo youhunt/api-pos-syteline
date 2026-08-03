@@ -6,33 +6,25 @@ All notable changes to this repository will be documented in this file.
 
 ### Added
 
-- Staging-table, IDO, Error Processing form, validation, Customer Order discovery, and controlled runtime-probe documentation.
-- Controlled Customer Order processing procedure:
+- Controlled Customer Order procedure:
 
 ```text
 database/procedures/SMK069ProcessCustomerOrderSp.sql
 ```
 
-- Cloud end-to-end success evidence:
+- Cloud runtime evidence:
 
 ```text
 tests/evidence/2026-08-03-smk069-cloud-e2e-customer-order-success.md
+tests/evidence/2026-08-03-smk069-cloud-idempotent-reprocess-success.md
 ```
 
-- Supporting runtime evidence and context patch:
-
-```text
-tests/evidence/2026-07-31-smk069-tax-master-contract.md
-tests/evidence/2026-07-31-smk069-tax-code-runtime.md
-tests/evidence/2026-07-31-co-mstiup-site-context-source.md
-tests/evidence/2026-07-31-delete-remote-notes-call-chain.md
-database/patches/2026-07-31-smk069-unicode-site-context-fix.sql
-```
+- Supporting tax, site-context, and standard-trigger evidence under `tests/evidence` and `database/patches`.
 
 ### Changed
 
 - `CreateCoAndLines` discovery remains paused; controlled direct stored-procedure processing is active.
-- The active procedure contract is:
+- Active procedure contract:
 
 ```text
 @SiteRef
@@ -45,21 +37,9 @@ database/patches/2026-07-31-smk069-unicode-site-context-fix.sql
 ```
 
 - Generated Customer Order number pattern remains `COYYMM####`.
-- Source order remains stored in `co_mst.cust_po` for idempotent lookup.
-- Portal-only unavailable `Uf_*` columns remain excluded.
-- SQL session site context is supplied using the Unicode encoding required by `dbo.GetSiteContext()`.
+- Source order is stored in `co_mst.cust_po` for idempotent lookup.
+- SQL session site context uses the Unicode encoding required by `dbo.GetSiteContext()`.
 - Standard SyteLine triggers and constraints remain enabled.
-- Valid Cloud test master data:
-
-```text
-SiteRef  : DEFAULT
-Customer : C000001
-Item     : AA00001
-Whse     : MAIN
-U/M      : KG
-Terms    : CBD
-Tax Code : PPN11%
-```
 
 ### Cloud End-to-End Result — 2026-08-03
 
@@ -100,9 +80,27 @@ Price       : 10000.00000000
 Whse        : MAIN
 ```
 
-The header IDO did not expose a usable `SiteRef` property in the final verification request. `SLCoitems.SiteRef` returned null; this is recorded as an IDO property exposure/mapping observation and is not treated as proof that the physical `coitem_mst.site_ref` column is null.
+The header IDO did not expose a usable `SiteRef` property. `SLCoitems.SiteRef` returned null; this is treated as an IDO property exposure/mapping observation, not proof that physical `coitem_mst.site_ref` is null.
 
-The returned header price `11100` is numerically consistent with line price `10000` plus 11% tax. Functional confirmation is still required on whether the external contract should expose net, tax, and gross totals separately.
+### Cloud Idempotency Result — 2026-08-03
+
+The processing method was called again with the same source order:
+
+```text
+SiteRef     : DEFAULT
+SourceCoNum : TEST000002
+```
+
+Confirmed response:
+
+```text
+ReturnValue  : 0
+CreatedCoNum : CO26080001
+Success      : 1
+Infobar      : Customer Order CO26080001 sudah pernah dibuat; staging disinkronkan menjadi Processed.
+```
+
+The tenant runtime reused the existing Customer Order and entered the idempotent synchronization branch instead of returning a new generated number.
 
 ### Current SMK069 Status
 
@@ -118,23 +116,24 @@ The returned header price `11100` is numerically consistent with line price `100
 [CONFIRMED] Customer Order line 1 through SLCoitems
 [CONFIRMED] source order TEST000002 stored as CustPo
 [CONFIRMED] generated number pattern COYYMM####
+[COMPLETED] idempotent reprocess returned existing CO26080001
 [NO BLOCKER] single-line Cloud happy path
-[PENDING] idempotent reprocess test
+[PENDING] independent duplicate header/line count verification
 [PENDING] multi-line order test
 [PENDING] negative validation and rollback tests
 [PENDING] Process/Reprocess form button integration
 [PENDING] controlled receive API
 [PENDING] final external POS API contract
 [PENDING] functional confirmation of net/tax/gross totals
-[PENDING] synchronize the exact final Cloud SP source into the repository SQL file
+[PENDING] synchronize exact final Cloud SP source into repository SQL file
 ```
 
 ### Planned
 
-- Re-run `TEST000002` to confirm idempotent behavior and prevent duplicate Customer Orders.
+- Verify through read-only IDO queries that only one header with `CustPo = TEST000002` and one line for `CO26080001` exist.
 - Test one source order containing multiple staging lines.
-- Confirm physical `coitem_mst.site_ref` directly when tenant SQL access is available.
-- Confirm whether API totals should be net, tax, and gross fields rather than one ambiguous header price.
+- Confirm physical `coitem_mst.site_ref` when tenant SQL access is available.
+- Confirm external API net, tax, and gross amount semantics.
 - Connect the Process/Reprocess form button to the confirmed IDO method.
 
 ## [0.1.0] — 2026-07-23
