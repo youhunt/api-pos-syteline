@@ -7,73 +7,102 @@ All notable changes to this repository will be documented in this file.
 ### Added
 
 - Staging-table, IDO, Error Processing form, validation, Customer Order discovery, and controlled runtime-probe documentation.
-- Controlled implementation documents:
-
-```text
-implementation/16-controlled-createcoandlines-runtime-probe.md
-implementation/17-createcoandlines-nonbusiness-marker-probe.md
-implementation/18-discover-createcoandlines-call-sites.md
-implementation/19-controlled-sp-direct-order-processing.md
-implementation/20-controlled-cloud-ui-pseudocode-discovery.md
-```
-
-- Direct-insert evidence:
-
-```text
-tests/evidence/2026-07-31-smk-save-source-and-direct-insert-decision.md
-tests/evidence/2026-07-31-legacy-portal-header-line-direct-insert-flow.md
-tests/evidence/2026-07-31-smk069-sp-first-compile-errors-and-fix.md
-tests/evidence/2026-07-31-smk069-sp-compile-success-and-missing-staging-test.md
-tests/evidence/2026-07-31-smk069-invalid-item-runtime.md
-tests/evidence/2026-07-31-smk069-replication-rule-delete-remote-notes-runtime.md
-tests/evidence/2026-07-31-delete-remote-notes-call-chain.md
-```
-
 - Controlled Customer Order processing procedure:
 
 ```text
 database/procedures/SMK069ProcessCustomerOrderSp.sql
 ```
 
+- Cloud end-to-end success evidence:
+
+```text
+tests/evidence/2026-08-03-smk069-cloud-e2e-customer-order-success.md
+```
+
+- Supporting runtime evidence and context patch:
+
+```text
+tests/evidence/2026-07-31-smk069-tax-master-contract.md
+tests/evidence/2026-07-31-smk069-tax-code-runtime.md
+tests/evidence/2026-07-31-co-mstiup-site-context-source.md
+tests/evidence/2026-07-31-delete-remote-notes-call-chain.md
+database/patches/2026-07-31-smk069-unicode-site-context-fix.sql
+```
+
 ### Changed
 
-- Header total remains `SUM(unit_price * qty_ordered)`.
-- Cost remains outside staging and is retrieved from `item_mst` during Customer Order processing.
-- Standard `SiteRef` is used; no duplicate `site_ref` column.
-- Customer Order model remains:
-
-```text
-Header : SL.SLCos / dbo.co_mst
-Lines  : SL.SLCoitems / dbo.coitem_mst
-```
-
 - `CreateCoAndLines` discovery remains paused; controlled direct stored-procedure processing is active.
-- The active procedure contract excludes `@Sparepart`, pickup-date, start-time, and end-time parameters.
-- The active generated Customer Order pattern is `COYYMM####`.
+- The active procedure contract is:
+
+```text
+@SiteRef
+@SourceCoNum
+@CustSeq
+@ProcessedBy
+@CreatedCoNum OUTPUT
+@Success OUTPUT
+@Infobar OUTPUT
+```
+
+- Generated Customer Order number pattern remains `COYYMM####`.
+- Source order remains stored in `co_mst.cust_po` for idempotent lookup.
 - Portal-only unavailable `Uf_*` columns remain excluded.
-- Alias types remain valid for procedure parameters and variables, while system types such as `NVARCHAR` are used as `CAST`/`CONVERT` targets.
-- `dbo.SMK069ProcessCustomerOrderSp` compiled successfully in the tenant.
-- Runtime progression:
+- SQL session site context is supplied using the Unicode encoding required by `dbo.GetSiteContext()`.
+- Standard SyteLine triggers and constraints remain enabled.
+- Valid Cloud test master data:
 
 ```text
-1. 50003 — staging SiteRef + source co_num not found
-2. 50020 — TEST-ITEM-001 not found in item_mst
-3. 50000 — standard DeleteRemoteNotesSp replication rule for target DEFAULT not found
+SiteRef  : DEFAULT
+Customer : C000001
+Item     : AA00001
+Whse     : MAIN
+U/M      : KG
+Terms    : CBD
+Tax Code : PPN11%
 ```
 
-- Runtime 3 confirms execution progressed into standard SyteLine note-transfer/replication processing during the direct `co_mst` insert.
-- Tenant source confirms:
+### Cloud End-to-End Result — 2026-08-03
 
 ```text
-DeleteRemoteNotesSp exists.
-InitDatarep_object_categorySp registers DeleteRemoteNotesSp in system initialization metadata.
-TransferNotesToSiteSp invokes SL.SLObjectNotes.DeleteRemoteNotesSp through RemoteMethodCallSp for remote execution.
+REST additem
+→ TEST000002 inserted with status N
+→ ue_SMK069ValidateCustomerSp returned 0
+→ staging changed to V
+→ SMK069ProcessCustomerOrderSp returned Success = 1
+→ generated Customer Order CO26080001
+→ staging changed to P
+→ SLCos header verified
+→ SLCoitems line verified
 ```
 
-- The current blocker is runtime Replication Rule resolution, not a missing stored procedure. The standard framework cannot find exactly one enabled category `Object` rule for target `DEFAULT` and method `DeleteRemoteNotesSp`.
-- The initialization metadata entry does not prove that the required active runtime rule exists in the backup database.
-- No global trigger disabling or unverified replication-rule insertion is approved.
-- The next step is read-only identification of the exact object that invokes `TransferNotesToSiteSp` during the `co_mst` insert.
+Confirmed header:
+
+```text
+CoNum      : CO26080001
+CustNum    : C000001
+CustPo     : TEST000002
+Whse       : MAIN
+TermsCode  : CBD
+TaxCode1   : PPN11%
+Stat       : P
+Price      : 11100.00000000
+```
+
+Confirmed line:
+
+```text
+CoNum       : CO26080001
+CoLine      : 1
+Item        : AA00001
+QtyOrdered  : 1.00000000
+UM          : KG
+Price       : 10000.00000000
+Whse        : MAIN
+```
+
+The header IDO did not expose a usable `SiteRef` property in the final verification request. `SLCoitems.SiteRef` returned null; this is recorded as an IDO property exposure/mapping observation and is not treated as proof that the physical `coitem_mst.site_ref` column is null.
+
+The returned header price `11100` is numerically consistent with line price `10000` plus 11% tax. Functional confirmation is still required on whether the external contract should expose net, tax, and gross totals separately.
 
 ### Current SMK069 Status
 
@@ -81,34 +110,32 @@ TransferNotesToSiteSp invokes SL.SLObjectNotes.DeleteRemoteNotesSp through Remot
 [COMPLETED] staging table and process-control columns
 [COMPLETED] ue_SMK069TempSales IDO
 [COMPLETED] Error Processing base form and Preview
-[COMPLETED] customer validation and tests
-[CONFIRMED] Customer Order header model
-[CONFIRMED] Customer Order line model
-[PAUSED] CreateCoAndLines schema/call-site discovery
-[ACTIVE] controlled stored-procedure/direct-insert implementation
-[CONFIRMED] legacy header and line mappings
-[COMPILED] dbo.SMK069ProcessCustomerOrderSp in tenant
-[COMPLETED] staging-group-not-found controlled test
-[COMPLETED] invalid-item controlled test
-[REACHED] standard co_mst note-transfer/replication framework
-[CONFIRMED] DeleteRemoteNotesSp exists and is called remotely by TransferNotesToSiteSp
-[BLOCKED] enabled runtime replication rule for target DEFAULT not found
-[NEXT] identify exact TransferNotesToSiteSp caller and surrounding condition
-[PENDING] decide whether backup replication configuration is incomplete or the note-transfer path is unexpected
-[PENDING] execute one valid staging order
-[PENDING] verify complete co_mst/coitem_mst creation
-[PENDING] test idempotent reprocess
-[PENDING] connect Process/Reprocess button
-[PENDING] implement controlled receive API
-[PENDING] final external POS REST API contract
+[COMPLETED] customer validation
+[COMPLETED] Cloud REST staging insert
+[COMPLETED] Cloud validation N → V
+[COMPLETED] Cloud Customer Order processing V → P
+[CONFIRMED] Customer Order header CO26080001 through SLCos
+[CONFIRMED] Customer Order line 1 through SLCoitems
+[CONFIRMED] source order TEST000002 stored as CustPo
+[CONFIRMED] generated number pattern COYYMM####
+[NO BLOCKER] single-line Cloud happy path
+[PENDING] idempotent reprocess test
+[PENDING] multi-line order test
+[PENDING] negative validation and rollback tests
+[PENDING] Process/Reprocess form button integration
+[PENDING] controlled receive API
+[PENDING] final external POS API contract
+[PENDING] functional confirmation of net/tax/gross totals
+[PENDING] synchronize the exact final Cloud SP source into the repository SQL file
 ```
 
 ### Planned
 
-- Run read-only SQL against `sys.sql_modules` to find every object other than `TransferNotesToSiteSp` that invokes it.
-- Capture the caller type, trigger parent table when applicable, and surrounding condition.
-- Determine whether the backup database lacks required replication configuration or whether the direct insert enters note-transfer logic unexpectedly.
-- Do not modify standard triggers or replication rules until the exact caller and condition are known.
+- Re-run `TEST000002` to confirm idempotent behavior and prevent duplicate Customer Orders.
+- Test one source order containing multiple staging lines.
+- Confirm physical `coitem_mst.site_ref` directly when tenant SQL access is available.
+- Confirm whether API totals should be net, tax, and gross fields rather than one ambiguous header price.
+- Connect the Process/Reprocess form button to the confirmed IDO method.
 
 ## [0.1.0] — 2026-07-23
 
