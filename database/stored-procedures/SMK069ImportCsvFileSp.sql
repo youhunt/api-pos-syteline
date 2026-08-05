@@ -34,6 +34,9 @@
 SET NOCOUNT ON;
 GO
 
+/* ================================================================
+   Helper: split one CSV record while respecting quoted values.
+   ================================================================ */
 CREATE OR ALTER FUNCTION dbo.SMK069CsvSplitLine
 (
     @Line NVARCHAR(MAX)
@@ -67,7 +70,9 @@ BEGIN
                 SET @Pos += 1;
             END
             ELSE
+            BEGIN
                 SET @InQuotes = CASE WHEN @InQuotes = 1 THEN 0 ELSE 1 END;
+            END;
         END
         ELSE IF @Character = N',' AND @InQuotes = 0
         BEGIN
@@ -78,7 +83,9 @@ BEGIN
             SET @Value = N'';
         END
         ELSE
+        BEGIN
             SET @Value = @Value + @Character;
+        END;
 
         SET @Pos += 1;
     END;
@@ -90,6 +97,9 @@ BEGIN
 END;
 GO
 
+/* ================================================================
+   Main import procedure.
+   ================================================================ */
 CREATE OR ALTER PROCEDURE dbo.SMK069ImportCsvFileSp
     @BatchId      NVARCHAR(100),
     @RequestedBy  NVARCHAR(128) = NULL,
@@ -164,6 +174,11 @@ BEGIN
         RETURN 16;
     END;
 
+    /*
+       Decode common CSV encodings.
+       UTF-16 LE is handled explicitly. UTF-8/ANSI is converted through VARCHAR.
+       The expected POS test files use ASCII-compatible field values.
+    */
     IF SUBSTRING(@CsvBytes, 1, 2) = 0xFFFE
     BEGIN
         SET @PayloadBytes = SUBSTRING(@CsvBytes, 3, DATALENGTH(@CsvBytes) - 2);
@@ -225,6 +240,12 @@ BEGIN
         field_value NVARCHAR(MAX) NULL
     );
 
+    /*
+       IMPORTANT:
+       T-SQL variables are scoped to the procedure/batch, not to BEGIN/END blocks.
+       Therefore @Fields and all row-level variables are declared once here and
+       explicitly cleared/reset for every CSV data row.
+    */
     DECLARE
         @CursorPos      INT = 1,
         @NextLf         INT,
@@ -281,20 +302,34 @@ BEGIN
                 s.field_no,
                 NULLIF(LTRIM(RTRIM(s.field_value)), N''),
                 CASE
-                    WHEN n.normalized IN (N'custnum', N'cust_num', N'customer', N'customer_code') THEN N'custnum'
-                    WHEN n.normalized IN (N'order_date', N'orderdate') THEN N'order_date'
-                    WHEN n.normalized IN (N'conum', N'co_num', N'order_no', N'order_number') THEN N'conum'
-                    WHEN n.normalized IN (N'coline', N'co_line', N'line_no', N'line_number') THEN N'coline'
-                    WHEN n.normalized IN (N'item', N'item_code', N'sku') THEN N'item'
-                    WHEN n.normalized IN (N'qty_ordered', N'qty', N'quantity') THEN N'qty_ordered'
-                    WHEN n.normalized IN (N'unit_price', N'unitprice', N'price') THEN N'unit_price'
-                    WHEN n.normalized IN (N'siteref', N'site_ref', N'site') THEN N'siteref'
-                    WHEN n.normalized IN (N'whse', N'warehouse') THEN N'whse'
-                    WHEN n.normalized IN (N'due_date', N'duedate') THEN N'due_date'
-                    WHEN n.normalized IN (N'u_m', N'um', N'unit_of_measure') THEN N'u_m'
-                    WHEN n.normalized IN (N'terms_code', N'terms') THEN N'terms_code'
-                    WHEN n.normalized IN (N'tax_code1', N'tax_code') THEN N'tax_code1'
-                    WHEN n.normalized IN (N'exch_rate', N'exchange_rate') THEN N'exch_rate'
+                    WHEN n.normalized IN (N'custnum', N'cust_num', N'customer', N'customer_code')
+                        THEN N'custnum'
+                    WHEN n.normalized IN (N'order_date', N'orderdate')
+                        THEN N'order_date'
+                    WHEN n.normalized IN (N'conum', N'co_num', N'order_no', N'order_number')
+                        THEN N'conum'
+                    WHEN n.normalized IN (N'coline', N'co_line', N'line_no', N'line_number')
+                        THEN N'coline'
+                    WHEN n.normalized IN (N'item', N'item_code', N'sku')
+                        THEN N'item'
+                    WHEN n.normalized IN (N'qty_ordered', N'qty', N'quantity')
+                        THEN N'qty_ordered'
+                    WHEN n.normalized IN (N'unit_price', N'unitprice', N'price')
+                        THEN N'unit_price'
+                    WHEN n.normalized IN (N'siteref', N'site_ref', N'site')
+                        THEN N'siteref'
+                    WHEN n.normalized IN (N'whse', N'warehouse')
+                        THEN N'whse'
+                    WHEN n.normalized IN (N'due_date', N'duedate')
+                        THEN N'due_date'
+                    WHEN n.normalized IN (N'u_m', N'um', N'unit_of_measure')
+                        THEN N'u_m'
+                    WHEN n.normalized IN (N'terms_code', N'terms')
+                        THEN N'terms_code'
+                    WHEN n.normalized IN (N'tax_code1', N'tax_code')
+                        THEN N'tax_code1'
+                    WHEN n.normalized IN (N'exch_rate', N'exchange_rate')
+                        THEN N'exch_rate'
                     ELSE NULL
                 END
             FROM dbo.SMK069CsvSplitLine(@Line) AS s
@@ -348,7 +383,9 @@ BEGIN
                 )
             )
             BEGIN
-                SET @Infobar = N'Header CSV tidak lengkap. Wajib ada: custnum, order_date, conum, coline, item, qty_ordered.';
+                SET @Infobar =
+                    N'Header CSV tidak lengkap. Wajib ada: '
+                    + N'custnum, order_date, conum, coline, item, qty_ordered.';
                 RETURN 16;
             END;
 
@@ -357,38 +394,53 @@ BEGIN
         END;
 
         SET @DataRow += 1;
+
         DELETE FROM @Fields;
 
-        SELECT
-            @RawCustNum = NULL, @RawOrderDate = NULL, @RawCoNum = NULL,
-            @RawCoLine = NULL, @RawItem = NULL, @RawQty = NULL,
-            @RawUnitPrice = NULL, @RawSiteRef = NULL, @RawWhse = NULL,
-            @RawDueDate = NULL, @RawUM = NULL, @RawTerms = NULL,
-            @RawTax = NULL, @RawExchRate = NULL, @OrderDate = NULL,
-            @CoLine = NULL, @QtyOrdered = NULL, @UnitPrice = NULL,
-            @DueDate = NULL, @ExchRate = NULL, @Message = N'';
+        SET @RawCustNum = NULL;
+        SET @RawOrderDate = NULL;
+        SET @RawCoNum = NULL;
+        SET @RawCoLine = NULL;
+        SET @RawItem = NULL;
+        SET @RawQty = NULL;
+        SET @RawUnitPrice = NULL;
+        SET @RawSiteRef = NULL;
+        SET @RawWhse = NULL;
+        SET @RawDueDate = NULL;
+        SET @RawUM = NULL;
+        SET @RawTerms = NULL;
+        SET @RawTax = NULL;
+        SET @RawExchRate = NULL;
+        SET @OrderDate = NULL;
+        SET @CoLine = NULL;
+        SET @QtyOrdered = NULL;
+        SET @UnitPrice = NULL;
+        SET @DueDate = NULL;
+        SET @ExchRate = NULL;
+        SET @Message = N'';
 
         INSERT INTO @Fields (field_no, field_value)
         SELECT field_no, NULLIF(LTRIM(RTRIM(field_value)), N'')
         FROM dbo.SMK069CsvSplitLine(@Line);
 
         SELECT
-            @RawCustNum   = MAX(CASE WHEN h.canonical_name = N'custnum' THEN f.field_value END),
-            @RawOrderDate = MAX(CASE WHEN h.canonical_name = N'order_date' THEN f.field_value END),
-            @RawCoNum     = MAX(CASE WHEN h.canonical_name = N'conum' THEN f.field_value END),
-            @RawCoLine    = MAX(CASE WHEN h.canonical_name = N'coline' THEN f.field_value END),
-            @RawItem      = MAX(CASE WHEN h.canonical_name = N'item' THEN f.field_value END),
-            @RawQty       = MAX(CASE WHEN h.canonical_name = N'qty_ordered' THEN f.field_value END),
-            @RawUnitPrice = MAX(CASE WHEN h.canonical_name = N'unit_price' THEN f.field_value END),
-            @RawSiteRef   = MAX(CASE WHEN h.canonical_name = N'siteref' THEN f.field_value END),
-            @RawWhse      = MAX(CASE WHEN h.canonical_name = N'whse' THEN f.field_value END),
-            @RawDueDate   = MAX(CASE WHEN h.canonical_name = N'due_date' THEN f.field_value END),
-            @RawUM        = MAX(CASE WHEN h.canonical_name = N'u_m' THEN f.field_value END),
-            @RawTerms     = MAX(CASE WHEN h.canonical_name = N'terms_code' THEN f.field_value END),
-            @RawTax       = MAX(CASE WHEN h.canonical_name = N'tax_code1' THEN f.field_value END),
-            @RawExchRate  = MAX(CASE WHEN h.canonical_name = N'exch_rate' THEN f.field_value END)
+            @RawCustNum   = MAX(CASE WHEN h.canonical_name = N'custnum'      THEN f.field_value END),
+            @RawOrderDate = MAX(CASE WHEN h.canonical_name = N'order_date'   THEN f.field_value END),
+            @RawCoNum     = MAX(CASE WHEN h.canonical_name = N'conum'        THEN f.field_value END),
+            @RawCoLine    = MAX(CASE WHEN h.canonical_name = N'coline'       THEN f.field_value END),
+            @RawItem      = MAX(CASE WHEN h.canonical_name = N'item'         THEN f.field_value END),
+            @RawQty       = MAX(CASE WHEN h.canonical_name = N'qty_ordered'  THEN f.field_value END),
+            @RawUnitPrice = MAX(CASE WHEN h.canonical_name = N'unit_price'   THEN f.field_value END),
+            @RawSiteRef   = MAX(CASE WHEN h.canonical_name = N'siteref'      THEN f.field_value END),
+            @RawWhse      = MAX(CASE WHEN h.canonical_name = N'whse'         THEN f.field_value END),
+            @RawDueDate   = MAX(CASE WHEN h.canonical_name = N'due_date'     THEN f.field_value END),
+            @RawUM        = MAX(CASE WHEN h.canonical_name = N'u_m'          THEN f.field_value END),
+            @RawTerms     = MAX(CASE WHEN h.canonical_name = N'terms_code'   THEN f.field_value END),
+            @RawTax       = MAX(CASE WHEN h.canonical_name = N'tax_code1'    THEN f.field_value END),
+            @RawExchRate  = MAX(CASE WHEN h.canonical_name = N'exch_rate'    THEN f.field_value END)
         FROM @Header AS h
-        LEFT JOIN @Fields AS f ON f.field_no = h.field_no;
+        LEFT JOIN @Fields AS f
+            ON f.field_no = h.field_no;
 
         SET @OrderDate = COALESCE
         (
@@ -397,6 +449,7 @@ BEGIN
             TRY_CONVERT(DATE, @RawOrderDate, 101),
             TRY_CONVERT(DATE, @RawOrderDate)
         );
+
         SET @CoLine = TRY_CONVERT(INT, @RawCoLine);
         SET @QtyOrdered = TRY_CONVERT(DECIMAL(18,8), @RawQty);
         SET @UnitPrice = TRY_CONVERT(DECIMAL(18,8), @RawUnitPrice);
@@ -409,39 +462,81 @@ BEGIN
         );
         SET @ExchRate = TRY_CONVERT(DECIMAL(18,8), @RawExchRate);
 
-        IF @RawCustNum IS NULL SET @Message += N'custnum kosong; ';
-        IF @RawOrderDate IS NULL SET @Message += N'order_date kosong; ';
-        ELSE IF @OrderDate IS NULL SET @Message += N'order_date tidak valid; ';
-        IF @RawCoNum IS NULL SET @Message += N'conum kosong; ';
-        IF @RawCoLine IS NULL SET @Message += N'coline kosong; ';
-        ELSE IF @CoLine IS NULL OR @CoLine <= 0 SET @Message += N'coline harus bilangan > 0; ';
-        IF @RawItem IS NULL SET @Message += N'item kosong; ';
-        IF @RawQty IS NULL SET @Message += N'qty_ordered kosong; ';
-        ELSE IF @QtyOrdered IS NULL OR @QtyOrdered <= 0 SET @Message += N'qty_ordered harus angka > 0; ';
-        IF @RawUnitPrice IS NOT NULL AND @UnitPrice IS NULL SET @Message += N'unit_price tidak valid; ';
-        ELSE IF @UnitPrice < 0 SET @Message += N'unit_price tidak boleh negatif; ';
-        IF @RawDueDate IS NOT NULL AND @DueDate IS NULL SET @Message += N'due_date tidak valid; ';
-        IF @RawExchRate IS NOT NULL AND (@ExchRate IS NULL OR @ExchRate <= 0) SET @Message += N'exch_rate harus angka > 0; ';
-        IF LEN(ISNULL(@RawCustNum, N'')) > 20 SET @Message += N'custnum melebihi 20 karakter; ';
-        IF LEN(ISNULL(@RawCoNum, N'')) > 30 SET @Message += N'conum melebihi 30 karakter; ';
-        IF LEN(ISNULL(@RawItem, N'')) > 50 SET @Message += N'item melebihi 50 karakter; ';
+        IF @RawCustNum IS NULL
+            SET @Message += N'custnum kosong; ';
+        IF @RawOrderDate IS NULL
+            SET @Message += N'order_date kosong; ';
+        ELSE IF @OrderDate IS NULL
+            SET @Message += N'order_date tidak valid; ';
+        IF @RawCoNum IS NULL
+            SET @Message += N'conum kosong; ';
+        IF @RawCoLine IS NULL
+            SET @Message += N'coline kosong; ';
+        ELSE IF @CoLine IS NULL OR @CoLine <= 0
+            SET @Message += N'coline harus bilangan > 0; ';
+        IF @RawItem IS NULL
+            SET @Message += N'item kosong; ';
+        IF @RawQty IS NULL
+            SET @Message += N'qty_ordered kosong; ';
+        ELSE IF @QtyOrdered IS NULL OR @QtyOrdered <= 0
+            SET @Message += N'qty_ordered harus angka > 0; ';
+        IF @RawUnitPrice IS NOT NULL AND @UnitPrice IS NULL
+            SET @Message += N'unit_price tidak valid; ';
+        ELSE IF @UnitPrice < 0
+            SET @Message += N'unit_price tidak boleh negatif; ';
+        IF @RawDueDate IS NOT NULL AND @DueDate IS NULL
+            SET @Message += N'due_date tidak valid; ';
+        IF @RawExchRate IS NOT NULL AND (@ExchRate IS NULL OR @ExchRate <= 0)
+            SET @Message += N'exch_rate harus angka > 0; ';
+
+        IF LEN(ISNULL(@RawCustNum, N'')) > 20
+            SET @Message += N'custnum melebihi 20 karakter; ';
+        IF LEN(ISNULL(@RawCoNum, N'')) > 30
+            SET @Message += N'conum melebihi 30 karakter; ';
+        IF LEN(ISNULL(@RawItem, N'')) > 50
+            SET @Message += N'item melebihi 50 karakter; ';
 
         INSERT INTO @ParsedRows
         (
-            row_no, custnum, order_date, conum, coline, item,
-            qty_ordered, unit_price, siteref, whse, due_date, u_m,
-            terms_code, tax_code1, exch_rate, upload_status,
-            result_message, raw_csv_row
+            row_no,
+            custnum,
+            order_date,
+            conum,
+            coline,
+            item,
+            qty_ordered,
+            unit_price,
+            siteref,
+            whse,
+            due_date,
+            u_m,
+            terms_code,
+            tax_code1,
+            exch_rate,
+            upload_status,
+            result_message,
+            raw_csv_row
         )
         VALUES
         (
-            @DataRow, LEFT(@RawCustNum, 20), @OrderDate,
-            LEFT(@RawCoNum, 30), @CoLine, LEFT(@RawItem, 50),
-            @QtyOrdered, @UnitPrice, LEFT(@RawSiteRef, 8),
-            LEFT(@RawWhse, 20), @DueDate, LEFT(@RawUM, 20),
-            LEFT(@RawTerms, 20), LEFT(@RawTax, 20), @ExchRate,
+            @DataRow,
+            LEFT(@RawCustNum, 20),
+            @OrderDate,
+            LEFT(@RawCoNum, 30),
+            @CoLine,
+            LEFT(@RawItem, 50),
+            @QtyOrdered,
+            @UnitPrice,
+            LEFT(@RawSiteRef, 8),
+            LEFT(@RawWhse, 20),
+            @DueDate,
+            LEFT(@RawUM, 20),
+            LEFT(@RawTerms, 20),
+            LEFT(@RawTax, 20),
+            @ExchRate,
             CASE WHEN @Message = N'' THEN N'N' ELSE N'E' END,
-            NULLIF(LEFT(@Message, 1000), N''), @Line
+            NULLIF(LEFT(@Message, 1000), N''),
+            @Line
         );
     END;
 
@@ -470,19 +565,60 @@ BEGIN
 
         INSERT INTO dbo.ue_SMK069_pos_csv_upload_mst
         (
-            batch_id, source_system, file_name, row_no, custnum,
-            order_date, conum, coline, item, qty_ordered, unit_price,
-            siteref, whse, due_date, u_m, terms_code, tax_code1,
-            exch_rate, upload_status, result_message, raw_csv_row,
-            processed_date, RecordDate, CreatedBy, UpdatedBy, RowPointer
+            batch_id,
+            source_system,
+            file_name,
+            row_no,
+            custnum,
+            order_date,
+            conum,
+            coline,
+            item,
+            qty_ordered,
+            unit_price,
+            siteref,
+            whse,
+            due_date,
+            u_m,
+            terms_code,
+            tax_code1,
+            exch_rate,
+            upload_status,
+            result_message,
+            raw_csv_row,
+            processed_date,
+            RecordDate,
+            CreatedBy,
+            UpdatedBy,
+            RowPointer
         )
         SELECT
-            @BatchId, @SourceSystem, @FileName, p.row_no, p.custnum,
-            p.order_date, p.conum, p.coline, p.item, p.qty_ordered,
-            p.unit_price, p.siteref, p.whse, p.due_date, p.u_m,
-            p.terms_code, p.tax_code1, p.exch_rate, p.upload_status,
-            p.result_message, p.raw_csv_row, NULL, GETDATE(),
-            @RequestedBy, @RequestedBy, NEWID()
+            @BatchId,
+            @SourceSystem,
+            @FileName,
+            p.row_no,
+            p.custnum,
+            p.order_date,
+            p.conum,
+            p.coline,
+            p.item,
+            p.qty_ordered,
+            p.unit_price,
+            p.siteref,
+            p.whse,
+            p.due_date,
+            p.u_m,
+            p.terms_code,
+            p.tax_code1,
+            p.exch_rate,
+            p.upload_status,
+            p.result_message,
+            p.raw_csv_row,
+            NULL,
+            GETDATE(),
+            @RequestedBy,
+            @RequestedBy,
+            NEWID()
         FROM @ParsedRows AS p;
 
         SET @Infobar =
@@ -512,6 +648,7 @@ BEGIN
         WHERE batch_id = @BatchId;
 
         COMMIT TRANSACTION;
+
         RETURN 0;
     END TRY
     BEGIN CATCH
@@ -531,3 +668,26 @@ BEGIN
     END CATCH;
 END;
 GO
+
+/*
+Example direct SQL test after a BLOB has been saved to the batch header:
+
+DECLARE
+    @ImportedRows INT,
+    @ErrorRows INT,
+    @Infobar NVARCHAR(4000),
+    @ReturnCode INT;
+
+EXEC @ReturnCode = dbo.SMK069ImportCsvFileSp
+    @BatchId = N'CSV-20260805-205000-ABC123',
+    @RequestedBy = N'YOHAN',
+    @ImportedRows = @ImportedRows OUTPUT,
+    @ErrorRows = @ErrorRows OUTPUT,
+    @Infobar = @Infobar OUTPUT;
+
+SELECT
+    @ReturnCode AS ReturnCode,
+    @ImportedRows AS ImportedRows,
+    @ErrorRows AS ErrorRows,
+    @Infobar AS Infobar;
+*/
