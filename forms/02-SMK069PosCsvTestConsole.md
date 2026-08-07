@@ -164,13 +164,15 @@ item
 qty_ordered
 ```
 
-Parser width validation:
+Final tenant/parser requirement:
 
 ```text
 custnum <= 7
 conum   <= 10
 item    <= 30
 ```
+
+The current PR parser source still requires synchronization to the exact final tenant version for these downstream width checks. The sample file already uses compliant values.
 
 Supported aliases are documented in the end-to-end document and in `SMK069ImportCsvFileSp.sql`.
 
@@ -237,12 +239,13 @@ A vendor conversion is not used for Customer Order validation. One invalid U/M l
 [VERIFIED] Binary CSV upload stores the BLOB
 [VERIFIED] CSV parser creates detail rows
 [VERIFIED] Two-row parser test
-[IMPLEMENTED] Source system alias normalization to POS
-[IMPLEMENTED] Parser downstream length checks
-[IMPLEMENTED] Import & Validate only wrapper
-[IMPLEMENTED] Receive U/M conversion validation
+[IMPLEMENTED IN TENANT] Source system alias normalization to POS
+[IMPLEMENTED IN TENANT] Parser downstream length checks
+[COMMITTED] Import & Validate only wrapper
+[IMPLEMENTED IN TENANT] Receive U/M conversion validation
 [DECIDED] File Name hidden
 [DECIDED] Upload should immediately parse and refresh detail
+[PENDING REPOSITORY SYNC] Exact final parser source
 [PENDING EVIDENCE] Formal tenant screenshot/result for auto-parse event chain
 [PENDING EVIDENCE] 100-row/25-order full UAT record
 ```
