@@ -5,34 +5,49 @@
 ```text
 Metadata object : SMK069_temp_sales_mst
 Physical table  : dbo.ue_SMK069_temp_sales_mst
-Purpose         : Menampung data sales dari file CSV sebelum divalidasi dan diproses menjadi Customer Order header dan Customer Order lines.
-Current status  : Table created; IDO created and updated; base form created; smoke test pending.
+Purpose         : Validated processing staging before Blanket Customer Order creation
+Current status  : Implemented and used by CSV/API receive and Error Processing
 ```
 
-## Confirmed Requirement Revisions
-
-Two corrections were confirmed on 28 July 2026:
+Full end-to-end documentation:
 
 ```text
-1. Header total = SUM(unit_price * qty_ordered)
-2. cost is not stored in this staging table; cost is obtained from item_mst during Customer Order processing
+docs/20-smk069-csv-to-blanket-customer-order-end-to-end.md
 ```
-
-Therefore, the `cost` column from the original specification is intentionally omitted from the implemented table.
 
 ## Row Meaning
 
-One staging row represents one Customer Order line.
+One row represents one source/POS Customer Order line.
+
+```text
+DEFAULT | CS26080001 | 1 | AA00005
+DEFAULT | CS26080001 | 2 | AA00007
+DEFAULT | CS26080001 | 3 | AA00008
+```
+
+Expected output:
+
+```text
+1 dbo.co_mst header, type B
+3 dbo.coitem_mst lines
+3 dbo.co_bln_mst lines
+```
+
+## Number Model
+
+```text
+co_num          = source/POS order number
+created_co_num  = generated SyteLine Customer Order number
+```
 
 Example:
 
 ```text
-PG | CO0001 | 1 | ITEM-A
-PG | CO0001 | 2 | ITEM-B
-PG | CO0001 | 3 | ITEM-C
+co_num          = CS26080001
+created_co_num  = CO26080017
 ```
 
-The intended result is one Customer Order header and three Customer Order lines.
+The source number is copied to `co_mst.cust_po`. The generated number is used by `co_mst.co_num`, `coitem_mst.co_num`, and `co_bln_mst.co_num`.
 
 ## Primary Key
 
@@ -40,66 +55,90 @@ The intended result is one Customer Order header and three Customer Order lines.
 SiteRef + co_num + co_line
 ```
 
-The source specification did not define a primary key. This composite key is the current technical decision to prevent the same Customer Order line from being stored twice for the same site.
+This prevents duplicate source lines for the same site and source order.
 
-## Important Site Column Decision
+## Site Column Decision
 
-The source specification calls the field `site_ref`. Mongoose already provides the standard multi-site column `SiteRef`. SQL Server normally treats these names as identical in a case-insensitive database, so a second `site_ref` column must not be created.
+The source specification uses `site_ref`, while Mongoose provides standard `SiteRef`. On a case-insensitive database these names conflict, so the standard `SiteRef` column fulfills both roles.
 
-The standard `SiteRef` column therefore fulfills both purposes:
+## Structure
 
-```text
-- source/target site required by the specification
-- Mongoose framework site context
-```
+| Column | Data type / physical intent | Nullable | Meaning |
+|---|---|---:|---|
+| `SiteRef` | `SiteType`, nvarchar(8) | No | Source and target site; part of PK |
+| `cust_num` | `CustNumType`, nvarchar(7) | Yes | Customer number |
+| `order_date` | `DateType` | Yes | Source order date |
+| `terms_code` | nvarchar(3) | Yes | Terms, payload or customer fallback |
+| `co_num` | `CoNumType`, nvarchar(10) | No | Source/POS order number; part of PK |
+| `created_co_num` | `CoNumType`, nvarchar(10) | Yes | Generated SyteLine CO number |
+| `co_line` | `CoLineType`, smallint | No | Source order line; part of PK |
+| `unit_price` | `CostPrcType`, decimal(20,8) | Yes | Source unit/contract price |
+| `tax_code1` | nvarchar(6) | Yes | Tax code, payload or customer fallback |
+| `exch_rate` | decimal | Yes | Exchange rate; default 1 |
+| `whse` | `WhseType`, nvarchar(4) | Yes | Warehouse |
+| `item` | `ItemType`, nvarchar(30) | Yes | SyteLine item |
+| `qty_ordered` | `QtyUnitType`, decimal(23,8) | Yes | Source/blanket quantity |
+| `due_date` | `DateType` | Yes | Due date; fallback order date |
+| `u_m` | `UMType`, nvarchar(3) | Yes | Transaction U/M |
+| `process_status` | nvarchar(1) | No | N/V/E/P/C process state |
+| `validation_msg` | nvarchar(1000) | Yes | Validation details |
+| `error_msg` | nvarchar(4000) | Yes | Processing error |
+| `retry_count` | int | No | Process retry count; default 0 |
+| `processed_date` | `DateType` | Yes | Last successful/attempt process timestamp |
+| `processed_by` | `UsernameType`, nvarchar(128) | Yes | Last process caller |
+| `CreateDate` | `CurrentDateType` | No | Framework create timestamp |
+| `CreatedBy` | `UsernameType` | No | Framework creator |
+| `InWorkflow` | `FlagNyType` | No | Framework flag |
+| `NoteExistsFlag` | `FlagNyType` | No | Framework flag |
+| `RecordDate` | `CurrentDateType` | No | Last record update timestamp |
+| `RowPointer` | `RowPointerType` | No | Framework row identity |
+| `UpdatedBy` | `UsernameType` | No | Framework last updater |
 
-## Struktur kolom
-
-| Column Name | Schema | Table Name | Data Type | System Data Type | Length | Decimal Position | Default Value | Is Nullable | Primary Key | Key Sequence |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `SiteRef` | dbo | ue_SMK069_temp_sales_mst | SiteType | nvarchar | 8 |  | `rtrim(CONVERT([nvarchar](8),context_info(),(0)))` | NO | 1 | 0 |
-| `cust_num` | dbo | ue_SMK069_temp_sales_mst | CustNumType | nvarchar | 7 |  |  | YES | 0 |  |
-| `order_date` | dbo | ue_SMK069_temp_sales_mst | DateType | datetime |  |  |  | YES | 0 |  |
-| `terms_code` | dbo | ue_SMK069_temp_sales_mst | nvarchar | nvarchar | 3 |  |  | YES | 0 |  |
-| `co_num` | dbo | ue_SMK069_temp_sales_mst | CoNumType | nvarchar | 10 |  |  | NO | 1 | 1 |
-| `co_line` | dbo | ue_SMK069_temp_sales_mst | CoLineType | smallint |  |  |  | NO | 1 | 2 |
-| `unit_price` | dbo | ue_SMK069_temp_sales_mst | CostPrcType | decimal | 20 | 8 | `0` | YES | 0 |  |
-| `tax_code1` | dbo | ue_SMK069_temp_sales_mst | nvarchar | nvarchar | 6 |  |  | YES | 0 |  |
-| `exch_rate` | dbo | ue_SMK069_temp_sales_mst | decimal | decimal |  |  | `1` | YES | 0 |  |
-| `whse` | dbo | ue_SMK069_temp_sales_mst | WhseType | nvarchar | 4 |  |  | YES | 0 |  |
-| `item` | dbo | ue_SMK069_temp_sales_mst | ItemType | nvarchar | 30 |  |  | YES | 0 |  |
-| `qty_ordered` | dbo | ue_SMK069_temp_sales_mst | QtyUnitType | decimal | 23 | 8 | `0` | YES | 0 |  |
-| `due_date` | dbo | ue_SMK069_temp_sales_mst | DateType | datetime |  |  |  | YES | 0 |  |
-| `u_m` | dbo | ue_SMK069_temp_sales_mst | UMType | nvarchar | 3 |  |  | YES | 0 |  |
-| `process_status` | dbo | ue_SMK069_temp_sales_mst | nvarchar | nvarchar | 1 |  | `N'N'` | NO | 0 |  |
-| `validation_msg` | dbo | ue_SMK069_temp_sales_mst | nvarchar | nvarchar | 1000 |  |  | YES | 0 |  |
-| `error_msg` | dbo | ue_SMK069_temp_sales_mst | nvarchar | nvarchar | 4000 |  |  | YES | 0 |  |
-| `retry_count` | dbo | ue_SMK069_temp_sales_mst | int | int |  |  | `0` | NO | 0 |  |
-| `processed_date` | dbo | ue_SMK069_temp_sales_mst | DateType | datetime |  |  |  | YES | 0 |  |
-| `processed_by` | dbo | ue_SMK069_temp_sales_mst | UsernameType | nvarchar | 128 |  |  | YES | 0 |  |
-| `CreateDate` | dbo | ue_SMK069_temp_sales_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
-| `CreatedBy` | dbo | ue_SMK069_temp_sales_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
-| `InWorkflow` | dbo | ue_SMK069_temp_sales_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
-| `NoteExistsFlag` | dbo | ue_SMK069_temp_sales_mst | FlagNyType | tinyint |  |  | `0` | NO | 0 |  |
-| `RecordDate` | dbo | ue_SMK069_temp_sales_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
-| `RowPointer` | dbo | ue_SMK069_temp_sales_mst | RowPointerType | uniqueidentifier |  |  | `newid()` | NO | 0 |  |
-| `UpdatedBy` | dbo | ue_SMK069_temp_sales_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
+The tenant metadata remains the source of truth for exact precision/default expressions.
 
 ## Process Status
 
 | Value | Meaning |
-| --- | --- |
-| `N` | New / belum divalidasi |
-| `V` | Valid / siap diproses |
-| `E` | Error validasi atau posting |
-| `P` | Processed / Customer Order berhasil dibuat |
+|---|---|
+| `N` | New/manual row, not validated |
+| `V` | Valid and ready for Process/Reprocess |
+| `E` | Validation or processing error |
+| `P` | Processed; Blanket CO created or idempotently reused |
 | `C` | Cancelled |
 
-## Technical Control Fields
-
-The following six fields are technical additions needed to support the Error Processing UI:
+Normal controlled flow:
 
 ```text
+Receive valid row → V
+Process success   → P
+Process failure   → E
+```
+
+## Field Ownership
+
+### Source/Business Data
+
+```text
+SiteRef
+cust_num
+order_date
+terms_code
+co_num
+co_line
+unit_price
+tax_code1
+exch_rate
+whse
+item
+qty_ordered
+due_date
+u_m
+```
+
+### System-Maintained Data
+
+```text
+created_co_num
 process_status
 validation_msg
 error_msg
@@ -108,44 +147,119 @@ processed_date
 processed_by
 ```
 
-They are maintained by validation and processing logic, not manually by the user.
+System-maintained fields must be read-only on the Error Processing form.
 
-## Initial Validation Scope
+## Validation Before Insert into Temp
 
-The minimum validation explicitly requested in the source specification is:
+`SMK069ReceivePosSalesJsonSp` transfers only fully valid orders. Validation includes:
 
 ```text
-cust_num must exist in customer_mst
+required fields and lengths
+valid customer
+valid item
+valid warehouse
+positive quantity
+non-negative price
+positive exchange rate
+U/M equal to item base U/M or valid conversion
+duplicate source line prevention
+header consistency
+atomic order rule
+existing source order in temp prevention
 ```
 
-Additional item, warehouse, U/M, terms, tax, date, and quantity validation will be added in later development steps.
+One invalid line prevents every line of the source order from entering temp.
+
+## Mapping to Standard Tables
+
+### `co_mst`
+
+```text
+co_num  = created_co_num
+type    = B
+cust_po = source co_num
+```
+
+### `coitem_mst`
+
+```text
+co_num  = created_co_num
+co_line = co_line
+item    = item
+quantity/price/U/M from staging
+```
+
+### `co_bln_mst`
+
+```text
+co_num       = created_co_num
+co_line      = co_line
+item         = item
+blanket_qty  = qty_ordered
+cont_price   = unit_price
+stat         = O
+allow_on_pick_list = 0
+```
+
+## Process Success Update
+
+```text
+created_co_num = @CreatedCoNum
+process_status = P
+validation_msg = NULL
+error_msg = NULL
+processed_date = GETDATE()
+processed_by = caller
+```
+
+## Process Error Update
+
+When the transaction is committable:
+
+```text
+process_status = E
+error_msg = original error
+retry_count = retry_count + 1
+processed_date = NULL
+processed_by = caller
+```
+
+If an outer Mongoose transaction is uncommittable, the original error is rethrown and the caller owns the final rollback.
+
+## IDO and Form Requirements
+
+IDO:
+
+```text
+ue_SMK069TempSales
+```
+
+Required property:
+
+```text
+CreatedCoNum → created_co_num
+```
+
+Grid captions:
+
+```text
+created_co_num → SyteLine CO Number
+co_num         → Source/POS CO Number
+```
 
 ## Current Implementation Status
 
 ```text
-[COMPLETED] SQL table created
-[COMPLETED] six technical process-control columns added
-[COMPLETED] entity IDO ue_SMK069TempSales created
-[COMPLETED] IDO updated/resynchronized after table changes
-[COMPLETED] base form object ue_SMK069APISalesErrorProcessing created
-[IN PROGRESS] base-form smoke test and read-only verification
-[PENDING]   Preview filter event
-[PENDING]   customer validation
-[PENDING]   Process/reprocess method
-[PENDING]   Customer Order header and line creation
+[COMPLETED] Physical table and process-control fields
+[COMPLETED] Entity IDO
+[COMPLETED] Error Processing form and Preview
+[COMPLETED] Customer validation
+[COMPLETED] Receive/API validation
+[COMPLETED] U/M conversion validation in Receive
+[COMPLETED] Blanket CO processing
+[COMPLETED] coitem_mst insert
+[COMPLETED] co_bln_mst insert
+[COMPLETED] created_co_num processing logic
+[REQUIRED CHECK] CreatedCoNum property/grid synchronized in tenant
+[REQUIRED UAT] 100-row/25-order formal evidence
 ```
-
-The form object must not be marked fully completed until it opens successfully and the required grid properties and read-only behavior are verified in the tenant.
-
-## Tenant Verification
-
-Verify the actual application data type definitions in the target tenant, especially:
-
-```text
-CoLineType
-CostPrcType
-QtyUnitType
-exchange-rate decimal precision
-```
-
-The tenant metadata is the source of truth for physical precision and scale.
