@@ -1,216 +1,140 @@
-# 19 — SMK069 CSV Test Console Current Status
+# SMK069 CSV Test Console — Current Status
 
-Updated: 5 August 2026
+> This document is retained as the CSV-console status page. The authoritative end-to-end reference is now:
+>
+> ```text
+> docs/20-smk069-csv-to-blanket-customer-order-end-to-end.md
+> ```
 
-## Purpose
+## Current Role
 
-`SMK POS CSV TEST CONSOLE` is a functional test harness for loading a local CSV file, parsing it into batch-detail rows, and sending those rows through the existing SMK069 sales integration pipeline.
-
-It is not the same form or collection as `SMK API SALES ERROR PROCESSING`.
-
-## Current Tenant Objects
-
-### CSV Console header
+`SMK POS CSV TEST CONSOLE` is a receive-and-validation test harness.
 
 ```text
-Table : dbo.ue_SMK069_pos_csv_batch_mst
-IDO   : ue_SMK069PosCsvBatch
+New Batch
+→ Upload CSV
+→ Save binary
+→ Parse rows
+→ Import & Validate
+→ valid rows enter temp status V
 ```
 
-Important fields:
+It does not create Customer Orders directly.
+
+Customer Order creation occurs through:
 
 ```text
-batch_id
-source_system
-batch_status
-file_name
-csv_file
-file_size
-uploaded_date
-received_rows
-total_orders
-validation_valid_orders
-validation_error_orders
-transferred_rows
-processed_orders
-process_error_orders
-result_message
-started_date
-completed_date
-```
-
-### CSV Console detail
-
-```text
-Table : dbo.ue_SMK069_pos_csv_upload_mst
-IDO   : ue_SMK069PosCsvUpload
-```
-
-Master-detail relation:
-
-```text
-BatchId = FP(BatchId)
-```
-
-### Error Processing staging
-
-```text
-Table : dbo.ue_SMK069_temp_sales_mst
-IDO   : ue_SMK069TempSales
-Form  : ue_SMK069APISalesErrorProcessing
-```
-
-The Error Processing form does not read the CSV BLOB or CSV detail table directly. It displays records only after the CSV/inbound flow transfers rows into `ue_SMK069_temp_sales_mst`.
-
-## Form Flow
-
-```text
-SMK POS CSV TEST CONSOLE
-    ↓
-ue_SMK069_pos_csv_batch_mst
-    ↓ parse CSV
-ue_SMK069_pos_csv_upload_mst
-    ↓ Run Full Process
-JSON / controlled inbound processing
-    ↓
-ue_SMK069_temp_sales_mst
-    ↓
 SMK API SALES ERROR PROCESSING
-    ↓ validate/process/reprocess
-SMK069ProcessCustomerOrderSp
-    ↓
-co_mst + coitem_mst
+→ Process/Reprocess
+→ co_mst type B
+→ coitem_mst
+→ co_bln_mst
 ```
 
-## Completed in Tenant
+## Collections
 
 ```text
-[COMPLETED] Master-detail form
-[COMPLETED] Primary collection ue_SMK069PosCsvBatch
-[COMPLETED] Secondary collection ue_SMK069PosCsvUpload
-[COMPLETED] New Batch creates a new Draft header without overwriting old batches
-[COMPLETED] Binary column csv_file VARBINARY(MAX)
-[COMPLETED] file_size and uploaded_date columns
-[COMPLETED] Manual CsvFile Binary IDO property
-[COMPLETED] Binary CSV upload component
-[COMPLETED] Collection Save before parsing
-[COMPLETED] Collection Refresh after parsing
-[COMPLETED] SMK069CsvSplitLine helper
-[COMPLETED] SMK069ImportCsvFileSp
-[COMPLETED] Fix for duplicate internal table-variable PK constraint
-[VERIFIED] Two CSV rows parsed and displayed in the detail collection
-[AVAILABLE] Run Full Process button
+Primary   : ue_SMK069PosCsvBatch
+Secondary : ue_SMK069PosCsvUpload
+Relation  : BatchId = FP(BatchId)
 ```
 
-Verified CSV parsing result on 5 August 2026:
+## Final UI Decisions
 
 ```text
-Row 1 : C000001 / POS-TEST-001 / line 1 / AA00001
-Row 2 : C000001 / POS-TEST-001 / line 2 / AA00002
+File Name hidden
+Upload should immediately save and parse
+Parsed detail rows are the main upload-success indicator
+Separate Parse button may remain as Re-parse fallback
+Run Full Process renamed/treated as Import & Validate
 ```
 
-## Latest Full-Process Observation
-
-Batch example:
+## Final Upload Event Target
 
 ```text
-CSV-20260805-071048-33489D
+0  Binary Value Action — CsvFile
+10 Collection Save — primary
+20 Generate Parse event / Call SMK069ImportCsvFileSp
+30 Collection Refresh — primary
+40 Collection Refresh — secondary
 ```
 
-Result shown by the form:
+## Import & Validate Target
 
 ```text
-Rows received       : 2
-Total orders        : 0
-Validation passed   : 0
-Validation failed   : 0
-CO succeeded        : 0
-CO process failed   : 0
-```
-
-Interpretation:
-
-```text
-CSV parsing succeeded.
-The controlled inbound entry point received two rows.
-The rows did not form a canonical source order for validation/CO processing.
-```
-
-The most likely boundary to verify next is source-system-specific field mapping. The CSV console currently displays `POS-CSV-TEST`; existing integration mapping may be configured under another source-system value such as `POS`.
-
-This must be verified from tenant data before changing defaults.
-
-## Required Diagnostic Queries
-
-### 1. Check source-system mapping
-
-```sql
-SELECT
-    source_system,
-    source_field,
-    target_field,
-    priority_no,
-    is_active
-FROM dbo.ue_SMK069_pos_field_map_mst
-WHERE source_system IN (N'POS', N'POS-CSV-TEST')
-ORDER BY source_system, target_field, priority_no;
-```
-
-### 2. Check inbound rows for the batch
-
-```sql
-SELECT
-    inbound_id,
-    source_system,
-    batch_id,
-    row_no,
-    raw_json,
-    SiteRef,
-    cust_num,
-    order_date,
-    co_num,
-    co_line,
-    item,
-    qty_ordered,
-    inbound_status,
-    validation_msg
-FROM dbo.ue_SMK069_pos_sales_inbound_mst
-WHERE batch_id = N'CSV-20260805-071048-33489D'
-ORDER BY row_no;
-```
-
-### 3. Check staging transfer
-
-```sql
-SELECT *
-FROM dbo.ue_SMK069_temp_sales_mst
-WHERE co_num = N'POS-TEST-001'
-ORDER BY co_line;
-```
-
-## Next Development Step
-
-Execute the three read-only diagnostics above and determine where the two rows stop:
-
-```text
-CSV detail
-→ inbound raw JSON
-→ canonical inbound columns
-→ temp sales staging
-```
-
-Do not modify the Customer Order procedure yet. The Cloud single-line, idempotent, and multi-line Customer Order paths have already been proven independently.
-
-## Repository Synchronization Boundary
-
-This repository now contains the confirmed CSV parser and sample template. Exact tenant sources for the following objects must still be exported or copied before they can be treated as repository source of truth:
-
-```text
-SMK069InitializeCsvTestBatchSp
 SMK069RunCsvTestBatchSp
-SMK069ReceiveAndProcessPosSalesJsonSp
+→ build canonical JSON
+→ SMK069ReceivePosSalesJsonSp
+→ raw inbound
+→ mapping
+→ validation including U/M
+→ transfer valid order to temp
+→ stop
+```
+
+## Validation Result
+
+```text
+valid order   → inbound T, temp V
+invalid order → inbound E, no temp transfer
+```
+
+One invalid line invalidates all lines of the same `SiteRef + source co_num`.
+
+## U/M Rule
+
+```text
+transaction U/M = item base U/M
+or
+valid Global/Item/Customer conversion exists
+```
+
+Vendor conversion is excluded.
+
+## Downstream Processing
+
+Source number:
+
+```text
+temp.co_num
+co_mst.cust_po
+```
+
+Generated SyteLine number:
+
+```text
+temp.created_co_num
+co_mst.co_num
+coitem_mst.co_num
+co_bln_mst.co_num
+```
+
+## Current Repository State
+
+Committed:
+
+```text
+SMK069RunCsvTestBatchSp receive/validate-only wrapper
+current form documentation
+complete end-to-end documentation
+U/M and Blanket correction evidence
+```
+
+Pending exact final tenant-source synchronization:
+
+```text
+SMK069ImportCsvFileSp
 SMK069ReceivePosSalesJsonSp
-CSV batch/detail table DDL
-CSV batch/detail IDO definitions
-SMK POS CSV TEST CONSOLE form definition
+SMK069ProcessCustomerOrderSp
+```
+
+## Pending Evidence
+
+```text
+[ ] Upload auto-parse event-chain screenshot/result
+[ ] CreatedCoNum property/grid verification
+[ ] U/M invalid-order negative evidence
+[ ] co_mst type B verification
+[ ] coitem/co_bln count reconciliation
+[ ] 100-row/25-order UAT
 ```
