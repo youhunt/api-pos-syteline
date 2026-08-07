@@ -4,7 +4,85 @@ All notable changes to this repository will be documented in this file.
 
 ## [Unreleased]
 
-### Added
+### 2026-08-07 — CSV-to-Blanket-Customer-Order End-to-End Synchronization
+
+#### Added
+
+- Complete end-to-end technical documentation:
+
+```text
+docs/20-smk069-csv-to-blanket-customer-order-end-to-end.md
+```
+
+- UAT incident/correction evidence:
+
+```text
+tests/evidence/2026-08-06-smk069-um-validation-and-blanket-order-corrections.md
+```
+
+- Final CSV receive/validation wrapper source:
+
+```text
+database/procedures/SMK069RunCsvTestBatchSp.sql
+```
+
+#### Changed
+
+- `SMK069ProcessCustomerOrderSp` target behavior is now a Blanket Customer Order:
+
+```text
+co_mst.type = B
+```
+
+- Every valid staging line is inserted into both:
+
+```text
+coitem_mst
+co_bln_mst
+```
+
+- `co_bln_mst.co_num` uses the generated SyteLine order number, not the source/POS order number.
+- `co_bln_mst.allow_on_pick_list` is explicitly set to `0` because the tenant column is `NOT NULL`.
+- Existing-order idempotency validates both `coitem_mst` and `co_bln_mst` line counts/details.
+- Temporary staging records store the generated order number in `created_co_num`.
+- Caller-safe transaction handling uses `@@TRANCOUNT`, savepoints, and original-error rethrow when an outer Mongoose transaction is uncommittable.
+- `SMK069ReceivePosSalesJsonSp` validates U/M against `item_mst.u_m` or an applicable Global/Item/Customer conversion in `u_m_conv_mst`; vendor conversion is excluded.
+- One invalid U/M line marks the entire source order invalid and prevents transfer to temp.
+- `SMK069RunCsvTestBatchSp` is receive/validate only and no longer creates Customer Orders.
+- CSV Console documentation now reflects hidden File Name, upload-to-parse behavior, and separation between Import & Validate and Process/Reprocess.
+- Error Processing documentation now reflects `created_co_num`, Blanket CO output, `coitem_mst`, and `co_bln_mst`.
+
+#### Fixed
+
+- Prevented invalid U/M data from being shown as valid and failing only during Customer Order processing.
+- Fixed Mongoose transaction-count mismatch caused by rolling back the caller-owned transaction.
+- Fixed `co_bln_mst` insert failure caused by a `NULL allow_on_pick_list` value.
+- Added parser checks for staging key widths:
+
+```text
+custnum <= 7
+conum   <= 10
+item    <= 30
+```
+
+#### Current Flow
+
+```text
+CSV upload
+→ parse rows
+→ Import & Validate
+→ inbound raw/mapping/U-M validation
+→ temp status V
+→ Process/Reprocess per source order
+→ co_mst type B
+→ coitem_mst
+→ co_bln_mst
+→ temp status P + created_co_num
+```
+
+### Earlier SMK069 Customer Order Work
+
+#### Added
 
 - Controlled Customer Order procedure:
 
@@ -21,27 +99,9 @@ tests/evidence/2026-08-03-smk069-cloud-idempotent-reprocess-success.md
 
 - Supporting tax, site-context, and standard-trigger evidence under `tests/evidence` and `database/patches`.
 
-### Changed
+#### Historical Cloud End-to-End Result — 2026-08-03
 
-- `CreateCoAndLines` discovery remains paused; controlled direct stored-procedure processing is active.
-- Active procedure contract:
-
-```text
-@SiteRef
-@SourceCoNum
-@CustSeq
-@ProcessedBy
-@CreatedCoNum OUTPUT
-@Success OUTPUT
-@Infobar OUTPUT
-```
-
-- Generated Customer Order number pattern remains `COYYMM####`.
-- Source order is stored in `co_mst.cust_po` for idempotent lookup.
-- SQL session site context uses the Unicode encoding required by `dbo.GetSiteContext()`.
-- Standard SyteLine triggers and constraints remain enabled.
-
-### Cloud End-to-End Result — 2026-08-03
+The earlier regular Customer Order path was confirmed before the Blanket Order requirement was introduced:
 
 ```text
 REST additem
@@ -55,7 +115,7 @@ REST additem
 → SLCoitems line verified
 ```
 
-Confirmed header:
+Confirmed header at that historical checkpoint:
 
 ```text
 CoNum      : CO26080001
@@ -80,11 +140,9 @@ Price       : 10000.00000000
 Whse        : MAIN
 ```
 
-The header IDO did not expose a usable `SiteRef` property. `SLCoitems.SiteRef` returned null; this is treated as an IDO property exposure/mapping observation, not proof that physical `coitem_mst.site_ref` is null.
+This evidence remains useful historically, but the current target is a Blanket Customer Order with additional `co_bln_mst` rows.
 
-### Cloud Idempotency Result — 2026-08-03
-
-The processing method was called again with the same source order:
+#### Historical Idempotency Result — 2026-08-03
 
 ```text
 SiteRef     : DEFAULT
@@ -100,41 +158,34 @@ Success      : 1
 Infobar      : Customer Order CO26080001 sudah pernah dibuat; staging disinkronkan menjadi Processed.
 ```
 
-The tenant runtime reused the existing Customer Order and entered the idempotent synchronization branch instead of returning a new generated number.
+The current Blanket implementation extends this check to `co_bln_mst` and requires `type = B`.
 
 ### Current SMK069 Status
 
 ```text
 [COMPLETED] staging table and process-control columns
-[COMPLETED] ue_SMK069TempSales IDO
-[COMPLETED] Error Processing base form and Preview
-[COMPLETED] customer validation
-[COMPLETED] Cloud REST staging insert
-[COMPLETED] Cloud validation N → V
-[COMPLETED] Cloud Customer Order processing V → P
-[CONFIRMED] Customer Order header CO26080001 through SLCos
-[CONFIRMED] Customer Order line 1 through SLCoitems
-[CONFIRMED] source order TEST000002 stored as CustPo
-[CONFIRMED] generated number pattern COYYMM####
-[COMPLETED] idempotent reprocess returned existing CO26080001
-[NO BLOCKER] single-line Cloud happy path
-[PENDING] independent duplicate header/line count verification
-[PENDING] multi-line order test
-[PENDING] negative validation and rollback tests
-[PENDING] Process/Reprocess form button integration
-[PENDING] controlled receive API
-[PENDING] final external POS API contract
-[PENDING] functional confirmation of net/tax/gross totals
-[PENDING] synchronize exact final Cloud SP source into repository SQL file
+[COMPLETED] created_co_num design and processing logic
+[COMPLETED] ue_SMK069TempSales IDO base
+[COMPLETED] Error Processing form and Preview
+[COMPLETED] CSV binary upload and parser
+[COMPLETED] CSV Import & Validate only wrapper
+[IMPLEMENTED IN TENANT] controlled Receive API procedure
+[COMPLETED] raw inbound preservation and field mapping
+[COMPLETED] customer/item/warehouse/basic validation
+[IMPLEMENTED IN TENANT] U/M base/conversion validation
+[COMPLETED] atomic-order validation
+[IMPLEMENTED IN TENANT] Blanket CO header type B
+[IMPLEMENTED IN TENANT] coitem_mst line creation
+[IMPLEMENTED IN TENANT] co_bln_mst line creation
+[IMPLEMENTED IN TENANT] caller-safe transaction handling
+[IMPLEMENTED IN TENANT] idempotent existing Blanket CO synchronization
+[PENDING REPOSITORY SYNC] exact final Receive and Process SQL source
+[PENDING EVIDENCE] CreatedCoNum property/grid verification in tenant
+[PENDING EVIDENCE] 100-row/25-order formal UAT record
+[PENDING REVIEW] conversion-factor handling for converted quantity and price
+[PENDING] final external POS REST URL/security contract
+[PENDING] functional confirmation of release/shipment/invoice lifecycle
 ```
-
-### Planned
-
-- Verify through read-only IDO queries that only one header with `CustPo = TEST000002` and one line for `CO26080001` exist.
-- Test one source order containing multiple staging lines.
-- Confirm physical `coitem_mst.site_ref` when tenant SQL access is available.
-- Confirm external API net, tax, and gross amount semantics.
-- Connect the Process/Reprocess form button to the confirmed IDO method.
 
 ## [0.1.0] — 2026-07-23
 
