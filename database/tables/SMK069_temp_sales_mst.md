@@ -151,7 +151,7 @@ System-maintained fields must be read-only on the Error Processing form.
 
 ## Validation Before Insert into Temp
 
-`SMK069ReceivePosSalesJsonSp` transfers only fully valid orders. Validation includes:
+The final tenant `SMK069ReceivePosSalesJsonSp` transfers only fully valid orders. Validation includes:
 
 ```text
 required fields and lengths
@@ -224,7 +224,7 @@ processed_date = NULL
 processed_by = caller
 ```
 
-If an outer Mongoose transaction is uncommittable, the original error is rethrown and the caller owns the final rollback.
+If an outer Mongoose transaction is uncommittable, the final tenant procedure rethrows the original error and the caller owns the final rollback.
 
 ## IDO and Form Requirements
 
@@ -254,12 +254,13 @@ co_num         → Source/POS CO Number
 [COMPLETED] Entity IDO
 [COMPLETED] Error Processing form and Preview
 [COMPLETED] Customer validation
-[COMPLETED] Receive/API validation
-[COMPLETED] U/M conversion validation in Receive
-[COMPLETED] Blanket CO processing
-[COMPLETED] coitem_mst insert
-[COMPLETED] co_bln_mst insert
-[COMPLETED] created_co_num processing logic
+[IMPLEMENTED IN TENANT] Receive/API validation
+[IMPLEMENTED IN TENANT] U/M conversion validation
+[IMPLEMENTED IN TENANT] Blanket CO processing
+[IMPLEMENTED IN TENANT] coitem_mst insert
+[IMPLEMENTED IN TENANT] co_bln_mst insert
+[IMPLEMENTED IN TENANT] created_co_num processing logic
+[PENDING REPOSITORY SYNC] Exact final Receive/Process SQL source
 [REQUIRED CHECK] CreatedCoNum property/grid synchronized in tenant
 [REQUIRED UAT] 100-row/25-order formal evidence
 ```
