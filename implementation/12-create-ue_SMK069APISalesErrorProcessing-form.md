@@ -14,13 +14,14 @@ Combined AND filtering        : VERIFIED
 process_status list source    : VERIFIED
 process_status read-only      : VERIFIED
 Customer validation           : COMPLETED
-Receive API validation        : IMPLEMENTED
-U/M conversion validation     : IMPLEMENTED in Receive
-Process/Reprocess logic        : IMPLEMENTED
-Blanket CO header              : IMPLEMENTED, co_mst.type = B
-CO item lines                  : IMPLEMENTED, coitem_mst
-Blanket lines                  : IMPLEMENTED, co_bln_mst
-Generated CO display           : requires CreatedCoNum property/grid column
+Receive API validation        : IMPLEMENTED IN TENANT
+U/M conversion validation     : IMPLEMENTED IN TENANT
+Process/Reprocess logic        : IMPLEMENTED IN TENANT
+Blanket CO header              : IMPLEMENTED IN TENANT, co_mst.type = B
+CO item lines                  : IMPLEMENTED IN TENANT, coitem_mst
+Blanket lines                  : IMPLEMENTED IN TENANT, co_bln_mst
+Generated CO display           : requires CreatedCoNum property/grid verification
+Exact final Receive/Process SQL: PENDING REPOSITORY SYNC
 ```
 
 Full CSV-to-Blanket-CO documentation:
@@ -225,10 +226,10 @@ Do not invoke once per grid line.
 ### Header
 
 ```text
-Table          : dbo.co_mst
-Rows/order     : 1
-Order type     : B
-Source reference: cust_po = source co_num
+Table            : dbo.co_mst
+Rows/order       : 1
+Order type       : B
+Source reference : cust_po = source co_num
 ```
 
 ### Customer Order Lines
@@ -242,10 +243,10 @@ co_num         : generated SyteLine CO
 ### Blanket Lines
 
 ```text
-Table          : dbo.co_bln_mst
-Rows/order     : equal to staging line count
-co_num         : generated SyteLine CO
-stat           : O
+Table              : dbo.co_bln_mst
+Rows/order         : equal to staging line count
+co_num             : generated SyteLine CO
+stat               : O
 allow_on_pick_list : 0
 ```
 
@@ -270,11 +271,11 @@ error_msg = original SQL/business error
 retry_count = retry_count + 1
 ```
 
-When an outer Mongoose transaction becomes uncommittable, the procedure rethrows the original error so the framework rolls back its own transaction.
+When an outer Mongoose transaction becomes uncommittable, the final tenant procedure rethrows the original error so the framework rolls back its own transaction.
 
 ## Transaction Safety
 
-The Process procedure uses:
+The final tenant Process procedure uses:
 
 ```text
 @@TRANCOUNT detection
@@ -303,7 +304,7 @@ cust_po = source co_num
 type = B
 ```
 
-Before reusing it, the procedure verifies:
+Before reusing it, the final tenant procedure verifies:
 
 ```text
 coitem_mst line count
@@ -350,4 +351,5 @@ The method must use the source order number (`co_num`) as `SourceCoNum`, not `cr
 [ ] invalid U/M never reaches Process from Receive
 [ ] original SQL error is visible for process failure
 [ ] no transaction count mismatch error
+[ ] exact final Receive/Process SQL committed after tenant source export
 ```
