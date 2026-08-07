@@ -28,7 +28,7 @@ database/procedures/SMK069RunCsvTestBatchSp.sql
 
 #### Changed
 
-- `SMK069ProcessCustomerOrderSp` target behavior is now a Blanket Customer Order:
+- Final tenant `SMK069ProcessCustomerOrderSp` creates a Blanket Customer Order:
 
 ```text
 co_mst.type = B
@@ -46,7 +46,7 @@ co_bln_mst
 - Existing-order idempotency validates both `coitem_mst` and `co_bln_mst` line counts/details.
 - Temporary staging records store the generated order number in `created_co_num`.
 - Caller-safe transaction handling uses `@@TRANCOUNT`, savepoints, and original-error rethrow when an outer Mongoose transaction is uncommittable.
-- `SMK069ReceivePosSalesJsonSp` validates U/M against `item_mst.u_m` or an applicable Global/Item/Customer conversion in `u_m_conv_mst`; vendor conversion is excluded.
+- Final tenant `SMK069ReceivePosSalesJsonSp` validates U/M against `item_mst.u_m` or an applicable Global/Item/Customer conversion in `u_m_conv_mst`; vendor conversion is excluded.
 - One invalid U/M line marks the entire source order invalid and prevents transfer to temp.
 - `SMK069RunCsvTestBatchSp` is receive/validate only and no longer creates Customer Orders.
 - CSV Console documentation now reflects hidden File Name, upload-to-parse behavior, and separation between Import & Validate and Process/Reprocess.
@@ -57,7 +57,7 @@ co_bln_mst
 - Prevented invalid U/M data from being shown as valid and failing only during Customer Order processing.
 - Fixed Mongoose transaction-count mismatch caused by rolling back the caller-owned transaction.
 - Fixed `co_bln_mst` insert failure caused by a `NULL allow_on_pick_list` value.
-- Added parser checks for staging key widths:
+- Final tenant parser checks downstream key widths:
 
 ```text
 custnum <= 7
@@ -168,7 +168,7 @@ The current Blanket implementation extends this check to `co_bln_mst` and requir
 [COMPLETED] ue_SMK069TempSales IDO base
 [COMPLETED] Error Processing form and Preview
 [COMPLETED] CSV binary upload and parser
-[COMPLETED] CSV Import & Validate only wrapper
+[COMMITTED] CSV Import & Validate only wrapper
 [IMPLEMENTED IN TENANT] controlled Receive API procedure
 [COMPLETED] raw inbound preservation and field mapping
 [COMPLETED] customer/item/warehouse/basic validation
@@ -179,7 +179,7 @@ The current Blanket implementation extends this check to `co_bln_mst` and requir
 [IMPLEMENTED IN TENANT] co_bln_mst line creation
 [IMPLEMENTED IN TENANT] caller-safe transaction handling
 [IMPLEMENTED IN TENANT] idempotent existing Blanket CO synchronization
-[PENDING REPOSITORY SYNC] exact final Receive and Process SQL source
+[PENDING REPOSITORY SYNC] exact final parser, Receive, and Process SQL source
 [PENDING EVIDENCE] CreatedCoNum property/grid verification in tenant
 [PENDING EVIDENCE] 100-row/25-order formal UAT record
 [PENDING REVIEW] conversion-factor handling for converted quantity and price
