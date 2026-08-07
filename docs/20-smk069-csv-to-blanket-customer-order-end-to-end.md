@@ -1,5 +1,7 @@
 # SMK069 — End-to-End CSV sampai Blanket Customer Order
 
+> **Source status:** Dokumen ini menjelaskan final behavior yang sudah diterapkan/ditetapkan di tenant. Pada saat commit dokumentasi ini, exact final source untuk parser, `SMK069ReceivePosSalesJsonSp`, dan `SMK069ProcessCustomerOrderSp` masih menunggu sinkronisasi dari tenant ke repository. `SMK069RunCsvTestBatchSp` versi Import & Validate Only sudah dikomit.
+
 ## 1. Identitas Dokumen
 
 | Item | Nilai |
@@ -266,7 +268,7 @@ C000001,2026-08-13,CS26080001,1,AA00005,100,300000,DEFAULT,MAIN,2026-09-06,KG,CB
 C000001,2026-08-13,CS26080001,2,AA00007,50,150000,DEFAULT,MAIN,2026-09-06,KG,CBD,PPN11%,1
 ```
 
-### 5.4 Width Constraints yang Sudah Divalidasi Parser
+### 5.4 Width Constraints Final Tenant
 
 ```text
 custnum : maksimum 7 karakter
@@ -274,7 +276,7 @@ conum   : maksimum 10 karakter
 item    : maksimum 30 karakter
 ```
 
-Receive SP juga mengecek batas yang sama.
+Receive SP final tenant juga mengecek batas yang sama. Exact final parser source untuk check ini masih pending repository sync.
 
 ### 5.5 Batas Physical Staging Lain yang Perlu Dijaga
 
@@ -411,7 +413,7 @@ dbo.ue_SMK069_pos_csv_batch_mst.csv_file
 
 ### 7.3 Parser Validation
 
-Contoh error:
+Contoh error final tenant:
 
 ```text
 custnum kosong
@@ -1806,19 +1808,27 @@ Dokumen ini membedakan implemented behavior dari item yang masih perlu konfirmas
 5. **Release semantics** — `coitem_mst` dan `co_bln_mst` dibuat bersamaan sesuai current requirement; Finance/Order Management perlu mengonfirmasi lifecycle release/shipment/invoice.
 6. **Performance** — 100-row/25-order test perlu direkam sebagai formal evidence setelah tenant run.
 7. **Security** — REST method authorization dan permission harus mengikuti least privilege.
+8. **Repository parity** — exact final parser, Receive, dan Process SQL perlu diekspor dari tenant dan dikomit tanpa rekonstruksi manual.
 
 ---
 
-## 27. Source of Truth Files
+## 27. Source Files dan Sinkronisasi
+
+Sudah dikomit pada branch ini:
 
 ```text
-database/stored-procedures/SMK069ImportCsvFileSp.sql
 database/procedures/SMK069RunCsvTestBatchSp.sql
-database/procedures/SMK069ReceivePosSalesJsonSp.sql
-database/procedures/SMK069ProcessCustomerOrderSp.sql
 forms/02-SMK069PosCsvTestConsole.md
 implementation/12-create-ue_SMK069APISalesErrorProcessing-form.md
 database/tables/SMK069_temp_sales_mst.md
+```
+
+Exact final tenant source yang masih perlu disinkronkan:
+
+```text
+database/stored-procedures/SMK069ImportCsvFileSp.sql
+database/procedures/SMK069ReceivePosSalesJsonSp.sql
+database/procedures/SMK069ProcessCustomerOrderSp.sql
 ```
 
 Jika implementasi tenant berubah, file SQL final dan dokumen ini harus diubah dalam commit/PR yang sama agar dokumentasi tidak tertinggal dari runtime.
