@@ -1,4 +1,4 @@
-# Implementation 12 — Create `ue_SMK069APISalesErrorProcessing` Form
+# Implementation 12 — `ue_SMK069APISalesErrorProcessing` Form
 
 ## Current Status
 
@@ -13,12 +13,21 @@ Order Date-only filtering     : VERIFIED
 Combined AND filtering        : VERIFIED
 process_status list source    : VERIFIED
 process_status read-only      : VERIFIED
-Customer validation           : NOT STARTED
-Process logic                 : NOT STARTED
-API ingestion                 : NOT STARTED
+Customer validation           : COMPLETED
+Receive API validation        : IMPLEMENTED
+U/M conversion validation     : IMPLEMENTED in Receive
+Process/Reprocess logic        : IMPLEMENTED
+Blanket CO header              : IMPLEMENTED, co_mst.type = B
+CO item lines                  : IMPLEMENTED, coitem_mst
+Blanket lines                  : IMPLEMENTED, co_bln_mst
+Generated CO display           : requires CreatedCoNum property/grid column
 ```
 
-Do not recreate the table, IDO, base form, or Preview controls.
+Full CSV-to-Blanket-CO documentation:
+
+```text
+docs/20-smk069-csv-to-blanket-customer-order-end-to-end.md
+```
 
 ## Object Identity
 
@@ -30,12 +39,30 @@ Form Type          : Grid Only
 Device Type        : Any
 ```
 
+## Purpose
+
+The form is the controlled processing boundary between validated temporary sales data and standard SyteLine Blanket Customer Order tables.
+
+```text
+Receive/Validate
+→ ue_SMK069_temp_sales_mst, status V
+→ this form
+→ Process/Reprocess by SiteRef + source co_num
+→ co_mst type B
+→ coitem_mst
+→ co_bln_mst
+→ temp status P + created_co_num
+```
+
+The form must not bypass validation by writing directly into standard Customer Order tables.
+
 ## Required Grid Properties
 
 ```text
 SiteRef
 order_date
-co_num
+created_co_num       -- display: SyteLine CO Number
+co_num               -- display: Source/POS CO Number
 co_line
 cust_num
 item
@@ -55,7 +82,7 @@ processed_date
 processed_by
 ```
 
-Framework properties not displayed in the initial UI:
+Framework properties can remain hidden:
 
 ```text
 CreateDate
@@ -67,12 +94,41 @@ RowPointer
 UpdatedBy
 ```
 
+## Source Number vs Generated Number
+
+```text
+co_num          = source/POS order number
+created_co_num  = generated SyteLine Customer Order number
+```
+
+Example:
+
+```text
+Source/POS CO Number : CS26080001
+SyteLine CO Number   : CO26080017
+```
+
+The generated number is also used by:
+
+```text
+co_mst.co_num
+coitem_mst.co_num
+co_bln_mst.co_num
+```
+
+The source number is retained in:
+
+```text
+co_mst.cust_po
+```
+
 ## Read-Only Fields
 
-These fields are system-maintained and must be read-only:
+System-maintained fields must be read-only:
 
 ```text
 SiteRef
+created_co_num
 process_status
 validation_msg
 error_msg
@@ -81,22 +137,11 @@ processed_date
 processed_by
 ```
 
-Current verification boundary:
-
-```text
-[VERIFIED] process_status cannot be manually edited
-[PENDING]  remaining six read-only fields require separate verification if needed
-```
+Business fields may be editable only according to the approved correction workflow. Changes must be saved before Reprocess.
 
 ## `process_status` Data Source
 
-Component:
-
-```text
-process_statusGridCol
-```
-
-Binding:
+Component binding:
 
 ```text
 object.process_status
@@ -108,31 +153,21 @@ List Source:
 INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)
 ```
 
-Mapping:
-
 | Stored value | Display text |
-| --- | --- |
+|---|---|
 | `N` | New |
 | `V` | Valid |
 | `E` | Error |
 | `P` | Processed |
 | `C` | Cancelled |
 
-Tenant verification confirms that `N` displays as `New`. The user also confirmed that clicking the Status cell does not open an editable input or dropdown, so `process_status` is protected from manual changes.
-
-Evidence:
-
-```text
-tests/evidence/2026-07-29-smk069-process-status-display.md
-```
-
-## Preview Rules — Verified
+## Preview Rules
 
 ```text
 Order Date only        → filter by order_date
-CO Number only         → filter by co_num
-Both entered           → filter by order_date AND co_num
-Both blank             → show validation message; do not load all staging data
+Source CO Number only  → filter by co_num
+Both entered           → order_date AND co_num
+Both blank             → validation message; do not load all rows
 ```
 
 Blank-filter message:
@@ -141,82 +176,178 @@ Blank-filter message:
 Isi Order Date atau CO Number sebelum Preview.
 ```
 
-Controlled test rows:
+The CO Number filter refers to the source/POS number stored in `co_num`. A separate display/filter can be added for `created_co_num` when users need to search by the generated SyteLine number.
+
+## Validate Behavior
+
+Receive/API validation is the primary validation layer. Important rule:
 
 ```text
-TEST000001 | 2026-07-29 | line 1
-TEST000001 | 2026-07-29 | line 2
-TEST000002 | 2026-07-30 | line 1
+U/M valid when:
+- equal to item_mst.u_m; or
+- an applicable Global, Item, or Customer conversion exists.
 ```
 
-Verified tenant results:
+Vendor conversion is excluded. One invalid line makes the entire source order invalid.
+
+Manual staging rows must be validated through a controlled method before Process/Reprocess. Direct manual status changes to `V` are prohibited.
+
+## Process/Reprocess Method
+
+Procedure:
 
 ```text
-CO Number TEST000001 + blank Order Date
-→ TEST000001 line 1 and line 2 only
-
-Order Date 7/30/2026 + blank CO Number
-→ TEST000002 line 1 only
-
-Order Date 7/30/2026 + CO Number TEST000001
-→ no matching business rows
-→ confirms order_date AND co_num
+dbo.SMK069ProcessCustomerOrderSp
 ```
 
-The test data is stored only in the custom staging table:
+Parameters:
 
 ```text
-dbo.ue_SMK069_temp_sales_mst
+SiteRef       = selected/current SiteRef
+SourceCoNum   = selected/current co_num
+CustSeq       = 0
+ProcessedBy   = USERNAME()
+CreatedCoNum  = output
+Success       = output
+Infobar       = output
 ```
 
-No direct SQL insert is allowed into standard `co_mst` or `coitem_mst`.
-
-## Form Implementation Checklist
+One invocation processes all lines having the same:
 
 ```text
-[x] base Grid Only form created
-[x] form opens successfully
-[x] caption confirmed
-[x] required business/process grid columns displayed in tenant
-[x] Order Date filter displayed
-[x] CO Number filter displayed
-[x] Preview button displayed
-[x] blank-filter validation verified
-[x] CO Number-only filtering verified
-[x] Order Date-only filtering verified
-[x] combined AND filtering verified
-[x] process_status inline list source configured
-[x] process_status displays New for stored N
-[x] process_status read-only behavior verified
+SiteRef + co_num
 ```
 
-## Completed Stop Point
+Do not invoke once per grid line.
 
-The base form and Preview behavior are complete for the current requirement.
+## Final Customer Order Output
 
-Do not add Customer Order creation directly in the form. The next implementation area is reusable customer validation:
+### Header
 
 ```text
-cust_num must exist in customer_mst
+Table          : dbo.co_mst
+Rows/order     : 1
+Order type     : B
+Source reference: cust_po = source co_num
 ```
 
-Continue with:
+### Customer Order Lines
 
 ```text
-implementation/13-create-SMK069-customer-validation.md
+Table          : dbo.coitem_mst
+Rows/order     : equal to staging line count
+co_num         : generated SyteLine CO
 ```
 
-## API Direction
-
-The project remains an API integration:
+### Blanket Lines
 
 ```text
-POS / Postman / sample CSV
-→ controlled service IDO receive method
-→ dbo.ue_SMK069_temp_sales_mst
-→ reusable validation and error processing
-→ supported Customer Order business process
-→ co_mst + coitem_mst
+Table          : dbo.co_bln_mst
+Rows/order     : equal to staging line count
+co_num         : generated SyteLine CO
+stat           : O
+allow_on_pick_list : 0
 ```
 
-CSV import, the Error Processing form, and REST API ingestion must reuse the same server-side validation and processing core.
+## Successful Result
+
+```text
+created_co_num = generated CO
+process_status = P
+validation_msg = NULL
+error_msg = NULL
+processed_date = current time
+processed_by = current user
+```
+
+## Error Result
+
+When the transaction remains committable:
+
+```text
+process_status = E
+error_msg = original SQL/business error
+retry_count = retry_count + 1
+```
+
+When an outer Mongoose transaction becomes uncommittable, the procedure rethrows the original error so the framework rolls back its own transaction.
+
+## Transaction Safety
+
+The Process procedure uses:
+
+```text
+@@TRANCOUNT detection
+procedure-owned transaction when no caller transaction exists
+SAVE TRANSACTION when called by Mongoose/IDO
+commit only procedure-owned transaction
+rollback to savepoint for a committable caller transaction
+rethrow for an uncommittable caller transaction
+```
+
+This avoids the earlier error:
+
+```text
+Transaction count after EXECUTE indicates a mismatching number of
+BEGIN and COMMIT statements.
+```
+
+## Idempotent Reprocess
+
+Existing Blanket CO is located by:
+
+```text
+site_ref
+cust_num
+cust_po = source co_num
+type = B
+```
+
+Before reusing it, the procedure verifies:
+
+```text
+coitem_mst line count
+co_bln_mst line count
+coitem item and quantity
+co_bln item, blanket quantity, and contract price
+```
+
+If matching:
+
+```text
+no duplicate CO is created
+created_co_num is synchronized
+status becomes P
+Success = 1
+```
+
+If not matching, processing fails for investigation.
+
+## Form Event Guidance
+
+Recommended Process/Reprocess sequence:
+
+```text
+10 Collection Save
+20 Call IDO Method — SMK069ProcessCustomerOrderSp
+30 Collection Refresh — primary
+40 Display Infobar/output message
+```
+
+The method must use the source order number (`co_num`) as `SourceCoNum`, not `created_co_num`.
+
+## UAT Checklist
+
+```text
+[ ] Valid source order creates one co_mst type B
+[ ] All lines inserted into coitem_mst
+[ ] All lines inserted into co_bln_mst
+[ ] co_bln allow_on_pick_list = 0
+[ ] source co_num stored as co_mst.cust_po
+[ ] generated CO shown in created_co_num
+[ ] staging line count = coitem count = co_bln count
+[ ] reprocess matching existing order does not duplicate
+[ ] invalid U/M never reaches Process from Receive
+[ ] original SQL error is visible for process failure
+[ ] no transaction count mismatch error
+```
