@@ -7,46 +7,100 @@ Display Caption      : SMK POS CSV TEST CONSOLE
 Primary Collection   : ue_SMK069PosCsvBatch
 Secondary Collection : ue_SMK069PosCsvUpload
 Relation              : BatchId = FP(BatchId)
-Purpose               : Functional CSV-to-sales integration test harness
+Purpose               : Functional CSV-to-sales receive and validation test harness
+```
+
+This form is a controlled UAT console. It receives CSV, parses rows, constructs canonical JSON, validates business data, and transfers fully valid orders to `dbo.ue_SMK069_temp_sales_mst`.
+
+It does **not** create the Customer Order directly. Blanket Customer Order creation is performed from `SMK API SALES ERROR PROCESSING` or by invoking `SMK069ProcessCustomerOrderSp` once per source order.
+
+## Final End-to-End Position
+
+```text
+CSV Console
+→ csv_file
+→ parsed CSV detail
+→ Import & Validate
+→ inbound validation
+→ temp sales, status V
+
+Error Processing
+→ Process/Reprocess
+→ co_mst type B
+→ coitem_mst
+→ co_bln_mst
+→ temp status P + created_co_num
+```
+
+Full documentation:
+
+```text
+docs/20-smk069-csv-to-blanket-customer-order-end-to-end.md
 ```
 
 ## Header Controls
+
+Business-visible controls:
 
 ```text
 Batch Id
 Source System
 Batch Status
-File Name
-CsvFile binary upload
-File Size (bytes)
-Uploaded Date
 Result Message
+Received Rows
+Total Orders
+Valid Orders
+Error Orders
+Transferred Rows
 ```
+
+Technical controls/properties:
+
+```text
+CsvFile
+File Size
+Uploaded Date
+```
+
+Final UI decision:
+
+```text
+File Name is hidden.
+```
+
+Original filename is not returned by the standard Binary Value Action and does not determine parsing success. Successful parsed rows, counts, and Result Message are the operational indicators.
 
 ## Main Buttons
 
 ### New Batch
 
-Creates a new header with a unique `BatchId` and Draft status without modifying the previously selected batch.
+Creates a new header with a unique `BatchId`, source system `POS`, and Draft status. A completed batch is not reused for another payload.
 
 ### Upload CSV
 
-Uses a binary import action bound to the `CsvFile` property of `ue_SMK069PosCsvBatch`.
-
-### Parse CSV to Rows
-
-Recommended handler sequence:
+Final intended sequence:
 
 ```text
-10 Collection Save    : primary collection
-20 Call IDO Method    : SMK069ImportCsvFileSp
-30 Collection Refresh : primary collection
-40 Collection Refresh : secondary collection
+0  Binary Value Action — Import into CsvFile
+10 Collection Save — primary collection
+20 Generate Parse event / Call SMK069ImportCsvFileSp
+30 Collection Refresh — primary collection
+40 Collection Refresh — secondary collection
 ```
 
-Do not generate `StdFormSave` or `StdFormRefresh` for this action. Direct Collection Save and Collection Refresh are used.
+The detail grid should appear immediately after the upload/save/parse sequence.
 
-Method parameters:
+If a separate Parse button remains in the tenant, keep it as a controlled `Re-parse CSV` fallback.
+
+### Parse CSV / Re-parse CSV
+
+Procedure:
+
+```text
+dbo.SMK069ImportCsvFileSp
+```
+
+Parameters:
 
 ```text
 BatchId      = P(BatchId)
@@ -56,26 +110,92 @@ ErrorRows    = output/event variable
 Infobar      = output/message variable
 ```
 
-### Run Full Process
-
-Builds the canonical JSON payload from detail rows and invokes the controlled inbound/validation/temporary-sales/Customer-Order processing flow.
-
-## Confirmed Parse Result
-
-The sample CSV containing two lines was parsed successfully and displayed in the secondary grid.
+Direct collection events are preferred:
 
 ```text
-Line 1 : C000001 / POS-TEST-001 / AA00001 / Qty 2 / Price 25000
-Line 2 : C000001 / POS-TEST-001 / AA00002 / Qty 1 / Price 15000
+Collection Save
+Call IDO Method
+Collection Refresh primary
+Collection Refresh secondary
 ```
 
-## Current Full-Process Boundary
+Do not rely on `StdFormSave` or `StdFormRefresh` when the direct collection response types are available.
 
-The latest run received two rows but returned zero source orders. CSV upload and parsing are therefore complete; source-system mapping and canonical inbound construction are the next diagnostic boundary.
+### Import & Validate
+
+Procedure:
+
+```text
+dbo.SMK069RunCsvTestBatchSp
+```
+
+Final behavior:
+
+```text
+CSV detail
+→ build canonical JSON
+→ dbo.SMK069ReceivePosSalesJsonSp
+→ field mapping
+→ master-data/default enrichment
+→ row/order validation
+→ valid orders transferred to temp
+→ stop
+```
+
+This event must not call `SMK069ReceiveAndProcessPosSalesJsonSp` and must not create `co_mst`, `coitem_mst`, or `co_bln_mst`.
+
+Legacy outputs retained for IDO compatibility:
+
+```text
+ProcessedOrders    = 0
+ProcessErrorOrders = 0
+```
+
+## CSV Parser Rules
+
+Required fields:
+
+```text
+custnum
+order_date
+conum
+coline
+item
+qty_ordered
+```
+
+Parser width validation:
+
+```text
+custnum <= 7
+conum   <= 10
+item    <= 30
+```
+
+Supported aliases are documented in the end-to-end document and in `SMK069ImportCsvFileSp.sql`.
+
+## Status Meanings
+
+### Detail Upload Status
+
+| Value | Meaning |
+|---|---|
+| `N` | Parsed and ready for Import & Validate |
+| `E` | CSV format/basic parser error |
+| `S` | Batch Import & Validate completed successfully |
+
+### Batch Status
+
+| Value | Meaning |
+|---|---|
+| `D` | Draft/parsed and ready |
+| `R` | Import & Validate running |
+| `E` | Parse/receive/validation error |
+| `C` | Receive/validation stage completed |
+
+`C` does not mean a Customer Order already exists.
 
 ## Relationship to Error Processing Form
-
-`SMK POS CSV TEST CONSOLE` and `SMK API SALES ERROR PROCESSING` do not share a primary collection.
 
 ```text
 CSV Console primary : ue_SMK069PosCsvBatch
@@ -83,4 +203,46 @@ CSV Console detail  : ue_SMK069PosCsvUpload
 Error Processing    : ue_SMK069TempSales
 ```
 
-The forms are connected only through the server-side pipeline that transfers canonical data into `dbo.ue_SMK069_temp_sales_mst`.
+The forms are connected through the server-side pipeline only.
+
+After a successful Import & Validate:
+
+```text
+Temp process_status = V
+created_co_num = NULL
+```
+
+After Process/Reprocess succeeds:
+
+```text
+Temp process_status = P
+created_co_num = generated SyteLine CO number
+```
+
+## U/M Validation Boundary
+
+U/M validation is performed by `SMK069ReceivePosSalesJsonSp`:
+
+```text
+U/M = item base U/M
+or
+an applicable Global/Item/Customer U/M conversion exists
+```
+
+A vendor conversion is not used for Customer Order validation. One invalid U/M line makes the entire source order invalid and prevents transfer to temp.
+
+## Verified and Pending
+
+```text
+[VERIFIED] Binary CSV upload stores the BLOB
+[VERIFIED] CSV parser creates detail rows
+[VERIFIED] Two-row parser test
+[IMPLEMENTED] Source system alias normalization to POS
+[IMPLEMENTED] Parser downstream length checks
+[IMPLEMENTED] Import & Validate only wrapper
+[IMPLEMENTED] Receive U/M conversion validation
+[DECIDED] File Name hidden
+[DECIDED] Upload should immediately parse and refresh detail
+[PENDING EVIDENCE] Formal tenant screenshot/result for auto-parse event chain
+[PENDING EVIDENCE] 100-row/25-order full UAT record
+```
