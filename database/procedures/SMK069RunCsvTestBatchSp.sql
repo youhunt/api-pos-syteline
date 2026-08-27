@@ -4,12 +4,16 @@
                 CSV detail -> JSON -> inbound -> mapping -> validation
                 -> ue_SMK069_temp_sales_mst
 
-    IMPORTANT:
-      - This version DOES NOT create a Customer Order.
-      - Customer Order creation is performed manually from
+    POS CONTRACT V2:
+      - CSV input carries custnum, order_date, cust_po, whse, coline,
+        item, qty_ordered, and u_m.
+      - conum is NOT supplied by CSV/POS; Receive generates RYYMM#####.
+      - unit_price is NOT supplied by CSV/POS; Receive resolves pricing
+        from itemcustprice_mst.
+      - This wrapper DOES NOT create a Customer Order.
+      - Customer Order creation is performed from
         SMK API SALES ERROR PROCESSING via Process/Reprocess.
-      - The existing procedure signature is retained so the current
-        IDO Method/event parameter configuration does not need to change.
+      - The existing procedure signature is retained for IDO compatibility.
 */
 CREATE OR ALTER PROCEDURE dbo.SMK069RunCsvTestBatchSp
     @BatchId               NVARCHAR(100),
@@ -203,18 +207,19 @@ BEGIN
             SELECT
                 LTRIM(RTRIM(d.custnum)) AS custnum,
                 CONVERT(NVARCHAR(10), d.order_date, 23) AS order_date,
-                LTRIM(RTRIM(d.conum)) AS conum,
+                LTRIM(RTRIM(d.cust_po)) AS cust_po,
+                NULLIF(LTRIM(RTRIM(d.whse)), N'') AS whse,
                 d.coline AS coline,
                 LTRIM(RTRIM(d.item)) AS item,
                 d.qty_ordered AS qty_ordered,
-                d.unit_price AS unit_price,
+                NULLIF(LTRIM(RTRIM(d.u_m)), N'') AS u_m,
+
+                /* Optional/non-POS-contract fields retained for UAT flexibility. */
                 NULLIF(LTRIM(RTRIM(d.siteref)), N'') AS siteref,
-                NULLIF(LTRIM(RTRIM(d.whse)), N'') AS whse,
                 CASE
                     WHEN d.due_date IS NULL THEN NULL
                     ELSE CONVERT(NVARCHAR(10), d.due_date, 23)
                 END AS due_date,
-                NULLIF(LTRIM(RTRIM(d.u_m)), N'') AS u_m,
                 NULLIF(LTRIM(RTRIM(d.terms_code)), N'') AS terms_code,
                 NULLIF(LTRIM(RTRIM(d.tax_code1)), N'') AS tax_code1,
                 d.exch_rate AS exch_rate
@@ -303,7 +308,8 @@ BEGIN
         /*
             Success here means:
               - JSON received,
-              - canonical source order formed,
+              - canonical POS order formed from SiteRef + cust_po,
+              - Receive generated final co_num and resolved unit_price,
               - every order passed validation,
               - valid rows transferred to temp sales.
 
@@ -328,8 +334,8 @@ BEGIN
                 SET @Infobar = LEFT
                 (
                     @Infobar
-                    + N'; tidak ada co_num canonical yang terbentuk. '
-                    + N'Periksa mapping SourceSystem dan panjang conum maksimal 10 karakter.',
+                    + N'; tidak ada cust_po canonical yang terbentuk. '
+                    + N'Periksa mapping SourceSystem dan field wajib cust_po.',
                     4000
                 );
             END;
