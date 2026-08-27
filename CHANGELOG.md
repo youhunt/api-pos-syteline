@@ -4,6 +4,42 @@ All notable changes to this repository will be documented in this file.
 
 ## [Unreleased]
 
+### 2026-08-27 — POS Contract V2 Receive and Blanket CO UAT
+
+#### Changed
+
+- POS payload no longer supplies `conum` or `unit_price`.
+- Added mandatory `cust_po` (CustPOType / nvarchar(25)), mandatory `whse`, and mandatory `u_m` to the POS contract.
+- Receive groups atomic orders by `SiteRef + cust_po`.
+- Receive generates final Customer Order number using `R + YYMM + 5-digit running number`.
+- Receive resolves price from the latest effective `itemcustprice_mst` row; `cont_price` is preferred, with quantity-break fallback when contract price is zero.
+- U/M validation now follows the explicit item-specific rule: base item U/M or `u_m_conv_mst.item = item` with matching `from_u_m`/`to_u_m`.
+- Warehouse is mandatory and validated against `whse_mst`.
+- Process V2 reuses the Receive-generated `co_num`; it does not generate a second order number.
+- `co_mst.cust_po` now stores the POS `cust_po` business value.
+- Error Processing standard Create/New/Copy/Delete operations are disabled/required-disabled to protect staging integrity.
+
+#### Confirmed UAT
+
+```text
+BatchId          BATCH-20260827-002
+cust_po          POS08270002
+generated co_num R260822003
+lines            2
+unit_price       80000
+u_m              CTN
+whse             MAIN
+Receive           1 valid / 0 error / 2 transferred
+Process           Blanket Customer Order success / Processed
+```
+
+#### Documentation
+
+- Added `docs/22-smk069-pos-contract-v2-20260827.md`.
+- Added `tests/evidence/2026-08-27-smk069-pos-contract-v2-receive-process-success.md`.
+- Updated temp staging and Error Processing form documentation to V2 semantics.
+- Marked the intermediate `docs/21-smk069-list-co-and-cust-po-revision.md` as superseded.
+
 ### 2026-08-07 — CSV-to-Blanket-Customer-Order End-to-End Synchronization
 
 #### Added
