@@ -1,3 +1,5 @@
+> **POS Contract V2 notice (27 Aug 2026):** Sections in this document that show POS/CSV supplying `conum` or `unit_price`, or grouping orders by source `co_num`, are historical. The current production/API contract is documented in `docs/22-smk069-pos-contract-v2-20260827.md`. Under V2, POS/CSV supplies `cust_po`, `whse`, and `u_m`; Receive generates `co_num` and resolves `unit_price`. The CSV parser/wrapper have also been synchronized to V2.
+
 # SMK069 — End-to-End CSV sampai Blanket Customer Order
 
 > **POS Contract V2 update — 27 August 2026:** The POS/API contract and number model in parts of this older CSV master document are historical. POS now sends `cust_po`, `whse`, and `u_m`; POS no longer sends `conum` or `unit_price`. Receive generates `RYYMM#####` `co_num` and resolves price from `itemcustprice_mst`. Process reuses that same generated number. See `docs/22-smk069-pos-contract-v2-20260827.md` for the current API source of truth. The CSV Test Console still requires V2 parser/wrapper synchronization.
