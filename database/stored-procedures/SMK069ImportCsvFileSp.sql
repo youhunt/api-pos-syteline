@@ -7,28 +7,35 @@
     Supported canonical headers / aliases:
       custnum       : custnum, cust_num, customer, customer_code
       order_date    : order_date, orderdate
-      conum         : conum, co_num, order_no, order_number
+      cust_po       : cust_po, custpo, pos_order_no, store_order_no
+      whse          : whse, warehouse
       coline        : coline, co_line, line_no, line_number
       item          : item, item_code, sku
       qty_ordered   : qty_ordered, qty, quantity
-      unit_price    : unit_price, unitprice, price
-      siteref       : siteref, site_ref, site
-      whse          : whse, warehouse
-      due_date      : due_date, duedate
       u_m           : u_m, um, unit_of_measure
+      siteref       : siteref, site_ref, site
+      due_date      : due_date, duedate
       terms_code    : terms_code, terms
       tax_code1     : tax_code1, tax_code
       exch_rate     : exch_rate, exchange_rate
 
-    Revision 2026-08-05:
-      - Fixed duplicate internal PK error caused by @Fields retaining rows across WHILE iterations.
-      - Row-level table/scalar variables are now explicitly reset for every CSV row.
+    Revision 2026-08-27 - POS Contract V2:
+      - Added mandatory cust_po, whse, and u_m.
+      - conum is no longer required/read from CSV for processing; Receive generates it.
+      - unit_price is no longer required/read from CSV for processing; Receive resolves it.
+      - Required CSV fields are now:
+        custnum, order_date, cust_po, whse, coline, item, qty_ordered, u_m.
+      - Downstream width validation: custnum <= 7, cust_po <= 25,
+        whse <= 8, item <= 30.
+      - Retains the 2026-08-05 row-variable reset fix.
 
     Notes:
       - Designed for the functional/UAT CSV console, not the production inbound channel.
       - Supports quoted CSV values and escaped double quotes ("").
       - Embedded line breaks inside a quoted field are intentionally not supported.
-      - Required fields: custnum, order_date, conum, coline, item, qty_ordered.
+      - Required fields: custnum, order_date, cust_po, whse, coline, item, qty_ordered, u_m.
+      - Legacy conum/unit_price columns may physically remain in the CSV detail table,
+        but Contract V2 does not require or forward them to Receive.
 */
 
 SET NOCOUNT ON;
@@ -217,6 +224,7 @@ BEGIN
         row_no         INT NOT NULL,
         custnum        NVARCHAR(20) NULL,
         order_date     DATE NULL,
+        cust_po        NVARCHAR(25) NULL,
         conum          NVARCHAR(30) NULL,
         coline         INT NULL,
         item           NVARCHAR(50) NULL,
@@ -255,6 +263,7 @@ BEGIN
         @Line           NVARCHAR(MAX),
         @RawCustNum     NVARCHAR(MAX),
         @RawOrderDate   NVARCHAR(MAX),
+        @RawCustPo      NVARCHAR(MAX),
         @RawCoNum       NVARCHAR(MAX),
         @RawCoLine      NVARCHAR(MAX),
         @RawItem        NVARCHAR(MAX),
@@ -306,6 +315,8 @@ BEGIN
                         THEN N'custnum'
                     WHEN n.normalized IN (N'order_date', N'orderdate')
                         THEN N'order_date'
+                    WHEN n.normalized IN (N'cust_po', N'custpo', N'pos_order_no', N'store_order_no')
+                        THEN N'cust_po'
                     WHEN n.normalized IN (N'conum', N'co_num', N'order_no', N'order_number')
                         THEN N'conum'
                     WHEN n.normalized IN (N'coline', N'co_line', N'line_no', N'line_number')
@@ -370,10 +381,12 @@ BEGIN
                     VALUES
                         (N'custnum'),
                         (N'order_date'),
-                        (N'conum'),
+                        (N'cust_po'),
+                        (N'whse'),
                         (N'coline'),
                         (N'item'),
-                        (N'qty_ordered')
+                        (N'qty_ordered'),
+                        (N'u_m')
                 ) AS required_fields(required_name)
                 WHERE NOT EXISTS
                 (
@@ -385,7 +398,7 @@ BEGIN
             BEGIN
                 SET @Infobar =
                     N'Header CSV tidak lengkap. Wajib ada: '
-                    + N'custnum, order_date, conum, coline, item, qty_ordered.';
+                    + N'custnum, order_date, cust_po, whse, coline, item, qty_ordered, u_m.';
                 RETURN 16;
             END;
 
@@ -399,6 +412,7 @@ BEGIN
 
         SET @RawCustNum = NULL;
         SET @RawOrderDate = NULL;
+        SET @RawCustPo = NULL;
         SET @RawCoNum = NULL;
         SET @RawCoLine = NULL;
         SET @RawItem = NULL;
@@ -426,6 +440,7 @@ BEGIN
         SELECT
             @RawCustNum   = MAX(CASE WHEN h.canonical_name = N'custnum'      THEN f.field_value END),
             @RawOrderDate = MAX(CASE WHEN h.canonical_name = N'order_date'   THEN f.field_value END),
+            @RawCustPo    = MAX(CASE WHEN h.canonical_name = N'cust_po'      THEN f.field_value END),
             @RawCoNum     = MAX(CASE WHEN h.canonical_name = N'conum'        THEN f.field_value END),
             @RawCoLine    = MAX(CASE WHEN h.canonical_name = N'coline'       THEN f.field_value END),
             @RawItem      = MAX(CASE WHEN h.canonical_name = N'item'         THEN f.field_value END),
@@ -468,8 +483,12 @@ BEGIN
             SET @Message += N'order_date kosong; ';
         ELSE IF @OrderDate IS NULL
             SET @Message += N'order_date tidak valid; ';
-        IF @RawCoNum IS NULL
-            SET @Message += N'conum kosong; ';
+        IF @RawCustPo IS NULL
+            SET @Message += N'cust_po kosong; ';
+        IF @RawWhse IS NULL
+            SET @Message += N'whse kosong; ';
+        IF @RawUM IS NULL
+            SET @Message += N'u_m kosong; ';
         IF @RawCoLine IS NULL
             SET @Message += N'coline kosong; ';
         ELSE IF @CoLine IS NULL OR @CoLine <= 0
@@ -480,27 +499,26 @@ BEGIN
             SET @Message += N'qty_ordered kosong; ';
         ELSE IF @QtyOrdered IS NULL OR @QtyOrdered <= 0
             SET @Message += N'qty_ordered harus angka > 0; ';
-        IF @RawUnitPrice IS NOT NULL AND @UnitPrice IS NULL
-            SET @Message += N'unit_price tidak valid; ';
-        ELSE IF @UnitPrice < 0
-            SET @Message += N'unit_price tidak boleh negatif; ';
         IF @RawDueDate IS NOT NULL AND @DueDate IS NULL
             SET @Message += N'due_date tidak valid; ';
         IF @RawExchRate IS NOT NULL AND (@ExchRate IS NULL OR @ExchRate <= 0)
             SET @Message += N'exch_rate harus angka > 0; ';
 
-        IF LEN(ISNULL(@RawCustNum, N'')) > 20
-            SET @Message += N'custnum melebihi 20 karakter; ';
-        IF LEN(ISNULL(@RawCoNum, N'')) > 30
-            SET @Message += N'conum melebihi 30 karakter; ';
-        IF LEN(ISNULL(@RawItem, N'')) > 50
-            SET @Message += N'item melebihi 50 karakter; ';
+        IF LEN(ISNULL(@RawCustNum, N'')) > 7
+            SET @Message += N'custnum melebihi 7 karakter; ';
+        IF LEN(ISNULL(@RawCustPo, N'')) > 25
+            SET @Message += N'cust_po melebihi 25 karakter; ';
+        IF LEN(ISNULL(@RawWhse, N'')) > 8
+            SET @Message += N'whse melebihi 8 karakter; ';
+        IF LEN(ISNULL(@RawItem, N'')) > 30
+            SET @Message += N'item melebihi 30 karakter; ';
 
         INSERT INTO @ParsedRows
         (
             row_no,
             custnum,
             order_date,
+            cust_po,
             conum,
             coline,
             item,
@@ -520,13 +538,14 @@ BEGIN
         VALUES
         (
             @DataRow,
-            LEFT(@RawCustNum, 20),
+            LEFT(@RawCustNum, 7),
             @OrderDate,
-            LEFT(@RawCoNum, 30),
+            LEFT(@RawCustPo, 25),
+            NULL, /* conum generated later by Receive V2 */
             @CoLine,
             LEFT(@RawItem, 50),
             @QtyOrdered,
-            @UnitPrice,
+            NULL, /* unit_price resolved later by Receive V2 */
             LEFT(@RawSiteRef, 8),
             LEFT(@RawWhse, 20),
             @DueDate,
@@ -571,6 +590,7 @@ BEGIN
             row_no,
             custnum,
             order_date,
+            cust_po,
             conum,
             coline,
             item,
@@ -599,6 +619,7 @@ BEGIN
             p.row_no,
             p.custnum,
             p.order_date,
+            p.cust_po,
             p.conum,
             p.coline,
             p.item,
