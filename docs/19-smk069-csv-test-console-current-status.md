@@ -1,140 +1,187 @@
 # SMK069 CSV Test Console — Current Status
 
-> This document is retained as the CSV-console status page. The authoritative end-to-end reference is now:
+> Current contract reference:
 >
 > ```text
-> docs/20-smk069-csv-to-blanket-customer-order-end-to-end.md
+> docs/22-smk069-pos-contract-v2-20260827.md
 > ```
 
-## Current Role
+## Current role
 
-`SMK POS CSV TEST CONSOLE` is a receive-and-validation test harness.
+`SMK POS CSV TEST CONSOLE` is the functional/UAT harness for **POS Contract V2**.
 
 ```text
 New Batch
-→ Upload CSV
-→ Save binary
-→ Parse rows
-→ Import & Validate
-→ valid rows enter temp status V
+-> Upload CSV
+-> Save binary
+-> Parse CSV V2
+-> Import & Validate
+-> Receive pricing/validation/co_num generation
+-> valid rows enter temp status V
 ```
 
-It does not create Customer Orders directly.
-
-Customer Order creation occurs through:
+Customer Order creation remains separate:
 
 ```text
 SMK API SALES ERROR PROCESSING
-→ Process/Reprocess
-→ co_mst type B
-→ coitem_mst
-→ co_bln_mst
+-> Process/Reprocess
+-> co_mst type B
+-> coitem_mst
+-> co_bln_mst
+-> temp status P
 ```
 
-## Collections
+## V2 CSV contract
+
+CSV/POS supplies:
 
 ```text
-Primary   : ue_SMK069PosCsvBatch
-Secondary : ue_SMK069PosCsvUpload
-Relation  : BatchId = FP(BatchId)
+custnum
+order_date
+cust_po
+whse
+coline
+item
+qty_ordered
+u_m
 ```
 
-## Final UI Decisions
+CSV/POS does not supply:
 
 ```text
-File Name hidden
-Upload should immediately save and parse
-Parsed detail rows are the main upload-success indicator
-Separate Parse button may remain as Re-parse fallback
-Run Full Process renamed/treated as Import & Validate
+conum
+unit_price
 ```
 
-## Final Upload Event Target
+Receive supplies:
 
 ```text
-0  Binary Value Action — CsvFile
-10 Collection Save — primary
-20 Generate Parse event / Call SMK069ImportCsvFileSp
-30 Collection Refresh — primary
-40 Collection Refresh — secondary
+co_num     = R + YYMM + 5-digit running number
+unit_price = itemcustprice_mst effective pricing
 ```
 
-## Import & Validate Target
+Atomic order key:
 
 ```text
-SMK069RunCsvTestBatchSp
-→ build canonical JSON
-→ SMK069ReceivePosSalesJsonSp
-→ raw inbound
-→ mapping
-→ validation including U/M
-→ transfer valid order to temp
-→ stop
+SiteRef + cust_po
 ```
 
-## Validation Result
+## Parser V2 status
+
+`SMK069ImportCsvFileSp` now:
+
+- requires `cust_po`, `whse`, and `u_m`;
+- no longer requires `conum` or `unit_price`;
+- validates parser widths: custnum <= 7, cust_po <= 25, whse <= 8, item <= 30;
+- stores `cust_po` on `ue_SMK069_pos_csv_upload_mst`;
+- leaves legacy CSV-detail `conum` and `unit_price` unused for V2 processing.
+
+Required patch:
 
 ```text
-valid order   → inbound T, temp V
-invalid order → inbound E, no temp transfer
+database/patches/2026-08-27-smk069-pos-contract-v2-csv-console.sql
 ```
 
-One invalid line invalidates all lines of the same `SiteRef + source co_num`.
-
-## U/M Rule
+Required secondary IDO property:
 
 ```text
-transaction U/M = item base U/M
-or
-valid Global/Item/Customer conversion exists
+ue_SMK069PosCsvUpload.CustPo -> cust_po
 ```
 
-Vendor conversion is excluded.
+## Wrapper V2 status
 
-## Downstream Processing
-
-Source number:
+`SMK069RunCsvTestBatchSp` now builds Receive JSON with:
 
 ```text
-temp.co_num
-co_mst.cust_po
+custnum
+order_date
+cust_po
+whse
+coline
+item
+qty_ordered
+u_m
 ```
 
-Generated SyteLine number:
+plus optional test-harness fields such as SiteRef/due date/terms/tax/exchange rate when present.
+
+It intentionally omits:
 
 ```text
-temp.created_co_num
-co_mst.co_num
-coitem_mst.co_num
-co_bln_mst.co_num
+conum
+unit_price
 ```
 
-## Current Repository State
+so the CSV test path exercises the same server-side generation/pricing behavior as the production POS API.
 
-Committed:
+## Upload event target
 
 ```text
-SMK069RunCsvTestBatchSp receive/validate-only wrapper
-current form documentation
-complete end-to-end documentation
-U/M and Blanket correction evidence
+0  Binary Value Action -> CsvFile
+10 Collection Save -> primary
+20 Call SMK069ImportCsvFileSp
+30 Collection Refresh -> primary
+40 Collection Refresh -> secondary
 ```
 
-Pending exact final tenant-source synchronization:
+## Grid target
+
+Visible parsed CSV columns:
 
 ```text
-SMK069ImportCsvFileSp
-SMK069ReceivePosSalesJsonSp
-SMK069ProcessCustomerOrderSp
+Row No
+Customer
+Order Date
+Customer PO
+Warehouse
+Line
+Item
+Quantity
+U/M
+Upload Status
+Result Message
 ```
 
-## Pending Evidence
+Hide/remove legacy parsed columns:
 
 ```text
-[ ] Upload auto-parse event-chain screenshot/result
-[ ] CreatedCoNum property/grid verification
-[ ] U/M invalid-order negative evidence
-[ ] co_mst type B verification
-[ ] coitem/co_bln count reconciliation
-[ ] 100-row/25-order UAT
+CSV conum
+CSV unit_price
+```
+
+Generated `co_num` and resolved `unit_price` are visible downstream in inbound/temp.
+
+## U/M rule V2
+
+```text
+payload u_m = item_mst.u_m
+OR
+u_m_conv_mst.item = payload item
+AND (from_u_m = payload u_m OR to_u_m = payload u_m)
+```
+
+One invalid line marks the whole `SiteRef + cust_po` order Error.
+
+## Current repository state
+
+```text
+[UPDATED] SMK069ImportCsvFileSp - Contract V2 parser
+[UPDATED] SMK069RunCsvTestBatchSp - Contract V2 JSON wrapper
+[ADDED]   CSV-detail cust_po schema patch
+[UPDATED] SMK069_POS_CSV_Sample.csv
+[UPDATED] CSV Test Console form documentation
+[UAT CONFIRMED] Receive V2.1
+[UAT CONFIRMED] Process V2 Blanket CO
+```
+
+## Remaining tenant actions
+
+```text
+[ ] Apply CSV-detail cust_po patch if not yet applied
+[ ] Add/refresh ue_SMK069PosCsvUpload.CustPo
+[ ] Apply updated SMK069ImportCsvFileSp
+[ ] Apply updated SMK069RunCsvTestBatchSp
+[ ] Update CSV detail grid columns
+[ ] Test CSV -> inbound -> temp with V2 sample
+[ ] Process generated co_num and reconcile coitem/co_bln
 ```
