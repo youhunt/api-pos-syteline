@@ -6,6 +6,20 @@ All notable changes to this repository will be documented in this file.
 
 ### 2026-08-27 — POS Contract V2 Receive and Blanket CO UAT
 
+#### CSV Console V2 synchronization
+
+- Updated `SMK069ImportCsvFileSp` to require:
+  `custnum, order_date, cust_po, whse, coline, item, qty_ordered, u_m`.
+- CSV parser no longer requires/forwards POS `conum` or `unit_price`.
+- Updated `SMK069RunCsvTestBatchSp` so its canonical JSON matches the production V2 Receive payload.
+- Added idempotent schema patch:
+  `database/patches/2026-08-27-smk069-pos-contract-v2-csv-console.sql`.
+- Added `cust_po` propagation to CSV detail and documented IDO property
+  `ue_SMK069PosCsvUpload.CustPo`.
+- Updated `templates/SMK069_POS_CSV_Sample.csv` to the V2 eight-field input contract.
+- Updated CSV Test Console documentation/grid target to show Customer PO, warehouse and U/M,
+  and hide legacy CSV conum/unit price.
+
 #### Changed
 
 - POS payload no longer supplies `conum` or `unit_price`.
@@ -203,8 +217,8 @@ The current Blanket implementation extends this check to `co_bln_mst` and requir
 [COMPLETED] created_co_num design and processing logic
 [COMPLETED] ue_SMK069TempSales IDO base
 [COMPLETED] Error Processing form and Preview
-[COMPLETED] CSV binary upload and parser
-[COMMITTED] CSV Import & Validate only wrapper
+[COMPLETED IN REPOSITORY] CSV binary upload and POS Contract V2 parser
+[COMMITTED] CSV Import & Validate wrapper aligned to POS Contract V2
 [IMPLEMENTED IN TENANT] controlled Receive API procedure
 [COMPLETED] raw inbound preservation and field mapping
 [COMPLETED] customer/item/warehouse/basic validation
@@ -215,7 +229,8 @@ The current Blanket implementation extends this check to `co_bln_mst` and requir
 [IMPLEMENTED IN TENANT] co_bln_mst line creation
 [IMPLEMENTED IN TENANT] caller-safe transaction handling
 [IMPLEMENTED IN TENANT] idempotent existing Blanket CO synchronization
-[PENDING REPOSITORY SYNC] exact final parser, Receive, and Process SQL source
+[SYNCED] POS Contract V2 CSV parser and RunCsv wrapper sources
+[PENDING REPOSITORY SYNC] exact final Receive and Process SQL source
 [PENDING EVIDENCE] CreatedCoNum property/grid verification in tenant
 [PENDING EVIDENCE] 100-row/25-order formal UAT record
 [PENDING REVIEW] conversion-factor handling for converted quantity and price
