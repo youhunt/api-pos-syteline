@@ -1,5 +1,8 @@
 # SMK069 — End-to-End CSV sampai Blanket Customer Order
 
+> **POS Contract V2 update — 27 August 2026:** The POS/API contract and number model in parts of this older CSV master document are historical. POS now sends `cust_po`, `whse`, and `u_m`; POS no longer sends `conum` or `unit_price`. Receive generates `RYYMM#####` `co_num` and resolves price from `itemcustprice_mst`. Process reuses that same generated number. See `docs/22-smk069-pos-contract-v2-20260827.md` for the current API source of truth. The CSV Test Console still requires V2 parser/wrapper synchronization.
+
+
 > **Source status:** Dokumen ini menjelaskan final behavior yang sudah diterapkan/ditetapkan di tenant. Pada saat commit dokumentasi ini, exact final source untuk parser, `SMK069ReceivePosSalesJsonSp`, dan `SMK069ProcessCustomerOrderSp` masih menunggu sinkronisasi dari tenant ke repository. `SMK069RunCsvTestBatchSp` versi Import & Validate Only sudah dikomit.
 
 ## Quick Navigation
