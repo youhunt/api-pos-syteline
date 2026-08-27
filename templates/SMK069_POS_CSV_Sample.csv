@@ -1,0 +1,3 @@
+custnum,order_date,cust_po,whse,coline,item,qty_ordered,u_m
+C000001,2026-08-06,POS08270003,MAIN,1,AA00032,1,CTN
+C000001,2026-08-06,POS08270003,MAIN,2,AA00032,2,CTN
