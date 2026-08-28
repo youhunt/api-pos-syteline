@@ -1,4 +1,18 @@
 # Changelog
+## 2026-08-28 — Outlet/Store customer and warehouse mapping
+
+- POS `custnum` is now treated as Outlet/Store Code, not final SyteLine customer number.
+- Receive resolves customer through `custaddr_mst` where `cust_num LIKE 'PHR%'`,
+  `cust_seq <> 0`, and `LEFT(name,4) = inbound custnum`.
+- `ue_SMK069_temp_sales_mst.cust_num` receives mapped `custaddr_mst.cust_num`.
+- No `cust_seq` column is added to temp.
+- Process resolves the actual non-zero `cust_seq` from `custaddr_mst` using
+  the raw inbound Outlet/Store Code for the generated `co_num`.
+- POS warehouse mapping:
+  `P963/R970 -> PLG`; all other values -> `MAIN`.
+- Pricing uses the mapped SyteLine `cust_num`.
+- Raw inbound `custnum` and `whse` remain unchanged for audit.
+
 
 All notable changes to this repository will be documented in this file.
 
