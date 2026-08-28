@@ -19,6 +19,11 @@
       tax_code1     : tax_code1, tax_code
       exch_rate     : exch_rate, exchange_rate
 
+    Revision 2026-08-28 - POS Contract V2.2:
+      - Added a persisted-row guard: parser must never report FormatErrors=0
+        when cust_po/whse/u_m is blank in the physical CSV detail table.
+      - Success Infobar now identifies CSV V2 explicitly.
+
     Revision 2026-08-27 - POS Contract V2:
       - Added mandatory cust_po, whse, and u_m.
       - conum is no longer required/read from CSV for processing; Receive generates it.
@@ -642,8 +647,33 @@ BEGIN
             NEWID()
         FROM @ParsedRows AS p;
 
+        /*
+            Contract V2.2 persistence guard.
+            This prevents a mixed/partial parser deployment from returning
+            FormatErrors=0 while mandatory V2 fields were actually persisted
+            as NULL in ue_SMK069_pos_csv_upload_mst.
+        */
+        IF EXISTS
+        (
+            SELECT 1
+            FROM dbo.ue_SMK069_pos_csv_upload_mst
+            WHERE batch_id = @BatchId
+              AND upload_status = N'N'
+              AND
+              (
+                  NULLIF(LTRIM(RTRIM(cust_po)), N'') IS NULL
+                  OR NULLIF(LTRIM(RTRIM(whse)), N'') IS NULL
+                  OR NULLIF(LTRIM(RTRIM(u_m)), N'') IS NULL
+              )
+        )
+        BEGIN
+            THROW 50140,
+                  N'CSV V2 persistence check gagal: cust_po, whse, atau u_m kosong setelah parsing. Apply ulang parser V2 lengkap.',
+                  1;
+        END;
+
         SET @Infobar =
-            N'CSV berhasil diparsing. Rows='
+            N'CSV V2 berhasil diparsing. Rows='
             + CONVERT(NVARCHAR(20), @ImportedRows)
             + N', FormatErrors='
             + CONVERT(NVARCHAR(20), @ErrorRows)
