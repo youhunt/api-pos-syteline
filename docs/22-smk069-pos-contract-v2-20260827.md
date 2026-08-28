@@ -104,6 +104,52 @@ raw JSON
 -> ue_SMK069_temp_sales_mst, process_status = V
 ```
 
+## 3A. Outlet/Store customer and warehouse mapping revision — 28 Aug 2026
+
+The POS `custnum` field is an **Outlet/Store Code**, not the final SyteLine
+`cust_num`.
+
+Receive keeps the raw POS value in inbound for audit, then resolves the final
+SyteLine customer through `custaddr_mst`:
+
+```sql
+custaddr_mst.cust_num LIKE 'PHR%'
+AND custaddr_mst.cust_seq <> 0
+AND LEFT(custaddr_mst.name, 4) = inbound.cust_num
+```
+
+Final staging mapping:
+
+```text
+temp.cust_num = custaddr_mst.cust_num
+
+temp.whse =
+  P963 / R970 -> PLG
+  all others  -> MAIN
+```
+
+No `cust_seq` column is added to `ue_SMK069_temp_sales_mst`.
+
+During Process, `cust_seq` is resolved again from `custaddr_mst` by using:
+
+```text
+mapped temp.cust_num
++
+raw inbound Outlet/Store Code for the same generated co_num
++
+custaddr_mst.cust_seq <> 0
+```
+
+Pricing also uses the **mapped SyteLine cust_num**, not the raw POS Outlet/Store
+Code, when querying `itemcustprice_mst`.
+
+The raw inbound values remain unchanged for audit:
+
+```text
+inbound.cust_num = raw POS Outlet/Store Code
+inbound.whse     = raw POS warehouse code
+```
+
 ## 4. POS Transaction Data Contract V2
 
 | Alias Field | Type | Required? | Rule | Description |
@@ -153,7 +199,7 @@ One invalid line makes the whole `SiteRef + cust_po` order Error.
 
 ## 6. Warehouse validation
 
-`whse` is mandatory and must exist in `whse_mst` for the target site. The supplied value is preserved into temp and the Customer Order.
+`whse` is mandatory as the POS warehouse code. Receive maps `P963`/`R970` to SyteLine warehouse `PLG`; all other POS warehouse values map to `MAIN`. The mapped warehouse must exist in `whse_mst` and is the value stored in temp and used by the Customer Order.
 
 ## 7. Unit price resolution
 
@@ -164,7 +210,7 @@ SELECT TOP 1 ...
 FROM dbo.itemcustprice_mst
 WHERE site_ref = @SiteRef
   AND item = @item
-  AND cust_num = @custnum
+  AND cust_num = @mapped_cust_num
   AND effect_date <= @order_date
 ORDER BY effect_date DESC, RecordDate DESC;
 ```
@@ -254,7 +300,7 @@ Example:
 ```text
 @SiteRef     = DEFAULT
 @SourceCoNum = R260822003
-@CustSeq     = 0
+@CustSeq     = compatibility input only; Process resolves the actual non-zero cust_seq from custaddr_mst
 ```
 
 Process must not generate another number.
@@ -350,8 +396,10 @@ Infobar          Blanket Customer Order R260822003 berhasil dibuat untuk cust_po
 ```text
 POS JSON
 -> Receive raw inbound
--> validate cust_po/customer/item/whse/U-M/terms
--> resolve item/customer price
+-> map POS Outlet/Store Code to SyteLine cust_num/cust_seq via custaddr_mst
+-> map POS whse to PLG/MAIN
+-> validate cust_po/customer/item/mapped whse/U-M/terms
+-> resolve item/customer price using mapped cust_num
 -> generate RYYMM##### co_num
 -> temp V
 -> Process generated co_num
