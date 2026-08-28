@@ -14,6 +14,9 @@
       - Customer Order creation is performed from
         SMK API SALES ERROR PROCESSING via Process/Reprocess.
       - The existing procedure signature is retained for IDO compatibility.
+      - Contract V2.2 refuses Import & Validate when parsed detail still has
+        blank cust_po/whse/u_m, preventing a mixed parser deployment from
+        reaching Receive.
 */
 CREATE OR ALTER PROCEDURE dbo.SMK069RunCsvTestBatchSp
     @BatchId               NVARCHAR(100),
@@ -88,6 +91,37 @@ BEGIN
     )
     BEGIN
         SET @Infobar = N'Batch belum memiliki detail transaksi.';
+        RETURN 16;
+    END;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM dbo.ue_SMK069_pos_csv_upload_mst
+        WHERE batch_id = @BatchId
+          AND ISNULL(upload_status, N'N') <> N'E'
+          AND
+          (
+              NULLIF(LTRIM(RTRIM(cust_po)), N'') IS NULL
+              OR NULLIF(LTRIM(RTRIM(whse)), N'') IS NULL
+              OR NULLIF(LTRIM(RTRIM(u_m)), N'') IS NULL
+          )
+    )
+    BEGIN
+        SET @Infobar =
+            N'CSV Contract V2 belum lengkap pada parsed detail: '
+            + N'cust_po, whse, dan u_m wajib terisi. '
+            + N'Re-Parse CSV menggunakan SMK069ImportCsvFileSp V2 terbaru.';
+
+        UPDATE dbo.ue_SMK069_pos_csv_batch_mst
+        SET
+            batch_status = N'E',
+            result_message = LEFT(@Infobar, 1000),
+            completed_date = GETDATE(),
+            UpdatedBy = @RequestedBy,
+            RecordDate = GETDATE()
+        WHERE batch_id = @BatchId;
+
         RETURN 16;
     END;
 
