@@ -19,6 +19,13 @@
       tax_code1     : tax_code1, tax_code
       exch_rate     : exch_rate, exchange_rate
 
+    Revision 2026-08-28 - POS Contract V2.3:
+      - Explicitly synchronize cust_po/whse/u_m from parsed rows back to the
+        physical CSV detail rows after INSERT.
+      - Persisted-row guard now reports the exact mandatory field that remains
+        blank after synchronization.
+      - Success Infobar identifies CSV V2 explicitly.
+
     Revision 2026-08-28 - POS Contract V2.2:
       - Added a persisted-row guard: parser must never report FormatErrors=0
         when cust_po/whse/u_m is blank in the physical CSV detail table.
@@ -648,10 +655,35 @@ BEGIN
         FROM @ParsedRows AS p;
 
         /*
-            Contract V2.2 persistence guard.
-            This prevents a mixed/partial parser deployment from returning
-            FormatErrors=0 while mandatory V2 fields were actually persisted
-            as NULL in ue_SMK069_pos_csv_upload_mst.
+            Contract V2.3 persistence synchronization.
+
+            UAT showed the CSV row parser correctly read cust_po from field 3,
+            but the physical CSV-detail row could still contain a blank cust_po
+            after INSERT.  Synchronize mandatory V2 fields explicitly from the
+            parsed in-memory rows before validating persistence.
+        */
+        UPDATE d
+        SET
+            d.cust_po = p.cust_po,
+            d.whse = p.whse,
+            d.u_m = p.u_m,
+            d.UpdatedBy = @RequestedBy,
+            d.RecordDate = GETDATE()
+        FROM dbo.ue_SMK069_pos_csv_upload_mst AS d
+        INNER JOIN @ParsedRows AS p
+          ON p.row_no = d.row_no
+        WHERE d.batch_id = @BatchId
+          AND
+          (
+              ISNULL(d.cust_po, N'') <> ISNULL(p.cust_po, N'')
+              OR ISNULL(d.whse, N'') <> ISNULL(p.whse, N'')
+              OR ISNULL(d.u_m, N'') <> ISNULL(p.u_m, N'')
+          );
+
+        /*
+            Contract V2.3 persistence guard.
+            Do not report successful parsing unless the mandatory V2 fields
+            actually survived into ue_SMK069_pos_csv_upload_mst.
         */
         IF EXISTS
         (
@@ -667,8 +699,31 @@ BEGIN
               )
         )
         BEGIN
+            DECLARE @MissingV2Field NVARCHAR(100);
+
+            SELECT TOP (1)
+                @MissingV2Field =
+                    CASE
+                        WHEN NULLIF(LTRIM(RTRIM(cust_po)), N'') IS NULL THEN N'cust_po'
+                        WHEN NULLIF(LTRIM(RTRIM(whse)), N'') IS NULL THEN N'whse'
+                        WHEN NULLIF(LTRIM(RTRIM(u_m)), N'') IS NULL THEN N'u_m'
+                        ELSE N'unknown'
+                    END
+            FROM dbo.ue_SMK069_pos_csv_upload_mst
+            WHERE batch_id = @BatchId
+              AND upload_status = N'N'
+              AND
+              (
+                  NULLIF(LTRIM(RTRIM(cust_po)), N'') IS NULL
+                  OR NULLIF(LTRIM(RTRIM(whse)), N'') IS NULL
+                  OR NULLIF(LTRIM(RTRIM(u_m)), N'') IS NULL
+              )
+            ORDER BY row_no;
+
             THROW 50140,
-                  N'CSV V2 persistence check gagal: cust_po, whse, atau u_m kosong setelah parsing. Apply ulang parser V2 lengkap.',
+                  N'CSV V2 persistence check gagal. Field wajib masih kosong setelah sinkronisasi: '
+                  + ISNULL(@MissingV2Field, N'unknown')
+                  + N'.',
                   1;
         END;
 
