@@ -19,10 +19,12 @@
       tax_code1     : tax_code1, tax_code
       exch_rate     : exch_rate, exchange_rate
 
-    Revision 2026-08-28 - POS Contract V2.3:
+    Revision 2026-08-28 - POS Contract V2.3.1:
+      - Fixed SQL Server THROW syntax by building the dynamic error message
+        in @PersistenceErrorMessage before THROW.
       - Explicitly synchronize cust_po/whse/u_m from parsed rows back to the
         physical CSV detail rows after INSERT.
-      - Persisted-row guard now reports the exact mandatory field that remains
+      - Persisted-row guard reports the exact mandatory field that remains
         blank after synchronization.
       - Success Infobar identifies CSV V2 explicitly.
 
@@ -720,11 +722,14 @@ BEGIN
               )
             ORDER BY row_no;
 
-            THROW 50140,
-                  N'CSV V2 persistence check gagal. Field wajib masih kosong setelah sinkronisasi: '
-                  + ISNULL(@MissingV2Field, N'unknown')
-                  + N'.',
-                  1;
+            DECLARE @PersistenceErrorMessage NVARCHAR(2048);
+
+            SET @PersistenceErrorMessage =
+                N'CSV V2 persistence check gagal. Field wajib masih kosong setelah sinkronisasi: '
+                + ISNULL(@MissingV2Field, N'unknown')
+                + N'.';
+
+            THROW 50140, @PersistenceErrorMessage, 1;
         END;
 
         SET @Infobar =
