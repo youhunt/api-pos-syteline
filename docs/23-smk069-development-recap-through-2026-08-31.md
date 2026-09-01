@@ -1112,3 +1112,54 @@ Project source material used for this recap:
 4. Repository artifacts under `youhunt/api-pos-syteline`.
 
 Sensitive API credentials/tokens are intentionally excluded from this document.
+
+---
+
+## Addendum — 1 September 2026: Customer Item Mapping / Price Lookup Revision
+
+A new business requirement changes the meaning of the POS `item` field.
+
+Previously the runtime logic treated payload `item` as the SyteLine internal
+item. The revised requirement says payload `item` must be treated as the
+customer item code and mapped through `itemcust_mst`.
+
+Required lookup:
+
+```sql
+SELECT TOP 1
+    ...
+FROM itemcustprice_mst AS ic
+INNER JOIN itemcust_mst AS i
+    ON i.site_ref = ic.site_ref
+   AND i.item = ic.item
+   AND i.cust_num = ic.cust_num
+WHERE ic.site_ref = @SiteRef
+  AND i.site_ref = @SiteRef
+  AND @order_date >= ic.effect_date
+  AND i.cust_item = @POSItem
+  AND i.u_m = @UM
+  AND ic.cust_num = @MappedCustNum
+ORDER BY ic.effect_date DESC, ic.RecordDate DESC;
+```
+
+Required semantics:
+
+```text
+inbound.item = raw POS/customer item code
+temp.item    = itemcust_mst.item (mapped SyteLine internal item)
+unit_price   = itemcustprice_mst price for mapped customer/internal item
+```
+
+SiteRef must be applied to both `itemcust_mst` and
+`itemcustprice_mst`.
+
+Status as of this addendum:
+
+```text
+Requirement confirmed: YES
+SQL revision prepared: YES
+Tenant Apply/UAT: PENDING
+```
+
+Shipment outbound work remains the next workstream after this inbound mapping
+change is applied and verified.
