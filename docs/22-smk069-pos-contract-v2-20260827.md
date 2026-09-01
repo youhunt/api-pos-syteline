@@ -150,6 +150,42 @@ inbound.cust_num = raw POS Outlet/Store Code
 inbound.whse     = raw POS warehouse code
 ```
 
+
+## 3B. Customer item mapping revision — 1 Sep 2026
+
+The POS `item` field is now treated as a **customer item code**, not directly as
+the SyteLine internal `item_mst.item`.
+
+Receive must map the POS item through `itemcust_mst` using the already mapped
+SyteLine customer:
+
+```sql
+itemcust_mst.site_ref = inbound.SiteRef
+AND itemcust_mst.cust_num = mapped cust_num
+AND itemcust_mst.cust_item = inbound.item
+AND itemcust_mst.u_m = inbound.u_m
+```
+
+The final internal item is:
+
+```text
+mapped_item = itemcust_mst.item
+```
+
+Audit/staging behavior:
+
+```text
+inbound.item = raw POS/customer item code
+temp.item    = mapped SyteLine internal item
+```
+
+The lookup is SiteRef-aware. `itemcust_mst.site_ref` and
+`itemcustprice_mst.site_ref` must both match the inbound target SiteRef.
+
+If no mapping exists, or more than one distinct internal item is found for the
+same mapped customer + cust_item + U/M, the whole atomic `SiteRef + cust_po`
+order is invalid.
+
 ## 4. POS Transaction Data Contract V2
 
 | Alias Field | Type | Required? | Rule | Description |
@@ -160,9 +196,9 @@ inbound.whse     = raw POS warehouse code
 | cust_po | String | Yes | Maximum 25 characters | POS order number. |
 | whse | String | Yes | Maximum 8 characters | Based on POS WHSE Code. Example: P963. Must exist in whse_mst for the target site. |
 | coline | Integer | Yes | Greater than 0 | Unique line number inside one SiteRef + cust_po source order. |
-| item | String | Yes | Maximum 30 characters | Must exist in SyteLine Items for the target SiteRef. |
+| item | String | Yes | Maximum 30 characters | POS/customer item code. Must map through `itemcust_mst.cust_item` for the mapped customer, SiteRef, and payload U/M. |
 | qty_ordered | String | Yes | Greater than 0 | Ordered quantity; Receive converts/validates the value as numeric quantity. |
-| u_m | String | Yes | Valid U/M | Based on SyteLine Item U/M and Item Conversion U/M. |
+| u_m | String | Yes | Valid U/M | Must match `itemcust_mst.u_m` for the mapped customer-item row; mapped internal item U/M/conversion validation remains applicable. |
 | unit_price | Server-derived | No input | Effective pricing | Not supplied by POS; resolved from itemcustprice_mst. |
 
 Server-derived defaults still used by the current receiver:
@@ -203,17 +239,29 @@ One invalid line makes the whole `SiteRef + cust_po` order Error.
 
 ## 7. Unit price resolution
 
-The receiver selects the latest effective customer/item price row:
+Starting 1 Sep 2026, price lookup also performs customer-item mapping. The
+business requirement is equivalent to:
 
 ```sql
-SELECT TOP 1 ...
-FROM dbo.itemcustprice_mst
-WHERE site_ref = @SiteRef
-  AND item = @item
-  AND cust_num = @mapped_cust_num
-  AND effect_date <= @order_date
-ORDER BY effect_date DESC, RecordDate DESC;
+SELECT TOP 1
+    ...
+FROM dbo.itemcustprice_mst AS ic
+INNER JOIN dbo.itemcust_mst AS i
+    ON i.site_ref = ic.site_ref
+   AND i.item = ic.item
+   AND i.cust_num = ic.cust_num
+WHERE ic.site_ref = @SiteRef
+  AND i.site_ref = @SiteRef
+  AND @order_date >= ic.effect_date
+  AND i.cust_item = @pos_item
+  AND i.u_m = @u_m
+  AND ic.cust_num = @mapped_cust_num
+ORDER BY ic.effect_date DESC, ic.RecordDate DESC;
 ```
+
+Thus the POS item is mapped to the SyteLine internal item through
+`itemcust_mst`, and pricing is taken from `itemcustprice_mst` for that
+mapped customer/internal-item combination.
 
 Current implemented pricing hierarchy:
 
