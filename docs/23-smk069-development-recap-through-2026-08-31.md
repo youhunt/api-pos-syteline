@@ -1454,3 +1454,59 @@ Receive UAT is now successful, but before declaring Process fully aligned, the
 intended value for `temp.item -> coitem_mst.item / co_bln_mst.item` should be
 confirmed against the functional design. The current canonical view must not
 be changed without that confirmation.
+
+
+---
+
+## Addendum 2026-09-01 - Process Customer Item Validation
+
+UAT on the Error Processing form exposed a second place that still treated
+`temp.item` as the SyteLine internal item.
+
+Observed Process error:
+
+```text
+Error 50020:
+Item tidak ditemukan pada item_mst: AC20003B
+```
+
+The current contract now treats the staging item value as the POS/customer
+item code. Therefore Process must not validate the staging value directly
+against `item_mst.item`.
+
+Required Process mapping:
+
+```text
+temp.item (POS/customer item)
+-> itemcust_mst.cust_item
+   + mapped customer
+   + SiteRef
+-> itemcust_mst.item (SyteLine internal item)
+-> item_mst.item
+-> coitem_mst.item
+-> co_bln_mst.item
+```
+
+The original customer item should remain available as the customer-facing
+code; the prepared Process revision stores it in `co_bln_mst.cust_item`.
+
+Prepared revision:
+
+```text
+SMK069ProcessCustomerOrderSp
+POS Contract V2.6 - Customer Item Mapping
+```
+
+V2.6 changes the Process validation and downstream item usage so:
+
+- Error 50020 validates `itemcust_mst.cust_item` for the mapped customer;
+- the resolved `itemcust_mst.item` is validated against `item_mst`;
+- header item costs use the resolved internal item;
+- idempotency/reprocess compares existing CO lines to the resolved internal item;
+- `coitem_mst.item` receives the internal SyteLine item;
+- `co_bln_mst.item` receives the internal SyteLine item;
+- `co_bln_mst.cust_item` receives the original POS/customer item;
+- defensive U/M validation uses the resolved internal item and also accepts
+  customer-item U/M registered in `itemcust_mst`.
+
+Status: **prepared for Apply/UAT; deployment confirmation pending**.
