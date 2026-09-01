@@ -249,3 +249,64 @@ surfaced as a failure/non-200.
 An idempotent replay of the same failed `BatchId` returns the same business
 error result and must not append an additional "already received/not processed
 again" error message.
+
+
+---
+
+## Addendum - Public API Same Method Name / Non-200 Business Rejection
+
+The previous non-200 design used a differently named HTTP wrapper. That would
+require the external caller/IDO method to switch to another method name, which
+does not meet the desired API contract.
+
+The revised design keeps the existing public name:
+
+```text
+dbo.SMK069ReceivePosSalesJsonSp
+```
+
+but splits the implementation internally:
+
+```text
+External JSON/Postman
+-> SMK069ReceivePosSalesJsonSp          (PUBLIC wrapper, same method name)
+-> SMK069ReceivePosSalesJsonCoreSp      (INTERNAL core)
+-> raw inbound
+-> mapping view
+-> temp
+```
+
+The internal Core owns persistence and business validation. It returns
+`16` when the mapping view rejects a store/material/order and `0` only when
+the order is valid and transferred.
+
+The public procedure calls the Core and raises an unhandled SQL exception when
+the Core reports business failure. This is what makes the Mongoose REST/IDO
+invocation fail instead of returning a normal `HTTP 200 / Success=true`.
+
+The public IDO method must be configured **NON-TRANSACTIONAL** so the Core can
+commit raw/error audit rows before the public wrapper raises the REST/IDO
+failure.
+
+CSV/internal processing must call:
+
+```text
+SMK069ReceivePosSalesJsonCoreSp
+```
+
+directly, because CSV needs the stored `ReturnValue=16` business result rather
+than an external HTTP exception.
+
+### Required behavior
+
+- valid store/material -> HTTP success, transferred to temp;
+- unknown store -> rejected atomically, no temp/CO, external API non-200;
+- unknown material/customer item -> rejected atomically, no temp/CO, external
+  API non-200;
+- one invalid line -> whole `cust_po` rejected;
+- retry of the same failed `BatchId` -> same original business error, no extra
+  "already received/processed" error;
+- retry of a successful `BatchId` -> same successful business result.
+
+A valid test such as `DEV4-198` is still expected to return HTTP success. The
+non-200 requirement applies only to rejected business requests.
