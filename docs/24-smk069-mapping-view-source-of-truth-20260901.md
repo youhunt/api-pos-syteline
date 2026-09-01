@@ -157,3 +157,69 @@ single-prefix change localized to the Receive number-generation block.
 The generated CO length is guarded so a future longer prefix is not silently
 truncated. A format change that increases the total CO number length must first
 be checked against the tenant `CoNumType`/physical column length.
+
+
+---
+
+## Addendum - API HTTP Status and Idempotent Error Replay
+
+### Problem
+
+A business-validation failure can still appear as a technically successful
+Mongoose IDO invocation:
+
+```text
+HTTP 200
+Success = true
+ErrorOrders = 1
+TransferredRows = 0
+```
+
+This happens because the stored procedure can return normally even though the
+business order failed validation.
+
+A retry of the same `BatchId` also previously added wording such as:
+
+```text
+sudah pernah diterima; tidak diproses ulang
+```
+
+which made an idempotent retry look like a second/new error.
+
+### Core Receive revision
+
+`SMK069ReceivePosSalesJsonSp V2.4.2` now:
+
+- keeps raw inbound + validation results persisted;
+- returns `16` when business validation fails;
+- returns `0` only when the order is valid and transferred;
+- returns the same business result on an idempotent replay;
+- removes the extra "already received/not processed again" wording from the
+  replay response.
+
+This is the safe core behavior for CSV/internal callers.
+
+### Non-200 REST wrapper
+
+A separate wrapper is prepared:
+
+```text
+dbo.SMK069ReceivePosSalesJsonHttpSp
+```
+
+The wrapper calls the core Receive and raises an unhandled SQL exception when
+the returned business result is failure.
+
+**Important:** expose this wrapper as a **NON-TRANSACTIONAL IDO method**. Infor
+Mongoose can run IDO methods transactionally or non-transactionally; using the
+non-transactional setting allows the core Receive to persist/commit the inbound
+error result before the wrapper raises the REST/IDO exception. If the wrapper
+is configured Transactional, the outer IDO transaction may roll back those
+persisted error rows when the exception is raised.
+
+The expected result is a non-200 REST invocation failure instead of
+`HTTP 200 / Success=true`.
+
+For a specific semantic HTTP code such as `422 Unprocessable Entity`, a custom
+REST/API gateway layer is required; the standard stored-procedure/IDO invoke
+path does not directly control arbitrary HTTP status codes.
