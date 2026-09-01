@@ -1212,3 +1212,96 @@ name     = DEV4 ...
 ```
 
 This confirms that Receive must **not** hardcode `custaddr_mst.cust_num LIKE 'PHR%'`. The outlet lookup now uses SiteRef + `cust_seq <> 0` + `LEFT(name,4)=POS custnum`, and the resulting SyteLine customer prefix is fully data-driven.
+
+
+---
+
+## Addendum 2026-09-01 - Canonical inbound mapping view
+
+The runtime design was simplified after confirmation from the functional team that
+`dbo.ue_SMK069_pos_sales_inbound_mapping_view` is the intended canonical mapping
+layer.
+
+### Revised Receive flow
+
+```text
+POS JSON
+-> ue_SMK069_pos_sales_inbound_mst          (raw)
+-> ue_SMK069_pos_sales_inbound_mapping_view (canonical mapping)
+-> validation
+-> generate co_num
+-> ue_SMK069_temp_sales_mst
+-> ProcessCustomerOrder
+-> co_mst / coitem_mst / co_bln_mst
+```
+
+The Receive procedure must no longer maintain a separate customer/item/price
+mapping engine that can disagree with the view.
+
+Canonical values consumed from the mapping view include:
+
+```text
+cust_num
+cust_seq
+cust_po
+order_date
+co_num
+co_line
+item
+qty_ordered
+unit_price
+whse
+due_date
+u_m
+terms_code
+tax_code1
+exch_rate
+```
+
+Important data ownership:
+
+```text
+inbound.cust_num = raw POS outlet/store code
+inbound.item     = raw POS/customer item code
+
+temp.cust_num    = mapping_view.cust_num
+temp.item        = mapping_view.item
+temp.unit_price  = mapping_view.unit_price
+```
+
+`cust_seq` is still not added to temp. Process should retrieve the mapped
+customer sequence from the canonical mapping view.
+
+### DEV4 evidence
+
+The mapping view confirmed:
+
+```text
+DEV4 -> cust_num PHD0001 / cust_seq 164
+```
+
+This demonstrated why the old independent Receive mapping could return a false
+"outlet/store code DEV4 tidak ditemukan" while the canonical view had already
+resolved the customer correctly.
+
+### New Receive revision prepared
+
+```text
+SMK069ReceivePosSalesJsonSp
+POS Contract V2.3.5 - Canonical Mapping View
+```
+
+This revision:
+
+- preserves raw inbound values;
+- uses the mapping view as the mapping source of truth;
+- validates that exactly one canonical row exists per inbound row;
+- validates that mapped `unit_price` is present;
+- keeps atomic-order validation;
+- generates `R + YYMM + 5-digit` co_num;
+- inserts canonical mapped values into temp;
+- appends row-level validation detail to Infobar;
+- retains Mongoose-safe transaction/savepoint behavior.
+
+Status at time of this addendum: **prepared for Apply/UAT; deployment confirmation
+pending**.
