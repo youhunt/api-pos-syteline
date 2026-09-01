@@ -1212,3 +1212,27 @@ name     = DEV4 ...
 ```
 
 This confirms that Receive must **not** hardcode `custaddr_mst.cust_num LIKE 'PHR%'`. The outlet lookup now uses SiteRef + `cust_seq <> 0` + `LEFT(name,4)=POS custnum`, and the resulting SyteLine customer prefix is fully data-driven.
+
+
+---
+
+## Addendum 2026-09-01 - Canonical inbound mapping view
+
+The functional team confirmed that `dbo.ue_SMK069_pos_sales_inbound_mapping_view`
+is the intended canonical mapping layer. Receive should preserve raw inbound data,
+read mapped customer/item/price values from this view, validate the canonical
+result, generate `co_num`, and insert canonical values to temp.
+
+Confirmed DEV4 mapping evidence:
+
+```text
+DEV4 -> PHD0001 / cust_seq 164
+```
+
+Prepared revision:
+
+```text
+SMK069ReceivePosSalesJsonSp V2.3.5 - Canonical Mapping View
+```
+
+Status: prepared for Apply/UAT; deployment confirmation pending.
