@@ -112,3 +112,48 @@ Receive still writes raw values and generated `co_num` to `ue_SMK069_pos_sales_i
 7. Verify temp values equal the view.
 8. Process the generated CO.
 9. Verify `co_mst.type='B'`, `coitem_mst`, and `co_bln_mst` all use the mapping-view values.
+
+
+---
+
+## Addendum - Release Date and CO Prefix
+
+### Release Date
+
+UAT on Blanket Customer Order `R260822007` showed the Customer Order line
+`Release Date` was blank even though the CO header had an `order_date`.
+
+The processing rule is now:
+
+```text
+coitem_mst.release_date = co_mst.order_date
+```
+
+For new CO creation, `SMK069ProcessCustomerOrderSp` inserts
+`coitem_mst.release_date` from the resolved header `@OrderDate`.
+
+For an already existing matching CO, Process/Reprocess also repairs
+`coitem_mst.release_date` when it is NULL, using the existing
+`co_mst.order_date`.
+
+### CO Prefix
+
+The current numbering format is unchanged:
+
+```text
+R + YYMM + 5-digit running
+example: R260900001
+```
+
+The Receive procedure now isolates the business prefix in one variable:
+
+```sql
+@OrderPrefix = N'R'
+```
+
+and builds the period prefix from that value. This makes a future controlled
+single-prefix change localized to the Receive number-generation block.
+
+The generated CO length is guarded so a future longer prefix is not silently
+truncated. A format change that increases the total CO number length must first
+be checked against the tenant `CoNumType`/physical column length.
