@@ -553,3 +553,33 @@ NULL mapped customer.
 
 The current implementation preserves the raw POS customer item in inbound and
 writes the mapped internal SyteLine item to temp.
+
+
+## Addendum 2026-09-01 - Outlet Mapping Prefix Fix
+
+UAT for outlet code `DEV4` showed a valid `custaddr_mst` mapping:
+
+```text
+site_ref = Default
+cust_num = PHD0001
+cust_seq = 164
+name     = DEV4 ...
+```
+
+Therefore the earlier outlet lookup restriction:
+
+```sql
+custaddr_mst.cust_num LIKE 'PHR%'
+```
+
+must not be used. Outlet mapping is now based on:
+
+```sql
+site_ref = inbound SiteRef
+cust_seq <> 0
+LEFT(name, 4) = inbound POS custnum
+```
+
+The resulting `cust_num` is dynamic and may use prefixes such as `PHR...`, `PHD...`, or other valid tenant customer prefixes configured in `custaddr_mst`.
+
+Downstream item/customer price mapping continues to use the dynamically mapped SyteLine customer.
