@@ -495,3 +495,61 @@ Tenant deployment actions:
 2. Confirm a supported REST IDO for `co_bln_mst` if blanket-line verification must be exposed externally.
 3. Complete formal negative UAT for invalid warehouse, invalid item-specific U/M conversion, missing price, duplicate line, and duplicate `cust_po`.
 4. Record formal CSV V2 evidence after the updated parser/wrapper are applied in the tenant.
+
+
+## 3C. Customer item validation and pricing feedback — 1 Sep 2026
+
+Feedback on 1 Sep 2026 clarifies that POS `item` must be validated as
+`itemcust_mst.cust_item`, not directly as `item_mst.item`.
+
+Required customer-item validation:
+
+```sql
+itemcust_mst.site_ref = inbound.SiteRef
+AND itemcust_mst.cust_num = mapped cust_num
+AND itemcust_mst.cust_item = inbound.item
+AND itemcust_mst.u_m = inbound.u_m
+```
+
+The mapped SyteLine internal item remains:
+
+```text
+mapped_item = itemcust_mst.item
+```
+
+Required price lookup:
+
+```sql
+SELECT TOP 1
+    ...
+FROM dbo.itemcustprice_mst AS ic
+INNER JOIN dbo.itemcust_mst AS i
+    ON i.site_ref = ic.site_ref
+   AND i.item = ic.item
+   AND i.cust_num = ic.cust_num
+WHERE ic.site_ref = @SiteRef
+  AND i.site_ref = @SiteRef
+  AND @order_date >= ic.effect_date
+  AND i.cust_item = @item
+  AND i.u_m = @u_m
+  AND ic.cust_num = @mapped_cust_num
+ORDER BY ic.effect_date DESC, ic.RecordDate DESC;
+```
+
+Validation-message dependency is also important. If Outlet/Store mapping fails,
+customer-item and customer-item-price checks cannot be evaluated reliably.
+The receiver should therefore report the root Outlet/Store mapping error first
+and suppress dependent item/price errors for that row.
+
+Example:
+
+```text
+outlet/store code DEV4 tidak ditemukan pada custaddr_mst
+```
+
+should not be accompanied by misleading downstream messages such as
+"item tidak ditemukan pada item_mst" or customer item price errors based on a
+NULL mapped customer.
+
+The current implementation preserves the raw POS customer item in inbound and
+writes the mapped internal SyteLine item to temp.
