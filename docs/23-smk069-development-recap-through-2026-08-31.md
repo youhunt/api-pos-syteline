@@ -1163,3 +1163,38 @@ Tenant Apply/UAT: PENDING
 
 Shipment outbound work remains the next workstream after this inbound mapping
 change is applied and verified.
+
+
+---
+
+## Addendum — 1 Sep 2026: Customer Item Validation / Pricing Feedback
+
+Additional feedback requires POS `item` to be treated as
+`itemcust_mst.cust_item`.
+
+Current required flow:
+
+```text
+POS item (cust_item)
+-> itemcust_mst by SiteRef + mapped cust_num + cust_item + u_m
+-> mapped internal itemcust_mst.item
+-> itemcustprice_mst by SiteRef + mapped cust_num + internal item + effective date
+-> temp.item = mapped internal item
+-> temp.unit_price = resolved server price
+```
+
+Price query must join `itemcustprice_mst` to `itemcust_mst` and must be
+SiteRef-aware.
+
+The validation layer should avoid cascaded item/price errors when the
+Outlet/Store Code mapping itself failed. For example, when outlet `DEV4`
+cannot be resolved in `custaddr_mst`, that root cause should be reported
+without misleading downstream price errors that depend on a mapped customer.
+
+Prepared SQL revision:
+
+```text
+SMK069ReceivePosSalesJsonSp V2.3.3 - Customer Item Mapping Feedback
+```
+
+Deployment/UAT of V2.3.3 should be confirmed separately from this documentation update.
