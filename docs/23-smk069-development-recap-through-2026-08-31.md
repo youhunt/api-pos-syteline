@@ -1198,3 +1198,17 @@ SMK069ReceivePosSalesJsonSp V2.3.3 - Customer Item Mapping Feedback
 ```
 
 Deployment/UAT of V2.3.3 should be confirmed separately from this documentation update.
+
+
+## Addendum 1 Sep 2026 - DEV4 proves customer prefix must be dynamic
+
+A tenant lookup for POS Outlet/Store Code `DEV4` returned:
+
+```text
+site_ref = Default
+cust_num = PHD0001
+cust_seq = 164
+name     = DEV4 ...
+```
+
+This confirms that Receive must **not** hardcode `custaddr_mst.cust_num LIKE 'PHR%'`. The outlet lookup now uses SiteRef + `cust_seq <> 0` + `LEFT(name,4)=POS custnum`, and the resulting SyteLine customer prefix is fully data-driven.
