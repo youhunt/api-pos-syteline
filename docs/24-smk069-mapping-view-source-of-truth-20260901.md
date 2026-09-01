@@ -103,9 +103,9 @@ Receive still writes raw values and generated `co_num` to `ue_SMK069_pos_sales_i
 
 ## UAT sequence
 
-1. Apply Receive V2.4.
+1. Apply Receive V2.4.2.
 2. Apply RunCsv V2.5.
-3. Apply Process V2.8.
+3. Apply Process V2.8.1.
 4. Optionally apply ReceiveAndProcess wrapper.
 5. Use a new BatchId for every changed mapping/view UAT.
 6. Verify the mapping view first.
@@ -223,3 +223,29 @@ The expected result is a non-200 REST invocation failure instead of
 For a specific semantic HTTP code such as `422 Unprocessable Entity`, a custom
 REST/API gateway layer is required; the standard stored-procedure/IDO invoke
 path does not directly control arbitrary HTTP status codes.
+
+
+---
+
+## Addendum - Business Rejection Rules (Store/Material)
+
+The external API business rules are now explicit:
+
+1. If the POS store/outlet is not represented by
+   `ue_SMK069_pos_sales_inbound_mapping_view`, reject the order.
+2. If a material/customer item/U/M/price combination is not represented by the
+   mapping view or a required mapped value is NULL, reject the order.
+3. The atomic-order rule remains active: one invalid line rejects the complete
+   `cust_po` order; no partial temp transfer is allowed.
+4. The stored procedures must not perform a second independent mapping against
+   `custaddr_mst`, `itemcust_mst`, or `itemcustprice_mst`.
+
+For JSON/Postman, business failure must not be treated as a normal success.
+The core Receive returns `16`; the external REST method should expose
+`SMK069ReceivePosSalesJsonHttpSp` as a **NON-TRANSACTIONAL** IDO method so
+the persisted validation result remains available and the REST invocation is
+surfaced as a failure/non-200.
+
+An idempotent replay of the same failed `BatchId` returns the same business
+error result and must not append an additional "already received/not processed
+again" error message.
