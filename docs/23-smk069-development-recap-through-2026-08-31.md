@@ -1236,3 +1236,221 @@ SMK069ReceivePosSalesJsonSp V2.3.5 - Canonical Mapping View
 ```
 
 Status: prepared for Apply/UAT; deployment confirmation pending.
+
+
+---
+
+## Addendum 2026-09-01 - Canonical Mapping UAT, Temp Trigger Fix, and CSV Compatibility
+
+### 1. DEV4 canonical mapping / pricing UAT
+
+The canonical mapping view resolved the DEV4 outlet to:
+
+```text
+POS outlet  = DEV4
+cust_num    = PHD0001
+cust_seq    = 164
+```
+
+Customer-item master data confirmed:
+
+```text
+cust_num    = PHD0001
+internal item = AA00024
+cust_item   = AA00024C
+u_m         = CTN
+```
+
+Effective customer-item pricing for 1 Sep 2026 confirmed:
+
+```text
+cust_item   = AA00024C
+u_m         = CTN
+cont_price  = 441000
+effect_date = 2026-01-01
+```
+
+A payload using `AA00024C / PCS` correctly failed because the registered
+customer-item U/M is `CTN`. The valid test uses:
+
+```text
+item = AA00024C
+u_m  = CTN
+```
+
+The separate test item `AA00015C` was not found in the PHD0001
+`itemcust_mst` lookup used during this UAT and should not be used as the
+positive-path test item until its master mapping is confirmed.
+
+### 2. Receive V2.3.5 / V2.3.6 temp-persistence investigation
+
+After canonical mapping and pricing succeeded, batch `DEV4-195` initially
+failed with:
+
+```text
+50130:
+Transfer ke temp gagal for Site=DEFAULT,
+CO=R260900001,
+Line=1.
+Expected cust_po=DEV4-195;
+actual temp cust_po=<NO ROW>
+```
+
+The Receive insert statement reported one transferred row, but the expected
+temp row could not be found by the persistence guard.
+
+Inspection of `dbo.ue_SMK069_temp_sales_mst` found these triggers:
+
+```text
+ue_SMK069_temp_sales_mstInsert              INSTEAD OF INSERT
+ue_SMK069_temp_sales_mstUpdatePenultimate   AFTER
+ue_SMK069_temp_sales_mstDel                 AFTER
+```
+
+The generated `INSTEAD OF INSERT` trigger was stale: the physical table
+already contained `cust_po`, but the trigger's explicit INSERT/SELECT column
+list did not contain `cust_po`.
+
+Root cause:
+
+```text
+Receive INSERT supplies cust_po
+-> Mongoose/UET INSTEAD OF INSERT trigger executes
+-> generated trigger re-inserts the row without cust_po
+-> cust_po is discarded
+-> Receive persistence verification fails
+```
+
+The trigger was corrected by adding:
+
+```sql
+[cust_po]
+```
+
+to the target INSERT column list and:
+
+```sql
+bt.[cust_po]
+```
+
+to the SELECT list.
+
+Because this is a generated Mongoose/UET trigger, the schema/UET generation
+must also remain aligned so a future Impact Schema operation does not overwrite
+the correction.
+
+Receive V2.3.6 also uses an exact `NOT EXISTS` persistence check on:
+
+```text
+SiteRef + co_num + co_line + cust_po
+```
+
+instead of the earlier LEFT JOIN guard, preventing false-positive persistence
+errors from unrelated/duplicate temp rows.
+
+### 3. Confirmed successful Receive UAT - DEV4-195
+
+After the trigger correction, the same valid batch completed successfully:
+
+```text
+BatchId          = DEV4-195
+custnum          = DEV4
+cust_po          = DEV4-195
+item             = AA00024C
+u_m              = CTN
+qty_ordered      = 180
+
+ReceivedRows     = 1
+TotalOrders      = 1
+ValidOrders      = 1
+ErrorOrders      = 0
+TransferredRows  = 1
+ReturnValue      = 0
+```
+
+Response:
+
+```text
+Batch DEV4-195 diterima.
+Row: 1;
+order(cust_po): 1;
+valid: 1;
+error: 0;
+row masuk temp: 1.
+```
+
+This confirms the positive Receive path through:
+
+```text
+POS JSON
+-> raw inbound
+-> canonical mapping view
+-> DEV4 -> PHD0001 / cust_seq 164
+-> customer-item/U/M validation
+-> price resolution (441000)
+-> generated co_num
+-> temp persistence with cust_po
+```
+
+### 4. CSV Test Console compatibility
+
+The current `SMK069RunCsvTestBatchSp` already converts parsed CSV detail to
+JSON and calls:
+
+```text
+dbo.SMK069ReceivePosSalesJsonSp
+```
+
+Therefore the CSV path automatically uses the current canonical Receive logic;
+no separate customer/item/price mapping engine should be added to the CSV
+wrapper.
+
+Required CSV V2 columns remain:
+
+```text
+custnum
+order_date
+cust_po
+whse
+coline
+item
+qty_ordered
+u_m
+```
+
+For the current positive DEV4 test:
+
+```csv
+custnum,order_date,cust_po,whse,coline,item,qty_ordered,u_m
+DEV4,2026-09-01,DEV4-196,MAIN,1,AA00024C,180,CTN
+```
+
+Important CSV semantics:
+
+- `item` is the POS/customer-item code expected by the canonical mapping
+  layer;
+- `u_m` must be the actual configured U/M code, e.g. `CTN`;
+- `conum` and `unit_price` are still not supplied by CSV/POS;
+- `SMK069ImportCsvFileSp` must persist `custnum`, `cust_po`, `whse`,
+  `item`, and `u_m` unchanged before `SMK069RunCsvTestBatchSp` calls
+  Receive.
+
+### 5. Open Process item-mapping check
+
+The supplied canonical view currently exposes:
+
+```sql
+ic.cust_item AS item
+```
+
+while the same customer-item master row maps:
+
+```text
+cust_item    = AA00024C
+internal item= AA00024
+```
+
+Receive UAT is now successful, but before declaring Process fully aligned, the
+intended value for `temp.item -> coitem_mst.item / co_bln_mst.item` should be
+confirmed against the functional design. The current canonical view must not
+be changed without that confirmation.
