@@ -70,3 +70,22 @@ The POS-xxx codes below are the implementation contract for the prepared SP sour
 - External JSON API returns an invocation failure/non-200 on business rejection.
 - Retry of the same failed BatchId returns the same stable business error code/result and must not add a new “already processed” error.
 - External consumers should branch on the stable `POS-xxx` code, not on free-text wording.
+
+
+## Success transport example
+
+For a valid standard IDO invoke, Mongoose returns its normal success envelope:
+
+```json
+{
+  "Message": null,
+  "Success": true,
+  "Parameters": [
+    "...",
+    "[POS-000] Batch DEV4-198 diterima. Row: 1; order(cust_po): 1; valid: 1; error: 0; row masuk temp: 1."
+  ],
+  "ReturnValue": "0"
+}
+```
+
+The stable integration code is `POS-000` in the Infobar/output parameter. `Message=null` is normal for a successful standard IDO invocation.
