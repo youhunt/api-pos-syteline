@@ -61,13 +61,13 @@ CSV
 
 ```text
 SMK069ReceivePosSalesJsonCoreSp
-  V2.4.6 - Stable POS error codes; internal Core
+  V2.4.7 - Stable POS error codes; internal Core
 
 SMK069ReceivePosSalesJsonSp
-  V2.4.6 - Public same-name API wrapper; payload-oriented error; non-200 on rejection
+  V2.4.7 - Public same-name API wrapper; payload-oriented error; non-200 on rejection
 
 SMK069RunCsvTestBatchSp
-  V2.7 - Stable POS error codes; calls Core
+  V2.8 - Stable POS error codes; calls Core
 
 SMK069ProcessCustomerOrderSp
   V2.8.2 - Stable POS error codes + Release Date fix
@@ -109,10 +109,10 @@ Receive still writes raw values and generated `co_num` to `ue_SMK069_pos_sales_i
 
 ## UAT sequence
 
-1. Apply `SMK069ReceivePosSalesJsonCoreSp V2.4.6`.
-2. Apply public `SMK069ReceivePosSalesJsonSp V2.4.6`.
+1. Apply `SMK069ReceivePosSalesJsonCoreSp V2.4.7`.
+2. Apply public `SMK069ReceivePosSalesJsonSp V2.4.7`.
 3. Configure the external public IDO method as **NON-TRANSACTIONAL**.
-4. Apply `SMK069RunCsvTestBatchSp V2.7`.
+4. Apply `SMK069RunCsvTestBatchSp V2.8`.
 5. Apply `SMK069ProcessCustomerOrderSp V2.8.2`.
 6. Optionally apply `SMK069ReceiveAndProcessPosSalesJsonSp V1.2`.
 7. Use a new BatchId for changed-mapping UAT.
@@ -354,3 +354,32 @@ PREPARED FOR APPLY / UAT
 Do not send the catalog to an external team labeled as production-confirmed until the V2.4.6 / V2.7 / V2.8.2 sources have been applied and the documented UAT matrix passes.
 
 This latest section supersedes older implementation notes that referred to a separately named `SMK069ReceivePosSalesJsonHttpSp`. The current external contract keeps the existing public procedure name `SMK069ReceivePosSalesJsonSp` and delegates internally to `SMK069ReceivePosSalesJsonCoreSp`.
+
+
+---
+
+## Addendum - POS-000 Success Result
+
+A valid standard Mongoose/IDO invoke is expected to keep the normal transport envelope:
+
+```text
+Success = true
+Message = null
+ReturnValue = 0
+```
+
+The integration-level success code is carried in the final output parameter (`Infobar`), not in the Mongoose `Message` property:
+
+```text
+[POS-000] Batch <BatchId> diterima. Row: ...; valid: ...; error: 0; row masuk temp: ...
+```
+
+Prepared source revisions:
+
+```text
+SMK069ReceivePosSalesJsonCoreSp V2.4.7
+SMK069ReceivePosSalesJsonSp     V2.4.7
+SMK069RunCsvTestBatchSp         V2.8
+```
+
+This keeps the contract consistent with the error-code catalog: `POS-000` for success, `POS-xxx` for rejection/error. The public IDO envelope itself remains controlled by Mongoose.
