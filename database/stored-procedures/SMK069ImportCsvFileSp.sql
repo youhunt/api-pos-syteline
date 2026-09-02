@@ -19,6 +19,10 @@
       tax_code1     : tax_code1, tax_code
       exch_rate     : exch_rate, exchange_rate
 
+    Revision 2026-09-02 - Stable POS Error Codes:
+      - Parser/CSV errors now use stable POS-4xx / payload POS-0xx codes.
+      - Success message uses POS-000.
+
     Revision 2026-08-28 - POS Contract V2.3.1:
       - Fixed SQL Server THROW syntax by building the dynamic error message
         in @PersistenceErrorMessage before THROW.
@@ -145,7 +149,7 @@ BEGIN
 
     IF @BatchId IS NULL
     BEGIN
-        SET @Infobar = N'Batch ID wajib diisi.';
+        SET @Infobar = N'[POS-012] batch_id wajib diisi.';
         RETURN 16;
     END;
 
@@ -173,25 +177,25 @@ BEGIN
 
     IF @@ROWCOUNT = 0
     BEGIN
-        SET @Infobar = N'Header batch tidak ditemukan.';
+        SET @Infobar = N'[POS-401] Batch CSV tidak ditemukan.';
         RETURN 16;
     END;
 
     IF @BatchStatus = N'R'
     BEGIN
-        SET @Infobar = N'Batch sedang diproses dan tidak dapat diimpor ulang.';
+        SET @Infobar = N'[POS-401] Batch CSV sedang diproses dan tidak dapat diimpor ulang.';
         RETURN 16;
     END;
 
     IF @BatchStatus = N'C'
     BEGIN
-        SET @Infobar = N'Batch sudah Completed. Gunakan New Batch untuk upload CSV baru.';
+        SET @Infobar = N'[POS-401] Batch CSV sudah Completed. Gunakan New Batch untuk upload CSV baru.';
         RETURN 16;
     END;
 
     IF @CsvBytes IS NULL OR DATALENGTH(@CsvBytes) = 0
     BEGIN
-        SET @Infobar = N'CSV file belum di-upload atau belum disimpan pada header batch.';
+        SET @Infobar = N'[POS-402] File CSV belum di-upload atau belum disimpan pada batch.';
         RETURN 16;
     END;
 
@@ -222,7 +226,7 @@ BEGIN
 
     IF NULLIF(LTRIM(RTRIM(REPLACE(@CsvText, NCHAR(10), N''))), N'') IS NULL
     BEGIN
-        SET @Infobar = N'Isi CSV kosong.';
+        SET @Infobar = N'[POS-402] Isi CSV kosong.';
         RETURN 16;
     END;
 
@@ -383,7 +387,7 @@ BEGIN
                 HAVING COUNT(*) > 1
             )
             BEGIN
-                SET @Infobar = N'Header CSV memiliki kolom canonical yang duplikat.';
+                SET @Infobar = N'[POS-403] Header CSV memiliki kolom yang duplikat.';
                 RETURN 16;
             END;
 
@@ -411,7 +415,7 @@ BEGIN
             )
             BEGIN
                 SET @Infobar =
-                    N'Header CSV tidak lengkap. Wajib ada: '
+                    N'[POS-403] Header CSV tidak lengkap. Wajib ada: '
                     + N'custnum, order_date, cust_po, whse, coline, item, qty_ordered, u_m.';
                 RETURN 16;
             END;
@@ -492,40 +496,40 @@ BEGIN
         SET @ExchRate = TRY_CONVERT(DECIMAL(18,8), @RawExchRate);
 
         IF @RawCustNum IS NULL
-            SET @Message += N'custnum kosong; ';
+            SET @Message += N'[POS-002] custnum kosong; ';
         IF @RawOrderDate IS NULL
-            SET @Message += N'order_date kosong; ';
+            SET @Message += N'[POS-003] order_date kosong; ';
         ELSE IF @OrderDate IS NULL
-            SET @Message += N'order_date tidak valid; ';
+            SET @Message += N'[POS-003] order_date tidak valid; ';
         IF @RawCustPo IS NULL
-            SET @Message += N'cust_po kosong; ';
+            SET @Message += N'[POS-004] cust_po kosong; ';
         IF @RawWhse IS NULL
-            SET @Message += N'whse kosong; ';
+            SET @Message += N'[POS-005] whse kosong; ';
         IF @RawUM IS NULL
-            SET @Message += N'u_m kosong; ';
+            SET @Message += N'[POS-009] u_m kosong; ';
         IF @RawCoLine IS NULL
-            SET @Message += N'coline kosong; ';
+            SET @Message += N'[POS-006] coline kosong; ';
         ELSE IF @CoLine IS NULL OR @CoLine <= 0
-            SET @Message += N'coline harus bilangan > 0; ';
+            SET @Message += N'[POS-006] coline harus bilangan > 0; ';
         IF @RawItem IS NULL
-            SET @Message += N'item kosong; ';
+            SET @Message += N'[POS-007] item kosong; ';
         IF @RawQty IS NULL
-            SET @Message += N'qty_ordered kosong; ';
+            SET @Message += N'[POS-008] qty_ordered kosong; ';
         ELSE IF @QtyOrdered IS NULL OR @QtyOrdered <= 0
-            SET @Message += N'qty_ordered harus angka > 0; ';
+            SET @Message += N'[POS-008] qty_ordered harus angka > 0; ';
         IF @RawDueDate IS NOT NULL AND @DueDate IS NULL
-            SET @Message += N'due_date tidak valid; ';
+            SET @Message += N'[POS-003] due_date tidak valid; ';
         IF @RawExchRate IS NOT NULL AND (@ExchRate IS NULL OR @ExchRate <= 0)
-            SET @Message += N'exch_rate harus angka > 0; ';
+            SET @Message += N'[POS-010] exch_rate harus angka > 0; ';
 
         IF LEN(ISNULL(@RawCustNum, N'')) > 7
-            SET @Message += N'custnum melebihi 7 karakter; ';
+            SET @Message += N'[POS-011] custnum melebihi 7 karakter; ';
         IF LEN(ISNULL(@RawCustPo, N'')) > 25
-            SET @Message += N'cust_po melebihi 25 karakter; ';
+            SET @Message += N'[POS-011] cust_po melebihi 25 karakter; ';
         IF LEN(ISNULL(@RawWhse, N'')) > 8
-            SET @Message += N'whse melebihi 8 karakter; ';
+            SET @Message += N'[POS-011] whse melebihi 8 karakter; ';
         IF LEN(ISNULL(@RawItem, N'')) > 30
-            SET @Message += N'item melebihi 30 karakter; ';
+            SET @Message += N'[POS-011] item melebihi 30 karakter; '
 
         INSERT INTO @ParsedRows
         (
@@ -575,7 +579,7 @@ BEGIN
 
     IF @HeaderFound = 0
     BEGIN
-        SET @Infobar = N'Header CSV tidak ditemukan.';
+        SET @Infobar = N'[POS-403] Header CSV tidak ditemukan.';
         RETURN 16;
     END;
 
@@ -586,7 +590,7 @@ BEGIN
 
     IF @ImportedRows = 0
     BEGIN
-        SET @Infobar = N'CSV tidak memiliki baris data setelah header.';
+        SET @Infobar = N'[POS-404] CSV tidak memiliki baris data setelah header.';
         RETURN 16;
     END;
 
@@ -725,7 +729,7 @@ BEGIN
             DECLARE @PersistenceErrorMessage NVARCHAR(2048);
 
             SET @PersistenceErrorMessage =
-                N'CSV V2 persistence check gagal. Field wajib masih kosong setelah sinkronisasi: '
+                N'[POS-404] CSV persistence check gagal. Field wajib masih kosong setelah sinkronisasi: '
                 + ISNULL(@MissingV2Field, N'unknown')
                 + N'.';
 
@@ -733,7 +737,7 @@ BEGIN
         END;
 
         SET @Infobar =
-            N'CSV V2 berhasil diparsing. Rows='
+            N'[POS-000] CSV V2 berhasil diparsing. Rows='
             + CONVERT(NVARCHAR(20), @ImportedRows)
             + N', FormatErrors='
             + CONVERT(NVARCHAR(20), @ErrorRows)
@@ -768,7 +772,7 @@ BEGIN
 
         SET @Infobar = LEFT
         (
-            N'SMK069ImportCsvFileSp gagal '
+            N'[POS-999] SMK069ImportCsvFileSp gagal '
             + CONVERT(NVARCHAR(20), ERROR_NUMBER())
             + N': '
             + ERROR_MESSAGE(),
