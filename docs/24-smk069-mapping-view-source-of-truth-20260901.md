@@ -27,8 +27,9 @@ Those mappings are owned by the mapping view.
 ### JSON / Postman
 
 ```text
-JSON
--> SMK069ReceivePosSalesJsonSp
+JSON / Postman
+-> SMK069ReceivePosSalesJsonSp           (PUBLIC API wrapper)
+-> SMK069ReceivePosSalesJsonCoreSp       (INTERNAL receive/validation)
 -> ue_SMK069_pos_sales_inbound_mst       (RAW landing/audit only)
 -> ue_SMK069_pos_sales_inbound_mapping_view
 -> ue_SMK069_temp_sales_mst
@@ -46,7 +47,7 @@ CSV
 -> ue_SMK069_pos_csv_upload_mst
 -> SMK069RunCsvTestBatchSp
 -> raw JSON
--> SMK069ReceivePosSalesJsonSp
+-> SMK069ReceivePosSalesJsonCoreSp
 -> mapping view
 -> temp
 -> Process/Reprocess
@@ -54,23 +55,28 @@ CSV
 -> co_mst / coitem_mst / co_bln_mst
 ```
 
-## SP revisions prepared
+## Latest SP revisions prepared
+
+**Status: PREPARED FOR APPLY / UAT.** These source revisions are synchronized with the error-code catalog, but they must not be called tenant-confirmed until Apply + UAT is completed.
 
 ```text
+SMK069ReceivePosSalesJsonCoreSp
+  V2.4.6 - Stable POS error codes; internal Core
+
 SMK069ReceivePosSalesJsonSp
-  V2.4 - Mapping View Is Business Source
+  V2.4.6 - Public same-name API wrapper; payload-oriented error; non-200 on rejection
 
 SMK069RunCsvTestBatchSp
-  V2.5 - Mapping View Is Business Source
+  V2.7 - Stable POS error codes; calls Core
 
 SMK069ProcessCustomerOrderSp
-  V2.8 - Mapping View Is Business Source
+  V2.8.2 - Stable POS error codes + Release Date fix
 
 SMK069ReceiveAndProcessPosSalesJsonSp
-  V1.0 - optional end-to-end JSON/Postman wrapper
+  V1.2 - Optional end-to-end wrapper with stable POS error codes
 ```
 
-`SMK069ImportCsvFileSp` remains the current V2 raw CSV parser. It must not contain business mapping logic.
+`SMK069ImportCsvFileSp` remains the raw CSV parser. It must not contain customer/item/price mapping logic. CSV parser errors must follow the same `POS-xxx` convention when that parser revision is applied.
 
 ## Mapping-view contract
 
@@ -103,15 +109,21 @@ Receive still writes raw values and generated `co_num` to `ue_SMK069_pos_sales_i
 
 ## UAT sequence
 
-1. Apply Receive V2.4.2.
-2. Apply RunCsv V2.5.
-3. Apply Process V2.8.1.
-4. Optionally apply ReceiveAndProcess wrapper.
-5. Use a new BatchId for every changed mapping/view UAT.
-6. Verify the mapping view first.
-7. Verify temp values equal the view.
-8. Process the generated CO.
-9. Verify `co_mst.type='B'`, `coitem_mst`, and `co_bln_mst` all use the mapping-view values.
+1. Apply `SMK069ReceivePosSalesJsonCoreSp V2.4.6`.
+2. Apply public `SMK069ReceivePosSalesJsonSp V2.4.6`.
+3. Configure the external public IDO method as **NON-TRANSACTIONAL**.
+4. Apply `SMK069RunCsvTestBatchSp V2.7`.
+5. Apply `SMK069ProcessCustomerOrderSp V2.8.2`.
+6. Optionally apply `SMK069ReceiveAndProcessPosSalesJsonSp V1.2`.
+7. Use a new BatchId for changed-mapping UAT.
+8. Verify mapping view output first.
+9. Verify temp values equal the mapping-view values.
+10. Verify unknown store/material/U/M/price is rejected atomically.
+11. Verify replay of a failed BatchId returns the same `POS-xxx` business result without an extra "already processed" error.
+12. Verify public rejected JSON request is surfaced as failure/non-200.
+13. Process a valid generated CO.
+14. Verify `co_mst.type='B'`, `coitem_mst`, and `co_bln_mst`.
+15. Verify `coitem_mst.release_date = co_mst.order_date`.
 
 
 ---
@@ -310,3 +322,35 @@ than an external HTTP exception.
 
 A valid test such as `DEV4-198` is still expected to return HTTP success. The
 non-200 requirement applies only to rejected business requests.
+
+
+---
+
+## Addendum - Stable POS Error Codes (2 September 2026)
+
+The integration now has a prepared stable error-code contract for Pizza Hut developers. The implementation sources and documentation are synchronized.
+
+Current rule:
+
+```text
+External business error message:
+[POS-xxx] <payload-oriented message>
+```
+
+Do not expose implementation-specific business details such as mapping-view names, `inbound_id`, or master-table lookup mechanics in the intended public message. Mongoose may still append SQL procedure/line metadata to an unhandled exception; removing platform-generated suffixes completely requires a custom REST/API layer.
+
+The complete catalog is maintained in:
+
+```text
+docs/25-smk069-pos-api-error-code-catalog-v1.md
+```
+
+Important status:
+
+```text
+PREPARED FOR APPLY / UAT
+```
+
+Do not send the catalog to an external team labeled as production-confirmed until the V2.4.6 / V2.7 / V2.8.2 sources have been applied and the documented UAT matrix passes.
+
+This latest section supersedes older implementation notes that referred to a separately named `SMK069ReceivePosSalesJsonHttpSp`. The current external contract keeps the existing public procedure name `SMK069ReceivePosSalesJsonSp` and delegates internally to `SMK069ReceivePosSalesJsonCoreSp`.
