@@ -4,6 +4,29 @@ All notable changes to this repository will be documented in this file.
 
 ## [Unreleased]
 
+### SMK069 Handoff — 2026-09-03
+
+- Added current continuation document:
+  `docs/24-smk069-current-handoff-2026-09-03.md`.
+- Recorded POS inbound as the stable baseline and preserved the existing `POS-xxx` result-code contract.
+- Recorded the current site-aware standard using `CONTEXT_INFO()` + `SetSiteSp` and active-site filtering for SMK069 `_mst` access.
+- Recorded the 3-Sep POS site-aware hardening V2 patch basis:
+  Core V2.4.8, Public V2.4.8, Process V2.8.3, CSV V2.8.1, E2E V1.3.
+- Recorded current Shipment outbound objects:
+  `SMK069_ShipmentAPI_mst`,
+  `SMK069BuildShipmentJsonSp`,
+  `SMK069PrepareShipmentSendSp`,
+  `SMK069CompleteShipmentSendSp`,
+  and `ue_SMK069_shipment_api_log_mst`.
+- Recorded Shipment lot-level JSON behavior, multiple-DOC_NO rejection, and `SiteRef + ShipmentId` logical idempotency.
+- Clarified that `SMK SHIPMENT API TEST` is UAT/debug only.
+- Reconfirmed production Shipment requirement:
+  automatic server-side execution every 1 hour by default, with adjustable interval.
+- Open items remain the actual POS Shipment endpoint/auth/response contract,
+  final WHS_CODE / STORE_CODE mapping, server-side HTTP sender, retry orchestration,
+  scheduler, and final UAT.
+
+
 ### Added
 
 - Controlled Customer Order procedure:
