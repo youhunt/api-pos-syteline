@@ -1,3 +1,9 @@
+## 2026-09-03 — Confirm Shipment extension assembly build in tenant
+
+- confirmed `ue_SMK069ShipmentExtensions` compiled and updated successfully;
+- recorded tenant evidence for the Mongoose IDO Invoke implementation;
+- next step is service IDO + method metadata wiring, then DN22 negative UAT.
+
 ## 2026-09-03 — Replace Shipment direct DB calls with Mongoose IDO Invoke
 
 - removed the Shipment extension class dependency on `System.Data` and `ApplicationDB`;

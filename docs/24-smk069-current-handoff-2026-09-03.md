@@ -1034,3 +1034,22 @@ The current source no longer requires `System.Data` or
 Before invoking `SMK069SendOneShipment`, the service IDO must expose the
 existing stable Prepare and Complete SQL procedures as Stored Procedure methods
 with their confirmed tenant parameter order.
+
+
+### Tenant assembly build confirmed
+
+The current `SMK069ShipmentSenderExtension.cs` compiled successfully in
+`ue_SMK069ShipmentExtensions` on 3 Sep 2026.
+
+The next tenant action is metadata wiring only:
+
+```text
+ue_SMK069ShipmentTransport
+  + Stored Procedure method: SMK069PrepareShipmentSendSp
+  + Stored Procedure method: SMK069CompleteShipmentSendSp
+  + Extension method: SMK069PostShipmentPayload
+  + Extension method: SMK069SendOneShipment
+```
+
+After cache refresh, proceed with safe DN22 negative UAT before any real POS
+endpoint is used.
