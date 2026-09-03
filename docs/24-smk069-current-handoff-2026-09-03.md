@@ -1010,3 +1010,27 @@ generated from HTTP 2xx while `SuccessMode=UNCONFIRMED`.
 Next gate: deploy/register the extension method and perform one-Shipment UAT
 after the POS UAT endpoint/auth/response contract is available. Pending-batch
 orchestration and hourly TaskMan scheduling follow that UAT.
+
+
+### Tenant compile adaptation — IDO Invoke replaces direct ApplicationDB
+
+The tenant Build From Source compiler repeatedly rejected the direct
+`System.Data` dependency required by the first `ApplicationDB.Connection`
+version.
+
+The Shipment extension class was therefore changed to the Mongoose-native
+pattern:
+
+```text
+SMK069SendOneShipment
+  -> Context.Commands.Invoke(SMK069PrepareShipmentSendSp IDO method)
+  -> HTTP POST
+  -> Context.Commands.Invoke(SMK069CompleteShipmentSendSp IDO method)
+```
+
+The current source no longer requires `System.Data` or
+`Mongoose.IDO.DataAccess`.
+
+Before invoking `SMK069SendOneShipment`, the service IDO must expose the
+existing stable Prepare and Complete SQL procedures as Stored Procedure methods
+with their confirmed tenant parameter order.

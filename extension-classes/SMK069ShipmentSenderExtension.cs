@@ -1,11 +1,10 @@
 using System;
-using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Text;
 using Mongoose.IDO;
-using Mongoose.IDO.DataAccess;
+using Mongoose.IDO.Protocol;
 
 namespace SMK069Shipment
 {
@@ -16,9 +15,9 @@ namespace SMK069Shipment
     /// The stable SQL contract remains:
     ///   Build -> Prepare -> HTTP -> Complete
     ///
-    /// A higher-level one-shipment orchestrator will call this transport between
-    /// SMK069PrepareShipmentSendSp and SMK069CompleteShipmentSendSp after the
-    /// exact tenant IDO/SP parameter metadata is confirmed.
+    /// The one-shipment orchestrator invokes Prepare and Complete through
+    /// Mongoose IDO stored-procedure methods, keeping direct database access out
+    /// of the extension class and preserving the caller's Mongoose context.
     /// </summary>
     [IDOExtensionClass("ue_SMK069ShipmentTransport")]
     public class SMK069ShipmentTransportExtension : IDOExtensionClass
@@ -187,74 +186,54 @@ namespace SMK069Shipment
             success = 0;
             infobar = null;
 
-            using (ApplicationDB appDB = this.CreateApplicationDB())
-            using (IDbCommand command = appDB.Connection.CreateCommand())
+            InvokeResponseData response = this.Context.Commands.Invoke(
+                "ue_SMK069ShipmentTransport",
+                "SMK069PrepareShipmentSendSp",
+                dnNo,
+                string.IsNullOrWhiteSpace(endpointUrl)
+                    ? IDONull.Value
+                    : (object)endpointUrl.Trim(),
+                IDONull.Value,
+                IDONull.Value,
+                IDONull.Value,
+                IDONull.Value);
+
+            if (response == null)
             {
-                command.CommandType = CommandType.StoredProcedure;
-                command.CommandText = "dbo.SMK069PrepareShipmentSendSp";
-
-                AddParameter(
-                    command,
-                    "@DN_No",
-                    DbType.Int64,
-                    ParameterDirection.Input,
-                    dnNo,
-                    0);
-
-                AddParameter(
-                    command,
-                    "@EndpointUrl",
-                    DbType.String,
-                    ParameterDirection.Input,
-                    string.IsNullOrWhiteSpace(endpointUrl)
-                        ? (object)DBNull.Value
-                        : endpointUrl.Trim(),
-                    1000);
-
-                IDbDataParameter logParameter = AddParameter(
-                    command,
-                    "@LogRowPointer",
-                    DbType.Guid,
-                    ParameterDirection.Output,
-                    DBNull.Value,
-                    0);
-
-                IDbDataParameter payloadParameter = AddParameter(
-                    command,
-                    "@PayloadJson",
-                    DbType.String,
-                    ParameterDirection.Output,
-                    DBNull.Value,
-                    -1);
-
-                IDbDataParameter successParameter = AddParameter(
-                    command,
-                    "@Success",
-                    DbType.Int32,
-                    ParameterDirection.Output,
-                    DBNull.Value,
-                    0);
-
-                IDbDataParameter infobarParameter = AddParameter(
-                    command,
-                    "@Infobar",
-                    DbType.String,
-                    ParameterDirection.Output,
-                    DBNull.Value,
-                    4000);
-
-                command.ExecuteNonQuery();
-
-                if (logParameter.Value != null &&
-                    logParameter.Value != DBNull.Value)
-                {
-                    logRowPointer = (Guid)logParameter.Value;
-                }
-
-                payloadJson = DbString(payloadParameter.Value);
-                success = DbInt32(successParameter.Value);
-                infobar = DbString(infobarParameter.Value);
+                throw new InvalidOperationException(
+                    "Prepare Shipment tidak mengembalikan IDO response.");
             }
+
+            if (response.Parameters.Count < 6)
+            {
+                throw new InvalidOperationException(
+                    "Prepare Shipment IDO method harus memiliki 6 parameter.");
+            }
+
+            infobar = response.Parameters[5].IsNull
+                ? null
+                : response.Parameters[5].Value;
+
+            if (response.IsReturnValueStdError())
+            {
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(infobar)
+                        ? "Prepare Shipment IDO invoke gagal."
+                        : infobar);
+            }
+
+            if (!response.Parameters[2].IsNull)
+            {
+                logRowPointer = response.Parameters[2].GetValue<Guid>();
+            }
+
+            payloadJson = response.Parameters[3].IsNull
+                ? null
+                : response.Parameters[3].Value;
+
+            success = response.Parameters[4].IsNull
+                ? 0
+                : response.Parameters[4].GetValue<int>();
         }
 
         private void ExecuteCompleteShipmentSend(
@@ -268,112 +247,45 @@ namespace SMK069Shipment
             success = 0;
             infobar = null;
 
-            using (ApplicationDB appDB = this.CreateApplicationDB())
-            using (IDbCommand command = appDB.Connection.CreateCommand())
+            InvokeResponseData response = this.Context.Commands.Invoke(
+                "ue_SMK069ShipmentTransport",
+                "SMK069CompleteShipmentSendSp",
+                logRowPointer,
+                httpCode,
+                string.IsNullOrEmpty(responseJson)
+                    ? IDONull.Value
+                    : (object)responseJson,
+                isSuccess == 1 ? 1 : 0,
+                IDONull.Value,
+                IDONull.Value);
+
+            if (response == null)
             {
-                command.CommandType = CommandType.StoredProcedure;
-                command.CommandText = "dbo.SMK069CompleteShipmentSendSp";
-
-                AddParameter(
-                    command,
-                    "@LogRowPointer",
-                    DbType.Guid,
-                    ParameterDirection.Input,
-                    logRowPointer,
-                    0);
-
-                AddParameter(
-                    command,
-                    "@HttpCode",
-                    DbType.Int32,
-                    ParameterDirection.Input,
-                    httpCode,
-                    0);
-
-                AddParameter(
-                    command,
-                    "@ResponseJson",
-                    DbType.String,
-                    ParameterDirection.Input,
-                    string.IsNullOrEmpty(responseJson)
-                        ? (object)DBNull.Value
-                        : responseJson,
-                    -1);
-
-                AddParameter(
-                    command,
-                    "@IsSuccess",
-                    DbType.Int32,
-                    ParameterDirection.Input,
-                    isSuccess == 1 ? 1 : 0,
-                    0);
-
-                IDbDataParameter successParameter = AddParameter(
-                    command,
-                    "@Success",
-                    DbType.Int32,
-                    ParameterDirection.Output,
-                    DBNull.Value,
-                    0);
-
-                IDbDataParameter infobarParameter = AddParameter(
-                    command,
-                    "@Infobar",
-                    DbType.String,
-                    ParameterDirection.Output,
-                    DBNull.Value,
-                    4000);
-
-                command.ExecuteNonQuery();
-
-                success = DbInt32(successParameter.Value);
-                infobar = DbString(infobarParameter.Value);
-            }
-        }
-
-        private static IDbDataParameter AddParameter(
-            IDbCommand command,
-            string name,
-            DbType dbType,
-            ParameterDirection direction,
-            object value,
-            int size)
-        {
-            IDbDataParameter parameter = command.CreateParameter();
-            parameter.ParameterName = name;
-            parameter.DbType = dbType;
-            parameter.Direction = direction;
-
-            if (size != 0)
-            {
-                parameter.Size = size;
+                throw new InvalidOperationException(
+                    "Complete Shipment tidak mengembalikan IDO response.");
             }
 
-            if (direction == ParameterDirection.Input ||
-                direction == ParameterDirection.InputOutput)
+            if (response.Parameters.Count < 6)
             {
-                parameter.Value = value ?? DBNull.Value;
+                throw new InvalidOperationException(
+                    "Complete Shipment IDO method harus memiliki 6 parameter.");
             }
 
-            command.Parameters.Add(parameter);
-            return parameter;
-        }
-
-        private static string DbString(object value)
-        {
-            return value == null || value == DBNull.Value
+            infobar = response.Parameters[5].IsNull
                 ? null
-                : Convert.ToString(value, CultureInfo.InvariantCulture);
-        }
+                : response.Parameters[5].Value;
 
-        private static int DbInt32(object value)
-        {
-            if (value == null || value == DBNull.Value)
+            if (response.IsReturnValueStdError())
             {
-                return 0;
+                throw new InvalidOperationException(
+                    string.IsNullOrWhiteSpace(infobar)
+                        ? "Complete Shipment IDO invoke gagal."
+                        : infobar);
             }
 
-            return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+            success = response.Parameters[4].IsNull
+                ? 0
+                : response.Parameters[4].GetValue<int>();
         }
 
         private static string BuildCompletionResponse(

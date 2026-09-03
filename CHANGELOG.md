@@ -1,3 +1,11 @@
+## 2026-09-03 — Replace Shipment direct DB calls with Mongoose IDO Invoke
+
+- removed the Shipment extension class dependency on `System.Data` and `ApplicationDB`;
+- switched Prepare/Complete orchestration to `Context.Commands.Invoke`;
+- documented two Stored Procedure methods on `ue_SMK069ShipmentTransport`;
+- preserved the stable SQL stored procedures and Site-context behavior;
+- retired the tenant workaround requiring `System.Data.dll`.
+
 ## 2026-09-03 — Document Shipment extension System.Data build dependency
 
 - recorded the tenant Build From Source compiler failure caused by a missing `System.Data.dll` reference;
