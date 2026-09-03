@@ -1,8 +1,10 @@
 # API POS SyteLine
 
-> **Current SMK069 recap through 31 Aug 2026:** [docs/23-smk069-development-recap-through-2026-08-31.md](docs/23-smk069-development-recap-through-2026-08-31.md)
+> **Current SMK069 handoff as of 3 Sep 2026:** [docs/24-smk069-current-handoff-2026-09-03.md](docs/24-smk069-current-handoff-2026-09-03.md)
 >
-> This recap consolidates the 27-Aug POS Contract V2 baseline, CSV V2 work, Outlet/Store mapping, mapped-customer pricing, actual cust_seq processing, latest successful Blanket CO UAT, 31-Aug error-visibility work, and Shipment outbound next steps.
+> Use the 3-Sep handoff as the current continuation source of truth. It records the stable POS inbound baseline, site-aware hardening, Shipment Build/Prepare/Complete status, multi-site rules, UAT findings, unresolved endpoint/mapping items, and the required automatic hourly/adjustable Shipment scheduler.
+>
+> **Previous recap through 31 Aug 2026:** [docs/23-smk069-development-recap-through-2026-08-31.md](docs/23-smk069-development-recap-through-2026-08-31.md)
 
 Repository dokumentasi dan artefak pengembangan integrasi **POS Pizza Hut / RSC → Infor SyteLine (Mongoose)**.
 
