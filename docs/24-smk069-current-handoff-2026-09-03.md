@@ -1053,3 +1053,56 @@ ue_SMK069ShipmentTransport
 
 After cache refresh, proceed with safe DN22 negative UAT before any real POS
 endpoint is used.
+
+
+### KACS/POS Shipment API contract received from user document
+
+The supplied KACS-to-SMK API document confirms:
+
+```text
+UAT base URL       : https://api-uat.pizzahut.co.id
+Production base URL: https://api-prod.pizzahut.co.id
+Login path         : /service-auth/login-once
+Shipment path      : /inventory-phi/v1/kacs_dn
+```
+
+Login is a POST and the success response contains both `token` and
+`refresh_token`.
+
+Shipment receive success is documented as:
+
+```text
+HTTP 201 Created
+body.code    = 200
+body.message = Success
+```
+
+Duplicate data is documented as:
+
+```text
+HTTP 400 Bad Request
+body.code    = 1010
+body.message = data is exist
+```
+
+Important unresolved authentication detail:
+
+The document shows token issuance but does **not** state the exact HTTP header
+used to send that token to the Shipment receive endpoint (for example whether
+it is `Authorization: Bearer <token>` or another header). Do not hard-code a
+header scheme until this is confirmed.
+
+Do not commit the username/password from the supplied document. Treat all login
+credentials as runtime secrets/configuration.
+
+For positive Shipment success evaluation, the target rule should be stricter
+than generic HTTP 2xx:
+
+```text
+HTTP status = 201
+AND body.code = 200
+AND body.message = Success
+```
+
+The existing `UNCONFIRMED` mode remains safest until the token header usage is
+confirmed and the sender is updated/tested against UAT.
