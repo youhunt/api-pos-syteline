@@ -518,3 +518,68 @@ parameters also exist.
 
 At this point `SMK069CompleteShipmentSendSp` was not yet visible in the method
 list, so it must be added before invoking `SMK069SendOneShipment`.
+
+
+## 13. KACS auth header + positive UAT contract confirmed
+
+The KACS/POS team confirmed the Shipment request header structure:
+
+```text
+Content-Type: application/json
+Authorization: Bearer <access token>
+```
+
+Do not store or commit the actual bearer token.
+
+The extension source now supports:
+
+```text
+SuccessMode = KACS_V1
+```
+
+This mode returns `BusinessSuccess=1` only when:
+
+```text
+HTTP status    = 201
+response.code  = 200
+response.message = Success
+```
+
+For positive UAT:
+
+```text
+DN_No           = 22
+EndpointUrl     = https://api-uat.pizzahut.co.id/inventory-phi/v1/kacs_dn
+AuthHeaderName  = Authorization
+AuthHeaderValue = Bearer <runtime UAT access token>
+SuccessMode     = KACS_V1
+SuccessMarker   = blank
+TimeoutSeconds  = 60
+```
+
+Before invoking positive UAT, rebuild `ue_SMK069ShipmentExtensions` from the
+latest repository source and confirm Assembly compiled successfully.
+
+Expected positive UAT:
+
+```text
+HttpCode        = 201
+TransportSuccess= 1
+BusinessSuccess = 1
+Success         = 1
+outbound log    = S
+DN22 Api_post   = 1
+Api_post_date   = populated
+```
+
+If KACS returns duplicate data:
+
+```text
+HTTP 400
+code 1010
+message data is exist
+```
+
+the current implementation intentionally treats that as failure
+(`BusinessSuccess=0`) until business owners explicitly decide whether a
+duplicate should be reconciled as already-successful or remain an error.
