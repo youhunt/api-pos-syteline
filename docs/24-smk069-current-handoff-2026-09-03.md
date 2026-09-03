@@ -1106,3 +1106,27 @@ AND body.message = Success
 
 The existing `UNCONFIRMED` mode remains safest until the token header usage is
 confirmed and the sender is updated/tested against UAT.
+
+
+### KACS Authorization header confirmed
+
+Shipment requests use:
+
+```text
+Content-Type: application/json
+Authorization: Bearer <access token>
+```
+
+The bearer token itself is runtime-secret data and must not be committed.
+
+The server-side transport now has `KACS_V1` success evaluation:
+
+```text
+HTTP 201
+AND JSON code = 200
+AND JSON message = Success
+```
+
+This enables a controlled positive DN22 UAT against the UAT Shipment endpoint.
+Automatic login/token acquisition remains the production follow-up after
+one-Shipment positive UAT succeeds.
