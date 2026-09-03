@@ -955,3 +955,28 @@ tenant metadata audit
 -> pending batch
 -> TaskMan hourly schedule
 ```
+
+
+### Query Execution note
+
+The original production-readiness audit was first written as one multi-result
+SQL script. In SyteLine **Apply Database**, `SELECT` result sets are not
+displayed like SSMS; Apply Database only reports execution status.
+
+For tenant verification, use:
+
+```text
+database/patches/2026-09-03-smk069-shipment-production-readiness-query-execution.sql
+```
+
+Run each numbered `SELECT` block separately in **Query Execution**. The
+queries are read-only and require no data change.
+
+The most important result for the next code step is **Q3**, the exact parameter
+metadata for:
+
+```text
+SMK069BuildShipmentJsonSp
+SMK069PrepareShipmentSendSp
+SMK069CompleteShipmentSendSp
+```

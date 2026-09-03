@@ -1,3 +1,10 @@
+## 2026-09-03 — Shipment readiness audit Query Execution variant
+
+- added a read-only Query Execution version of the Shipment readiness audit;
+- documented that Apply Database does not show SELECT result grids like SSMS;
+- split the audit into numbered result queries, including active Site, SP metadata,
+  view columns, pending Shipment snapshot, DN22 lot detail, and log collision checks.
+
 ## 2026-09-03 — Shipment server-side transport foundation
 
 - added `SMK069ShipmentSenderExtension.cs` for server-side POS Shipment HTTP POST;
