@@ -1,3 +1,11 @@
+## 2026-09-03 — Add KACS Shipment success contract mode
+
+- confirmed Shipment auth header is `Authorization: Bearer <token>`;
+- kept the actual bearer token out of source control;
+- added `KACS_V1` success mode requiring HTTP 201 + JSON code 200 + message Success;
+- documented controlled positive DN22 UAT inputs;
+- duplicate HTTP 400 / code 1010 remains an error pending explicit reconciliation policy.
+
 ## 2026-09-03 — Record KACS/POS Shipment API contract
 
 - recorded UAT/production base URLs and login/shipment paths from the supplied KACS API document;
