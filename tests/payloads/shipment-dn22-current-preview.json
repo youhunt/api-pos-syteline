@@ -1,0 +1,44 @@
+{
+  "CUST_CODE": "C000001",
+  "WHS_CODE": "PLG",
+  "DOC_NO": "CG26080002",
+  "DN_NO": "22",
+  "DELIVERY_DATE": "2026-08-19",
+  "STORE_ORDER_NO": "RRO/2608/002",
+  "STORE_CODE": "Del",
+  "VEHICLE_NUMBER": "B 1212 KKG",
+  "DETAIL": [
+    {
+      "PRODUCT_CODE": "AA00024",
+      "SHIPMENT_QTY": 12,
+      "UOM": "CTN",
+      "PRICE": 5000,
+      "BATCH": "260812-002-1B-0",
+      "EXPIRY_DATE": null
+    },
+    {
+      "PRODUCT_CODE": "AA00024",
+      "SHIPMENT_QTY": 6,
+      "UOM": "CTN",
+      "PRICE": 5000,
+      "BATCH": "260812-003-1B-0",
+      "EXPIRY_DATE": null
+    },
+    {
+      "PRODUCT_CODE": "AA00024",
+      "SHIPMENT_QTY": 3,
+      "UOM": "CTN",
+      "PRICE": 5000,
+      "BATCH": "260813-008-2A-0",
+      "EXPIRY_DATE": null
+    },
+    {
+      "PRODUCT_CODE": "AA00024",
+      "SHIPMENT_QTY": 9,
+      "UOM": "CTN",
+      "PRICE": 5000,
+      "BATCH": "260814-015-1C-0",
+      "EXPIRY_DATE": null
+    }
+  ]
+}

@@ -1,3 +1,13 @@
+## 2026-09-03 — Shipment server-side transport foundation
+
+- added `SMK069ShipmentSenderExtension.cs` for server-side POS Shipment HTTP POST;
+- kept transport separate from the stable Build/Prepare/Complete SQL lifecycle;
+- added conservative `UNCONFIRMED` response mode so HTTP 2xx does not automatically mean posted;
+- added runtime auth-header inputs without committing credentials;
+- added a read-only production-readiness audit for Site context, SP parameters, Shipment view, pending data, and log key collisions;
+- added the current DN22 lot-level UAT payload;
+- updated the current handoff with the next orchestration step.
+
 # Changelog
 
 All notable changes to this repository will be documented in this file.

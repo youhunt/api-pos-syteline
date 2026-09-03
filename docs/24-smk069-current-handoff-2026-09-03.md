@@ -906,3 +906,52 @@ POS endpoint/auth contract
 ```
 
 That is the point from which development should resume.
+
+
+---
+
+## 26. Post-handoff progress — server-side transport foundation
+
+A server-side Shipment HTTP transport foundation was added after this handoff
+was originally prepared.
+
+New source:
+
+```text
+extension-classes/SMK069ShipmentSenderExtension.cs
+implementation/21-create-smk069-shipment-server-side-transport.md
+database/patches/2026-09-03-smk069-shipment-production-readiness-audit.sql
+tests/payloads/shipment-dn22-current-preview.json
+```
+
+Current status of the production path is now:
+
+```text
+Build JSON                 stable SQL
+Prepare outbound log       stable SQL
+Server-side HTTP transport implemented foundation
+Complete result            stable SQL
+One-Shipment orchestration next
+Pending batch              pending
+Hourly TaskMan schedule    pending
+```
+
+Safety behavior:
+
+- the transport does not update Shipment or outbound log directly;
+- blank/default success mode is `UNCONFIRMED`;
+- HTTP 2xx alone does not produce `BusinessSuccess=1` in that mode;
+- real endpoint credentials are runtime inputs and are not committed;
+- the exact existing Build/Prepare/Complete parameter metadata must be read from
+  the tenant audit before the final orchestration is wired.
+
+The next implementation step is therefore no longer to write a Form HTTP
+sender. It is:
+
+```text
+tenant metadata audit
++ POS endpoint/auth/response sample
+-> one-Shipment server-side orchestration
+-> pending batch
+-> TaskMan hourly schedule
+```
