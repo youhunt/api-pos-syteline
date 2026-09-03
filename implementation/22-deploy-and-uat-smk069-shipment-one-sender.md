@@ -486,3 +486,35 @@ PayloadJson
 Success
 Infobar
 ```
+
+
+### Tenant confirmation — extension methods visible
+
+After correcting the extension identity to:
+
+```text
+Namespace : SMK069Shipment
+Class     : SMK069ShipmentTransportExtension
+```
+
+the tenant successfully exposed these extension methods on
+`ue_SMK069ShipmentTransport`:
+
+```text
+SMK069PostShipmentPayload
+SMK069SendOneShipment
+```
+
+Both were created as:
+
+```text
+Method Type   : Extension Class - Standard Method
+Transactional : No
+```
+
+The first seven parameters visible in Method Metadata matched the expected input
+sequence. Before UAT, scroll the parameter grid and confirm the remaining output
+parameters also exist.
+
+At this point `SMK069CompleteShipmentSendSp` was not yet visible in the method
+list, so it must be added before invoking `SMK069SendOneShipment`.
