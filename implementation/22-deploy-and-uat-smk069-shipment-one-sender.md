@@ -439,3 +439,50 @@ Proceed to the pending-batch sender and scheduler only after:
 [ ] POS UAT endpoint/auth/response contract is confirmed
 [ ] one positive Shipment UAT succeeds
 ```
+
+
+### Tenant correction — namespace and class must not be reversed
+
+The tenant Method Wizard returned:
+
+```text
+Type 'SMK069ShipmentTransportExtension.SMK069Shipment' not found
+in assembly 'ue_SMK069ShipmentExtensions'.
+```
+
+This means the IDO Extension Class identity was entered in reverse.
+
+Correct IDO values:
+
+```text
+IDO Assembly Name   : ue_SMK069ShipmentExtensions
+Ext Class Namespace : SMK069Shipment
+Ext Class Name      : SMK069ShipmentTransportExtension
+```
+
+The full CLR type must therefore resolve as:
+
+```text
+SMK069Shipment.SMK069ShipmentTransportExtension
+```
+
+After correcting the IDO:
+
+```text
+Save
+Check In
+Discard IDO Cache
+reopen Method Wizard
+```
+
+The confirmed Stored Procedure method
+`SMK069PrepareShipmentSendSp` already showed the expected parameter order:
+
+```text
+DN_No
+EndpointUrl
+LogRowPointer
+PayloadJson
+Success
+Infobar
+```
