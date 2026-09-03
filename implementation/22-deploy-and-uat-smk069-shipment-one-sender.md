@@ -95,6 +95,52 @@ Mongoose.IDO.DataAccess
 Use the tenant's normal Mongoose IDO references. Add a framework reference only
 if Build From Source explicitly reports a missing namespace/assembly.
 
+
+### Required Build From Source reference found in tenant
+
+The first tenant build produced errors such as:
+
+```text
+CS0234 System.Data does not exist in namespace System
+CS0012 IDbConnection is defined in an assembly that is not referenced
+CS0246 IDbCommand / IDbDataParameter / DbType / ParameterDirection not found
+```
+
+This is a **Build From Source assembly reference issue**, not a Shipment logic
+error.
+
+On the `IDO Extension Class Assemblies` record:
+
+```text
+Assembly Name : ue_SMK069ShipmentExtensions
+```
+
+keep the existing default references and append:
+
+```text
+System.Data.dll
+```
+
+The References field is comma-delimited. Do **not** replace/remove the default
+Mongoose references already present.
+
+Example conceptually:
+
+```text
+<existing default references>,System.Data.dll
+```
+
+Then:
+
+```text
+Save
+Build Assembly
+```
+
+Do not change the C# source merely to remove `System.Data`; it is required by
+the `ApplicationDB.Connection` / `IDbCommand` stored-procedure call path.
+
+
 ## 4. Link assembly to the IDO
 
 Open `IDOs`, check out:

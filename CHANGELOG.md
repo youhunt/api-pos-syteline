@@ -1,3 +1,9 @@
+## 2026-09-03 — Document Shipment extension System.Data build dependency
+
+- recorded the tenant Build From Source compiler failure caused by a missing `System.Data.dll` reference;
+- updated the Shipment one-sender deployment guide to preserve default references and append `System.Data.dll`;
+- no Shipment business/source logic changed.
+
 ## 2026-09-03 — Shipment one-Shipment server-side orchestration
 
 - confirmed exact tenant signatures for Shipment Build, Prepare and Complete;
