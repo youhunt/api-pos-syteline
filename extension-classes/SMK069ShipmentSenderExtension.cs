@@ -255,12 +255,18 @@ namespace SMK069Shipment
 
         private static string ReadResponseBody(HttpWebResponse response)
         {
-            if (response == null || response.GetResponseStream() == null)
+            if (response == null)
             {
                 return string.Empty;
             }
 
-            using (Stream stream = response.GetResponseStream())
+            Stream stream = response.GetResponseStream();
+            if (stream == null)
+            {
+                return string.Empty;
+            }
+
+            using (stream)
             using (StreamReader reader = new StreamReader(stream, Encoding.UTF8, true))
             {
                 return reader.ReadToEnd();

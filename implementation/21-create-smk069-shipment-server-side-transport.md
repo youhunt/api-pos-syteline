@@ -158,8 +158,7 @@ ue_SMK069ShipmentTransport
 ```
 
 Import the compiled extension assembly and attach
-`SMK069Shipment.SM K069ShipmentTransportExtension` with the whitespace removed
-from the class name:
+`SMK069Shipment.SMK069ShipmentTransportExtension`:
 
 ```text
 SMK069Shipment.SMK069ShipmentTransportExtension
