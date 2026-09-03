@@ -1,3 +1,11 @@
+## 2026-09-03 — Record KACS/POS Shipment API contract
+
+- recorded UAT/production base URLs and login/shipment paths from the supplied KACS API document;
+- recorded Shipment success as HTTP 201 + body code 200 + message Success;
+- recorded duplicate response as HTTP 400 + code 1010 + message data is exist;
+- documented that the token header scheme is still not specified by the source document;
+- explicitly kept login credentials out of Git.
+
 ## 2026-09-03 — Confirm Shipment four-method service IDO wiring
 
 - confirmed `ue_SMK069ShipmentTransport` exposes Prepare, Complete, HTTP transport, and one-Shipment orchestration methods;
