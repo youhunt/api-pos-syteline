@@ -1,3 +1,9 @@
+## 2026-09-03 — Confirm Shipment four-method service IDO wiring
+
+- confirmed `ue_SMK069ShipmentTransport` exposes Prepare, Complete, HTTP transport, and one-Shipment orchestration methods;
+- confirmed Complete parameter order matches tenant stored procedure metadata;
+- next gate is cache refresh and safe DN22 negative UAT.
+
 ## 2026-09-03 — Confirm Shipment extension assembly build in tenant
 
 - confirmed `ue_SMK069ShipmentExtensions` compiled and updated successfully;
