@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using Mongoose.IDO;
 using Mongoose.IDO.Protocol;
 
@@ -449,7 +450,7 @@ namespace SMK069Shipment
             if (successMode == null)
             {
                 ErrorMessage =
-                    "SuccessMode tidak valid. Gunakan UNCONFIRMED, MARKER, atau HTTP_2XX.";
+                    "SuccessMode tidak valid. Gunakan UNCONFIRMED, MARKER, HTTP_2XX, atau KACS_V1.";
                 Infobar = ErrorMessage;
                 return 16;
             }
@@ -606,6 +607,7 @@ namespace SMK069Shipment
                 case "UNCONFIRMED":
                 case "MARKER":
                 case "HTTP_2XX":
+                case "KACS_V1":
                     return mode;
                 default:
                     return null;
@@ -670,6 +672,30 @@ namespace SMK069Shipment
             {
                 businessSuccess = 0;
                 errorMessage = BuildHttpError(httpCode, responseBody);
+                return;
+            }
+
+            if (successMode == "KACS_V1")
+            {
+                bool codeOk =
+                    httpCode == 201 &&
+                    !string.IsNullOrEmpty(responseBody) &&
+                    Regex.IsMatch(
+                        responseBody,
+                        "\\\"code\\\"\\s*:\\s*200(?:\\D|$)",
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+                bool messageOk =
+                    !string.IsNullOrEmpty(responseBody) &&
+                    Regex.IsMatch(
+                        responseBody,
+                        "\\\"message\\\"\\s*:\\s*\\\"Success\\\"",
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+                businessSuccess = codeOk && messageOk ? 1 : 0;
+                errorMessage = businessSuccess == 1
+                    ? null
+                    : "KACS response tidak memenuhi kontrak sukses: HTTP 201 + code 200 + message Success.";
                 return;
             }
 
