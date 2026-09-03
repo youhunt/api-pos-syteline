@@ -980,3 +980,33 @@ SMK069BuildShipmentJsonSp
 SMK069PrepareShipmentSendSp
 SMK069CompleteShipmentSendSp
 ```
+
+
+### One-Shipment orchestration implemented after tenant metadata confirmation
+
+Tenant Query Execution confirmed the exact Build/Prepare/Complete parameters,
+`ShipmentViewSiteRefCheck = PASS`, and DN22 as four separate lot rows at Site
+`Default`.
+
+`SMK069ShipmentSenderExtension.cs` now includes:
+
+```text
+SMK069SendOneShipment
+```
+
+It executes:
+
+```text
+Prepare
+-> server-side HTTP POST
+-> Complete
+```
+
+Prepare is not duplicated by a separate Build call. HTTP/business failure still
+runs Complete with `IsSuccess=0`, so the outbound attempt can be recorded as
+error while the Shipment remains pending. Positive business success is never
+generated from HTTP 2xx while `SuccessMode=UNCONFIRMED`.
+
+Next gate: deploy/register the extension method and perform one-Shipment UAT
+after the POS UAT endpoint/auth/response contract is available. Pending-batch
+orchestration and hourly TaskMan scheduling follow that UAT.

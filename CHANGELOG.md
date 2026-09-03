@@ -1,3 +1,12 @@
+## 2026-09-03 — Shipment one-Shipment server-side orchestration
+
+- confirmed exact tenant signatures for Shipment Build, Prepare and Complete;
+- confirmed Shipment view `site_ref` and DN22 four-lot detail;
+- added `SMK069SendOneShipment` orchestration: Prepare -> HTTP -> Complete;
+- kept the IDO method non-transactional by design for the external HTTP boundary;
+- ensured handled HTTP/business failures still execute Complete with failure;
+- preserved the rule that only Complete may set Shipment `api_post=1`.
+
 ## 2026-09-03 — Shipment readiness audit Query Execution variant
 
 - added a read-only Query Execution version of the Shipment readiness audit;

@@ -1,9 +1,11 @@
 using System;
+using System.Data;
 using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Text;
 using Mongoose.IDO;
+using Mongoose.IDO.DataAccess;
 
 namespace SMK069Shipment
 {
@@ -24,6 +26,475 @@ namespace SMK069Shipment
         private const int DefaultTimeoutSeconds = 60;
         private const int MaximumTimeoutSeconds = 300;
         private const int MaximumReturnedBodyChars = 1048576;
+
+        /// <summary>
+        /// Executes one complete Shipment outbound attempt:
+        /// Prepare -> HTTP POST -> Complete.
+        ///
+        /// Important:
+        /// - this IDO method must be configured as NON-TRANSACTIONAL because it
+        ///   performs an external HTTP call between two database operations;
+        /// - the stable Shipment stored procedures remain the source of truth
+        ///   for Site scoping, log lifecycle and shipment_mst posted flags;
+        /// - a handled POS/transport failure returns method code 0 with
+        ///   Success=0 after Complete has persisted the failed attempt.
+        /// </summary>
+        [IDOMethod(MethodFlags.None, "Infobar")]
+        public int SMK069SendOneShipment(
+            long DN_No,
+            string EndpointUrl,
+            string AuthHeaderName,
+            string AuthHeaderValue,
+            string SuccessMode,
+            string SuccessMarker,
+            int TimeoutSeconds,
+            ref string LogRowPointer,
+            ref string PayloadJson,
+            ref int HttpCode,
+            ref string ResponseJson,
+            ref int TransportSuccess,
+            ref int BusinessSuccess,
+            ref string ErrorMessage,
+            ref int Success,
+            ref string Infobar)
+        {
+            LogRowPointer = null;
+            PayloadJson = null;
+            HttpCode = 0;
+            ResponseJson = null;
+            TransportSuccess = 0;
+            BusinessSuccess = 0;
+            ErrorMessage = null;
+            Success = 0;
+            Infobar = null;
+
+            Guid logRowPointer;
+            int prepareSuccess;
+            string prepareInfobar;
+
+            try
+            {
+                ExecutePrepareShipmentSend(
+                    DN_No,
+                    EndpointUrl,
+                    out logRowPointer,
+                    out PayloadJson,
+                    out prepareSuccess,
+                    out prepareInfobar);
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = "Prepare Shipment exception: " + ex.Message;
+                Infobar = ErrorMessage;
+                return 16;
+            }
+
+            if (prepareSuccess != 1 || logRowPointer == Guid.Empty)
+            {
+                ErrorMessage = string.IsNullOrWhiteSpace(prepareInfobar)
+                    ? "Prepare Shipment gagal."
+                    : prepareInfobar;
+                Infobar = ErrorMessage;
+                return 16;
+            }
+
+            LogRowPointer = logRowPointer.ToString();
+
+            string transportInfobar = null;
+            int transportReturn = SMK069PostShipmentPayload(
+                EndpointUrl,
+                PayloadJson,
+                AuthHeaderName,
+                AuthHeaderValue,
+                SuccessMode,
+                SuccessMarker,
+                TimeoutSeconds,
+                ref HttpCode,
+                ref ResponseJson,
+                ref TransportSuccess,
+                ref BusinessSuccess,
+                ref ErrorMessage,
+                ref transportInfobar);
+
+            string completionResponse = BuildCompletionResponse(
+                ResponseJson,
+                ErrorMessage,
+                transportReturn);
+
+            int completeSuccess;
+            string completeInfobar;
+
+            try
+            {
+                ExecuteCompleteShipmentSend(
+                    logRowPointer,
+                    HttpCode,
+                    completionResponse,
+                    BusinessSuccess,
+                    out completeSuccess,
+                    out completeInfobar);
+            }
+            catch (Exception ex)
+            {
+                Success = 0;
+                ErrorMessage = AppendMessage(
+                    ErrorMessage,
+                    "Complete Shipment exception: " + ex.Message);
+                Infobar =
+                    "Shipment " + DN_No.ToString(CultureInfo.InvariantCulture) +
+                    " sudah melalui Prepare/HTTP tetapi Complete gagal. " +
+                    "Periksa outbound log sebelum retry. " + ErrorMessage;
+                return 16;
+            }
+
+            if (completeSuccess != 1)
+            {
+                Success = 0;
+                ErrorMessage = AppendMessage(
+                    ErrorMessage,
+                    string.IsNullOrWhiteSpace(completeInfobar)
+                        ? "Complete Shipment mengembalikan Success=0."
+                        : completeInfobar);
+                Infobar = ErrorMessage;
+                return 16;
+            }
+
+            Success = BusinessSuccess == 1 ? 1 : 0;
+
+            Infobar = BuildOneShipmentInfobar(
+                DN_No,
+                LogRowPointer,
+                Success,
+                prepareInfobar,
+                transportInfobar,
+                completeInfobar);
+
+            // Business/HTTP failure is a handled attempt. Complete has already
+            // persisted log E and left shipment_mst pending.
+            return 0;
+        }
+
+        private void ExecutePrepareShipmentSend(
+            long dnNo,
+            string endpointUrl,
+            out Guid logRowPointer,
+            out string payloadJson,
+            out int success,
+            out string infobar)
+        {
+            logRowPointer = Guid.Empty;
+            payloadJson = null;
+            success = 0;
+            infobar = null;
+
+            using (ApplicationDB appDB = this.CreateApplicationDB())
+            using (IDbCommand command = appDB.Connection.CreateCommand())
+            {
+                command.CommandType = CommandType.StoredProcedure;
+                command.CommandText = "dbo.SMK069PrepareShipmentSendSp";
+
+                AddParameter(
+                    command,
+                    "@DN_No",
+                    DbType.Int64,
+                    ParameterDirection.Input,
+                    dnNo,
+                    0);
+
+                AddParameter(
+                    command,
+                    "@EndpointUrl",
+                    DbType.String,
+                    ParameterDirection.Input,
+                    string.IsNullOrWhiteSpace(endpointUrl)
+                        ? (object)DBNull.Value
+                        : endpointUrl.Trim(),
+                    1000);
+
+                IDbDataParameter logParameter = AddParameter(
+                    command,
+                    "@LogRowPointer",
+                    DbType.Guid,
+                    ParameterDirection.Output,
+                    DBNull.Value,
+                    0);
+
+                IDbDataParameter payloadParameter = AddParameter(
+                    command,
+                    "@PayloadJson",
+                    DbType.String,
+                    ParameterDirection.Output,
+                    DBNull.Value,
+                    -1);
+
+                IDbDataParameter successParameter = AddParameter(
+                    command,
+                    "@Success",
+                    DbType.Int32,
+                    ParameterDirection.Output,
+                    DBNull.Value,
+                    0);
+
+                IDbDataParameter infobarParameter = AddParameter(
+                    command,
+                    "@Infobar",
+                    DbType.String,
+                    ParameterDirection.Output,
+                    DBNull.Value,
+                    4000);
+
+                command.ExecuteNonQuery();
+
+                if (logParameter.Value != null &&
+                    logParameter.Value != DBNull.Value)
+                {
+                    logRowPointer = (Guid)logParameter.Value;
+                }
+
+                payloadJson = DbString(payloadParameter.Value);
+                success = DbInt32(successParameter.Value);
+                infobar = DbString(infobarParameter.Value);
+            }
+        }
+
+        private void ExecuteCompleteShipmentSend(
+            Guid logRowPointer,
+            int httpCode,
+            string responseJson,
+            int isSuccess,
+            out int success,
+            out string infobar)
+        {
+            success = 0;
+            infobar = null;
+
+            using (ApplicationDB appDB = this.CreateApplicationDB())
+            using (IDbCommand command = appDB.Connection.CreateCommand())
+            {
+                command.CommandType = CommandType.StoredProcedure;
+                command.CommandText = "dbo.SMK069CompleteShipmentSendSp";
+
+                AddParameter(
+                    command,
+                    "@LogRowPointer",
+                    DbType.Guid,
+                    ParameterDirection.Input,
+                    logRowPointer,
+                    0);
+
+                AddParameter(
+                    command,
+                    "@HttpCode",
+                    DbType.Int32,
+                    ParameterDirection.Input,
+                    httpCode,
+                    0);
+
+                AddParameter(
+                    command,
+                    "@ResponseJson",
+                    DbType.String,
+                    ParameterDirection.Input,
+                    string.IsNullOrEmpty(responseJson)
+                        ? (object)DBNull.Value
+                        : responseJson,
+                    -1);
+
+                AddParameter(
+                    command,
+                    "@IsSuccess",
+                    DbType.Int32,
+                    ParameterDirection.Input,
+                    isSuccess == 1 ? 1 : 0,
+                    0);
+
+                IDbDataParameter successParameter = AddParameter(
+                    command,
+                    "@Success",
+                    DbType.Int32,
+                    ParameterDirection.Output,
+                    DBNull.Value,
+                    0);
+
+                IDbDataParameter infobarParameter = AddParameter(
+                    command,
+                    "@Infobar",
+                    DbType.String,
+                    ParameterDirection.Output,
+                    DBNull.Value,
+                    4000);
+
+                command.ExecuteNonQuery();
+
+                success = DbInt32(successParameter.Value);
+                infobar = DbString(infobarParameter.Value);
+            }
+        }
+
+        private static IDbDataParameter AddParameter(
+            IDbCommand command,
+            string name,
+            DbType dbType,
+            ParameterDirection direction,
+            object value,
+            int size)
+        {
+            IDbDataParameter parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.DbType = dbType;
+            parameter.Direction = direction;
+
+            if (size != 0)
+            {
+                parameter.Size = size;
+            }
+
+            if (direction == ParameterDirection.Input ||
+                direction == ParameterDirection.InputOutput)
+            {
+                parameter.Value = value ?? DBNull.Value;
+            }
+
+            command.Parameters.Add(parameter);
+            return parameter;
+        }
+
+        private static string DbString(object value)
+        {
+            return value == null || value == DBNull.Value
+                ? null
+                : Convert.ToString(value, CultureInfo.InvariantCulture);
+        }
+
+        private static int DbInt32(object value)
+        {
+            if (value == null || value == DBNull.Value)
+            {
+                return 0;
+            }
+
+            return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        }
+
+        private static string BuildCompletionResponse(
+            string responseJson,
+            string errorMessage,
+            int transportReturn)
+        {
+            if (!string.IsNullOrWhiteSpace(responseJson))
+            {
+                return responseJson;
+            }
+
+            if (string.IsNullOrWhiteSpace(errorMessage))
+            {
+                return null;
+            }
+
+            return
+                "{\"SMK069_TRANSPORT_ERROR\":\"" +
+                JsonEscape(errorMessage) +
+                "\",\"METHOD_RETURN\":" +
+                transportReturn.ToString(CultureInfo.InvariantCulture) +
+                "}";
+        }
+
+        private static string JsonEscape(string value)
+        {
+            if (value == null)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder escaped = new StringBuilder(value.Length + 16);
+
+            foreach (char c in value)
+            {
+                switch (c)
+                {
+                    case '\\':
+                        escaped.Append("\\\\");
+                        break;
+                    case '"':
+                        escaped.Append("\\\"");
+                        break;
+                    case '\r':
+                        escaped.Append("\\r");
+                        break;
+                    case '\n':
+                        escaped.Append("\\n");
+                        break;
+                    case '\t':
+                        escaped.Append("\\t");
+                        break;
+                    default:
+                        if (c < 32)
+                        {
+                            escaped.Append(
+                                "\\u" +
+                                ((int)c).ToString(
+                                    "x4",
+                                    CultureInfo.InvariantCulture));
+                        }
+                        else
+                        {
+                            escaped.Append(c);
+                        }
+                        break;
+                }
+            }
+
+            return escaped.ToString();
+        }
+
+        private static string AppendMessage(string current, string next)
+        {
+            if (string.IsNullOrWhiteSpace(current))
+            {
+                return next;
+            }
+
+            if (string.IsNullOrWhiteSpace(next))
+            {
+                return current;
+            }
+
+            return current + " | " + next;
+        }
+
+        private static string BuildOneShipmentInfobar(
+            long dnNo,
+            string logRowPointer,
+            int success,
+            string prepareInfobar,
+            string transportInfobar,
+            string completeInfobar)
+        {
+            string summary =
+                "SMK069 Shipment DN=" +
+                dnNo.ToString(CultureInfo.InvariantCulture) +
+                "; Log=" +
+                (logRowPointer ?? string.Empty) +
+                "; Result=" +
+                (success == 1 ? "SUCCESS" : "FAILED") +
+                ".";
+
+            if (!string.IsNullOrWhiteSpace(transportInfobar))
+            {
+                summary += " " + transportInfobar;
+            }
+
+            if (!string.IsNullOrWhiteSpace(completeInfobar))
+            {
+                summary += " Complete=" + completeInfobar;
+            }
+            else if (!string.IsNullOrWhiteSpace(prepareInfobar))
+            {
+                summary += " Prepare=" + prepareInfobar;
+            }
+
+            return summary;
+        }
 
         [IDOMethod(MethodFlags.None, "Infobar")]
         public int SMK069PostShipmentPayload(

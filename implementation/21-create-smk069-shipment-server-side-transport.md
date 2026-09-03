@@ -234,3 +234,145 @@ After the runtime audit and POS endpoint/response sample are available:
 8. schedule the batch IDO method through TaskMan, default every 1 hour.
 
 The form remains UAT/debug only.
+
+
+---
+
+## 10. Tenant metadata confirmed — 3 Sep 2026
+
+Runtime Query Execution confirmed:
+
+```text
+SMK069BuildShipmentJsonSp
+  @DN_No bigint IN
+  @PayloadJson nvarchar(max) OUT
+  @Success int OUT
+  @Infobar nvarchar(4000) OUT
+
+SMK069PrepareShipmentSendSp
+  @DN_No bigint IN
+  @EndpointUrl nvarchar(1000) IN
+  @LogRowPointer uniqueidentifier OUT
+  @PayloadJson nvarchar(max) OUT
+  @Success int OUT
+  @Infobar nvarchar(4000) OUT
+
+SMK069CompleteShipmentSendSp
+  @LogRowPointer uniqueidentifier IN
+  @HttpCode int IN
+  @ResponseJson nvarchar(max) IN
+  @IsSuccess int IN
+  @Success int OUT
+  @Infobar nvarchar(4000) OUT
+```
+
+The Shipment API view also returned:
+
+```text
+ShipmentViewSiteRefCheck = PASS
+```
+
+DN22 remains pending at Site `Default` and contains four independent lot rows:
+
+```text
+12  260812-002-1B-0
+6   260812-003-1B-0
+3   260813-008-2A-0
+9   260814-015-1C-0
+```
+
+No lot aggregation is introduced.
+
+## 11. One-Shipment orchestration implemented
+
+The extension class now also exposes:
+
+```text
+SMK069SendOneShipment
+```
+
+Flow:
+
+```text
+SMK069PrepareShipmentSendSp
+        |
+        | returns LogRowPointer + PayloadJson
+        v
+SMK069PostShipmentPayload
+        |
+        | returns HttpCode + BusinessSuccess
+        v
+SMK069CompleteShipmentSendSp
+```
+
+Important behavior:
+
+- Prepare is called only once; Build is not called separately because Prepare
+  already delegates payload construction to the stable Build procedure.
+- HTTP/business failures are handled attempts. Complete is still called with
+  `IsSuccess=0`, allowing the log to become `E` while Shipment remains pending.
+- POS-confirmed success is passed to Complete as `IsSuccess=1`; only Complete
+  may set `shipment_mst.SMK069_Uf_api_post=1`.
+- if Complete itself fails after the HTTP attempt, the IDO method returns 16 and
+  explicitly tells operations to inspect the outbound log before retrying.
+- the method must be configured as **non-transactional**; an external HTTP call
+  must not sit inside one database transaction.
+
+### IDO method parameters
+
+Create the extension-class method with this exact parameter order:
+
+| Seq | Name | Direction | Type |
+|---:|---|---|---|
+| 1 | DN_No | Input | Int64 |
+| 2 | EndpointUrl | Input | String |
+| 3 | AuthHeaderName | Input | String |
+| 4 | AuthHeaderValue | Input | String |
+| 5 | SuccessMode | Input | String |
+| 6 | SuccessMarker | Input | String |
+| 7 | TimeoutSeconds | Input | Int32 |
+| 8 | LogRowPointer | Output | String |
+| 9 | PayloadJson | Output | String |
+| 10 | HttpCode | Output | Int32 |
+| 11 | ResponseJson | Output | String |
+| 12 | TransportSuccess | Output | Int32 |
+| 13 | BusinessSuccess | Output | Int32 |
+| 14 | ErrorMessage | Output | String |
+| 15 | Success | Output | Int32 |
+| 16 | Infobar | Output | String |
+
+### Safe negative UAT before the real endpoint is known
+
+DN22 can be used with an intentionally invalid/unreachable UAT URL to prove the
+failure path:
+
+```text
+SuccessMode = UNCONFIRMED
+Expected:
+  Prepare creates/returns log
+  TransportSuccess = 0
+  BusinessSuccess = 0
+  Complete returns success for the bookkeeping operation
+  Shipment Success = 0
+  outbound log = E
+  shipment api_post remains 0
+```
+
+Do **not** repeatedly use a URL that could accidentally resolve to a real
+third-party service. Prefer the POS UAT endpoint when available.
+
+### Positive UAT gate
+
+Do not run a positive POST that can mark DN22 posted until all are known:
+
+```text
+POS UAT endpoint
+authentication/header
+example accepted response
+example business-error response
+duplicate DN behavior
+confirmed SuccessMode / marker
+```
+
+The next implementation after one-Shipment UAT is the current-Site pending batch
+orchestrator, followed by TaskMan hourly scheduling.
