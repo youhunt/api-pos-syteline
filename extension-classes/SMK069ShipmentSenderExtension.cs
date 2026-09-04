@@ -10,8 +10,13 @@ using Mongoose.IDO.Protocol;
 namespace SMK069Shipment
 {
     /// <summary>
-    /// Server-side HTTP transport for SMK069 Shipment outbound.
-    /// Stable flow: Prepare -> HTTP -> Complete.
+    /// Server-side transport for SMK069 Shipment outbound.
+    ///
+    /// Production concept:
+    /// DN_No -> Prepare/build payload -> KACS login -> Shipment POST -> Complete.
+    ///
+    /// The KACS URL and Authorization header are transport concerns and are
+    /// never inserted into the Shipment business JSON payload.
     /// </summary>
     [IDOExtensionClass("ue_SMK069ShipmentTransport")]
     public class SMK069ShipmentTransportExtension : IDOExtensionClass
@@ -20,10 +25,244 @@ namespace SMK069Shipment
         private const int MaximumTimeoutSeconds = 300;
         private const int MaximumReturnedBodyChars = 1048576;
 
+        private const string KacsUatBaseUrl = "https://api-uat.pizzahut.co.id";
+        private const string KacsProdBaseUrl = "https://api-prod.pizzahut.co.id";
+        private const string KacsLoginPath = "/service-auth/login-once";
+        private const string KacsShipmentPath = "/inventory-phi/v1/kacs_dn";
+
         /// <summary>
-        /// Executes one complete Shipment outbound attempt.
-        /// This method must remain non-transactional because an external HTTP
-        /// call occurs between Prepare and Complete.
+        /// Simple KACS orchestration.
+        ///
+        /// Inputs:
+        /// - DN_No
+        /// - ApiEnvironment: UAT or PROD
+        /// - Username / Password: runtime credentials, never logged
+        /// - TimeoutSeconds
+        ///
+        /// Outputs contain the Shipment payload and final KACS Shipment response.
+        /// The access token is deliberately never returned or logged.
+        ///
+        /// Keep this IDO method NON-TRANSACTIONAL because it performs external HTTP.
+        /// </summary>
+        [IDOMethod(MethodFlags.None, "Infobar")]
+        public int SMK069SendOneShipmentKacs(
+            long DN_No,
+            string ApiEnvironment,
+            string Username,
+            string Password,
+            int TimeoutSeconds,
+            ref string LogRowPointer,
+            ref string PayloadJson,
+            ref int LoginHttpCode,
+            ref int HttpCode,
+            ref string ResponseJson,
+            ref int TransportSuccess,
+            ref int BusinessSuccess,
+            ref string ErrorMessage,
+            ref int Success,
+            ref string Infobar)
+        {
+            LogRowPointer = null;
+            PayloadJson = null;
+            LoginHttpCode = 0;
+            HttpCode = 0;
+            ResponseJson = null;
+            TransportSuccess = 0;
+            BusinessSuccess = 0;
+            ErrorMessage = null;
+            Success = 0;
+            Infobar = null;
+
+            string loginUrl;
+            string shipmentUrl;
+            if (!ResolveKacsUrls(ApiEnvironment, out loginUrl, out shipmentUrl, ref ErrorMessage))
+            {
+                Infobar = ErrorMessage;
+                return 16;
+            }
+
+            if (string.IsNullOrWhiteSpace(Username) ||
+                string.IsNullOrWhiteSpace(Password))
+            {
+                ErrorMessage = "KACS Username dan Password wajib diisi saat runtime.";
+                Infobar = ErrorMessage;
+                return 16;
+            }
+
+            int timeoutSeconds = NormalizeTimeout(TimeoutSeconds);
+
+            Guid logRowPointer;
+            int prepareSuccess;
+            string prepareInfobar;
+
+            try
+            {
+                ExecutePrepareShipmentSend(
+                    DN_No,
+                    shipmentUrl,
+                    out logRowPointer,
+                    out PayloadJson,
+                    out prepareSuccess,
+                    out prepareInfobar);
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = "Prepare Shipment exception: " + ex.Message;
+                Infobar = ErrorMessage;
+                return 16;
+            }
+
+            if (prepareSuccess != 1 || logRowPointer == Guid.Empty)
+            {
+                ErrorMessage = string.IsNullOrWhiteSpace(prepareInfobar)
+                    ? "Prepare Shipment gagal."
+                    : prepareInfobar;
+                Infobar = ErrorMessage;
+                return 16;
+            }
+
+            LogRowPointer = logRowPointer.ToString();
+
+            string accessToken;
+            string loginResponse;
+            string loginError;
+
+            bool loginOk = TryKacsLogin(
+                loginUrl,
+                Username,
+                Password,
+                timeoutSeconds,
+                out LoginHttpCode,
+                out loginResponse,
+                out accessToken,
+                out loginError);
+
+            if (!loginOk)
+            {
+                ErrorMessage = string.IsNullOrWhiteSpace(loginError)
+                    ? "KACS login gagal."
+                    : loginError;
+
+                ResponseJson = BuildStageResponse(
+                    "LOGIN",
+                    LoginHttpCode,
+                    SanitizeLoginResponse(loginResponse),
+                    ErrorMessage);
+
+                int completeSuccess;
+                string completeInfobar;
+
+                try
+                {
+                    ExecuteCompleteShipmentSend(
+                        logRowPointer,
+                        LoginHttpCode,
+                        ResponseJson,
+                        0,
+                        out completeSuccess,
+                        out completeInfobar);
+                }
+                catch (Exception ex)
+                {
+                    ErrorMessage = AppendMessage(
+                        ErrorMessage,
+                        "Complete Shipment exception setelah KACS login gagal: " + ex.Message);
+                    Infobar = ErrorMessage;
+                    return 16;
+                }
+
+                Infobar =
+                    "KACS login gagal; Shipment DN " +
+                    DN_No.ToString(CultureInfo.InvariantCulture) +
+                    " tidak dikirim. " +
+                    ErrorMessage;
+
+                return 0;
+            }
+
+            string transportInfobar = null;
+            int transportReturn = SMK069PostShipmentPayload(
+                shipmentUrl,
+                PayloadJson,
+                "Authorization",
+                "Bearer " + accessToken,
+                "KACS_V1",
+                string.Empty,
+                timeoutSeconds,
+                ref HttpCode,
+                ref ResponseJson,
+                ref TransportSuccess,
+                ref BusinessSuccess,
+                ref ErrorMessage,
+                ref transportInfobar);
+
+            // Drop token immediately after constructing the request.
+            accessToken = null;
+
+            string completionResponse = BuildCompletionResponse(
+                ResponseJson,
+                ErrorMessage,
+                transportReturn);
+
+            int finalCompleteSuccess;
+            string finalCompleteInfobar;
+
+            try
+            {
+                ExecuteCompleteShipmentSend(
+                    logRowPointer,
+                    HttpCode,
+                    completionResponse,
+                    BusinessSuccess,
+                    out finalCompleteSuccess,
+                    out finalCompleteInfobar);
+            }
+            catch (Exception ex)
+            {
+                Success = 0;
+                ErrorMessage = AppendMessage(
+                    ErrorMessage,
+                    "Complete Shipment exception: " + ex.Message);
+                Infobar =
+                    "Shipment DN " +
+                    DN_No.ToString(CultureInfo.InvariantCulture) +
+                    " sudah dikirim ke KACS tetapi Complete gagal. " +
+                    "Periksa outbound log sebelum retry. " +
+                    ErrorMessage;
+                return 16;
+            }
+
+            if (BusinessSuccess == 1 && finalCompleteSuccess != 1)
+            {
+                Success = 0;
+                ErrorMessage = AppendMessage(
+                    ErrorMessage,
+                    string.IsNullOrWhiteSpace(finalCompleteInfobar)
+                        ? "KACS menerima Shipment tetapi Complete tidak mengonfirmasi update sukses."
+                        : finalCompleteInfobar);
+                Infobar = ErrorMessage;
+                return 16;
+            }
+
+            Success =
+                BusinessSuccess == 1 && finalCompleteSuccess == 1
+                    ? 1
+                    : 0;
+
+            Infobar = BuildOneShipmentInfobar(
+                DN_No,
+                LogRowPointer,
+                Success,
+                prepareInfobar,
+                transportInfobar,
+                finalCompleteInfobar);
+
+            return 0;
+        }
+
+        /// <summary>
+        /// Existing generic one-Shipment method kept for diagnostics/backward compatibility.
+        /// Endpoint/auth are method parameters, not Shipment JSON fields.
         /// </summary>
         [IDOMethod(MethodFlags.None, "Infobar")]
         public int SMK069SendOneShipment(
@@ -133,11 +372,6 @@ namespace SMK069Shipment
                 return 16;
             }
 
-            // Complete's output Success follows the business outcome. Therefore
-            // Complete Success=0 is expected for a failed HTTP/business attempt
-            // that has already been persisted as log E. It is not a technical
-            // orchestration failure. A positive POS result, however, must also
-            // be successfully completed before we may report success.
             if (BusinessSuccess == 1 && completeSuccess != 1)
             {
                 Success = 0;
@@ -160,10 +394,6 @@ namespace SMK069Shipment
                 transportInfobar,
                 completeInfobar);
 
-            // A failed HTTP/business attempt is a handled result once Complete
-            // has executed without an IDO/std-error. The database log remains E
-            // and shipment_mst remains pending, so ReturnValue must be 0 while
-            // the business output Success remains 0.
             return 0;
         }
 
@@ -282,124 +512,145 @@ namespace SMK069Shipment
                 : response.Parameters[4].GetValue<int>();
         }
 
-        private static string BuildCompletionResponse(
-            string responseJson,
-            string errorMessage,
-            int transportReturn)
+        private static bool ResolveKacsUrls(
+            string environmentName,
+            out string loginUrl,
+            out string shipmentUrl,
+            ref string errorMessage)
         {
-            if (!string.IsNullOrWhiteSpace(responseJson))
+            loginUrl = null;
+            shipmentUrl = null;
+
+            string environment = string.IsNullOrWhiteSpace(environmentName)
+                ? "UAT"
+                : environmentName.Trim().ToUpperInvariant();
+
+            string baseUrl;
+            if (environment == "UAT" || environment == "DEV")
             {
-                return responseJson;
+                baseUrl = KacsUatBaseUrl;
+            }
+            else if (environment == "PROD" || environment == "PRODUCTION")
+            {
+                baseUrl = KacsProdBaseUrl;
+            }
+            else
+            {
+                errorMessage = "ApiEnvironment harus UAT atau PROD.";
+                return false;
             }
 
-            if (string.IsNullOrWhiteSpace(errorMessage))
-            {
-                return null;
-            }
-
-            return
-                "{\"SMK069_TRANSPORT_ERROR\":\"" +
-                JsonEscape(errorMessage) +
-                "\",\"METHOD_RETURN\":" +
-                transportReturn.ToString(CultureInfo.InvariantCulture) +
-                "}";
+            loginUrl = baseUrl + KacsLoginPath;
+            shipmentUrl = baseUrl + KacsShipmentPath;
+            return true;
         }
 
-        private static string JsonEscape(string value)
+        private static bool TryKacsLogin(
+            string loginUrl,
+            string username,
+            string password,
+            int timeoutSeconds,
+            out int httpCode,
+            out string responseBody,
+            out string accessToken,
+            out string errorMessage)
         {
-            if (value == null)
+            httpCode = 0;
+            responseBody = null;
+            accessToken = null;
+            errorMessage = null;
+
+            string requestJson =
+                "{\"username\":\"" + JsonEscape(username) +
+                "\",\"password\":\"" + JsonEscape(password) + "\"}";
+
+            Uri endpoint;
+            string endpointError = null;
+            if (!TryValidateEndpoint(loginUrl, out endpoint, ref endpointError))
             {
-                return string.Empty;
+                errorMessage = endpointError;
+                return false;
             }
 
-            StringBuilder escaped = new StringBuilder(value.Length + 16);
-
-            foreach (char c in value)
+            try
             {
-                switch (c)
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(endpoint);
+                request.Method = "POST";
+                request.ContentType = "application/json; charset=utf-8";
+                request.Accept = "application/json";
+                request.Timeout = timeoutSeconds * 1000;
+                request.ReadWriteTimeout = timeoutSeconds * 1000;
+                request.KeepAlive = false;
+
+                byte[] requestBytes = Encoding.UTF8.GetBytes(requestJson);
+                request.ContentLength = requestBytes.Length;
+
+                using (Stream requestStream = request.GetRequestStream())
                 {
-                    case '\\':
-                        escaped.Append("\\\\");
-                        break;
-                    case '"':
-                        escaped.Append("\\\"");
-                        break;
-                    case '\r':
-                        escaped.Append("\\r");
-                        break;
-                    case '\n':
-                        escaped.Append("\\n");
-                        break;
-                    case '\t':
-                        escaped.Append("\\t");
-                        break;
-                    default:
-                        if (c < 32)
-                        {
-                            escaped.Append(
-                                "\\u" +
-                                ((int)c).ToString(
-                                    "x4",
-                                    CultureInfo.InvariantCulture));
-                        }
-                        else
-                        {
-                            escaped.Append(c);
-                        }
-                        break;
+                    requestStream.Write(requestBytes, 0, requestBytes.Length);
                 }
+
+                try
+                {
+                    using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                    {
+                        httpCode = (int)response.StatusCode;
+                        responseBody = LimitBody(ReadResponseBody(response));
+                    }
+                }
+                catch (WebException ex)
+                {
+                    HttpWebResponse errorResponse = ex.Response as HttpWebResponse;
+                    if (errorResponse != null)
+                    {
+                        using (errorResponse)
+                        {
+                            httpCode = (int)errorResponse.StatusCode;
+                            responseBody = LimitBody(ReadResponseBody(errorResponse));
+                            errorMessage =
+                                "KACS login HTTP error " +
+                                httpCode.ToString(CultureInfo.InvariantCulture) +
+                                BuildBodySuffix(SanitizeLoginResponse(responseBody));
+                        }
+                    }
+                    else
+                    {
+                        errorMessage = "KACS login transport gagal: " + ex.Message;
+                    }
+
+                    return false;
+                }
+
+                if (httpCode != 200)
+                {
+                    errorMessage =
+                        "KACS login gagal. HTTP " +
+                        httpCode.ToString(CultureInfo.InvariantCulture) +
+                        BuildBodySuffix(SanitizeLoginResponse(responseBody));
+                    return false;
+                }
+
+                Match tokenMatch = Regex.Match(
+                    responseBody ?? string.Empty,
+                    "\\\"token\\\"\\s*:\\s*\\\"(?<token>[^\\\"]+)\\\"",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+                if (!tokenMatch.Success ||
+                    string.IsNullOrWhiteSpace(tokenMatch.Groups["token"].Value))
+                {
+                    errorMessage =
+                        "KACS login HTTP 200 tetapi token tidak ditemukan pada response.";
+                    return false;
+                }
+
+                accessToken = tokenMatch.Groups["token"].Value;
+                return true;
             }
-
-            return escaped.ToString();
-        }
-
-        private static string AppendMessage(string current, string next)
-        {
-            if (string.IsNullOrWhiteSpace(current))
+            catch (Exception ex)
             {
-                return next;
+                errorMessage = "KACS login exception: " + ex.Message;
+                return false;
             }
-
-            if (string.IsNullOrWhiteSpace(next))
-            {
-                return current;
-            }
-
-            return current + " | " + next;
-        }
-
-        private static string BuildOneShipmentInfobar(
-            long dnNo,
-            string logRowPointer,
-            int success,
-            string prepareInfobar,
-            string transportInfobar,
-            string completeInfobar)
-        {
-            string summary =
-                "SMK069 Shipment DN=" +
-                dnNo.ToString(CultureInfo.InvariantCulture) +
-                "; Log=" +
-                (logRowPointer ?? string.Empty) +
-                "; Result=" +
-                (success == 1 ? "SUCCESS" : "FAILED") +
-                ".";
-
-            if (!string.IsNullOrWhiteSpace(transportInfobar))
-            {
-                summary += " " + transportInfobar;
-            }
-
-            if (!string.IsNullOrWhiteSpace(completeInfobar))
-            {
-                summary += " Complete=" + completeInfobar;
-            }
-            else if (!string.IsNullOrWhiteSpace(prepareInfobar))
-            {
-                summary += " Prepare=" + prepareInfobar;
-            }
-
-            return summary;
         }
 
         [IDOMethod(MethodFlags.None, "Infobar")]
@@ -455,9 +706,7 @@ namespace SMK069Shipment
                 return 16;
             }
 
-            int timeoutSeconds = TimeoutSeconds <= 0
-                ? DefaultTimeoutSeconds
-                : Math.Min(TimeoutSeconds, MaximumTimeoutSeconds);
+            int timeoutSeconds = NormalizeTimeout(TimeoutSeconds);
 
             if (!ValidateAuthHeaderName(AuthHeaderName, ref ErrorMessage))
             {
@@ -538,8 +787,6 @@ namespace SMK069Shipment
                     successMode,
                     ErrorMessage);
 
-                // Transport/business failures are handled outputs so SendOne can
-                // call Complete and persist E/retry state.
                 return 0;
             }
             catch (Exception ex)
@@ -550,6 +797,13 @@ namespace SMK069Shipment
                 Infobar = ErrorMessage;
                 return 0;
             }
+        }
+
+        private static int NormalizeTimeout(int timeoutSeconds)
+        {
+            return timeoutSeconds <= 0
+                ? DefaultTimeoutSeconds
+                : Math.Min(timeoutSeconds, MaximumTimeoutSeconds);
         }
 
         private static bool TryValidateEndpoint(
@@ -581,7 +835,7 @@ namespace SMK069Shipment
             if (!string.IsNullOrEmpty(endpoint.UserInfo))
             {
                 errorMessage =
-                    "Credential tidak boleh ditanam di URL. Gunakan AuthHeaderName/AuthHeaderValue.";
+                    "Credential tidak boleh ditanam di URL.";
                 return false;
             }
 
@@ -623,7 +877,8 @@ namespace SMK069Shipment
                 name.Equals("Connection", StringComparison.OrdinalIgnoreCase))
             {
                 errorMessage =
-                    "AuthHeaderName tidak boleh memakai reserved HTTP header: " + name + ".";
+                    "AuthHeaderName tidak boleh memakai reserved HTTP header: " +
+                    name + ".";
                 return false;
             }
 
@@ -719,17 +974,82 @@ namespace SMK069Shipment
                 "Shipment tidak boleh dianggap posted hanya dari HTTP status.";
         }
 
-        private static string BuildHttpError(int httpCode, string body)
+        private static string BuildCompletionResponse(
+            string responseJson,
+            string errorMessage,
+            int transportReturn)
         {
-            string suffix = string.IsNullOrWhiteSpace(body)
+            if (!string.IsNullOrWhiteSpace(responseJson))
+            {
+                return responseJson;
+            }
+
+            if (string.IsNullOrWhiteSpace(errorMessage))
+            {
+                return null;
+            }
+
+            return
+                "{\"SMK069_TRANSPORT_ERROR\":\"" +
+                JsonEscape(errorMessage) +
+                "\",\"METHOD_RETURN\":" +
+                transportReturn.ToString(CultureInfo.InvariantCulture) +
+                "}";
+        }
+
+        private static string BuildStageResponse(
+            string stage,
+            int httpCode,
+            string responseBody,
+            string errorMessage)
+        {
+            return
+                "{\"STAGE\":\"" + JsonEscape(stage) +
+                "\",\"HTTP_CODE\":" +
+                httpCode.ToString(CultureInfo.InvariantCulture) +
+                ",\"RESPONSE\":\"" +
+                JsonEscape(responseBody ?? string.Empty) +
+                "\",\"ERROR\":\"" +
+                JsonEscape(errorMessage ?? string.Empty) +
+                "\"}";
+        }
+
+        private static string SanitizeLoginResponse(string responseBody)
+        {
+            if (string.IsNullOrEmpty(responseBody))
+            {
+                return responseBody;
+            }
+
+            string sanitized = Regex.Replace(
+                responseBody,
+                "(\\\"token\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")",
+                "$1<redacted>$2",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+            sanitized = Regex.Replace(
+                sanitized,
+                "(\\\"refresh_token\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")",
+                "$1<redacted>$2",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+            return sanitized;
+        }
+
+        private static string BuildBodySuffix(string body)
+        {
+            return string.IsNullOrWhiteSpace(body)
                 ? string.Empty
                 : "; Response=" + LimitBody(body, 2000);
+        }
 
+        private static string BuildHttpError(int httpCode, string body)
+        {
             return string.Format(
                 CultureInfo.InvariantCulture,
                 "POS API HTTP error {0}{1}",
                 httpCode,
-                suffix);
+                BuildBodySuffix(body));
         }
 
         private static string BuildInfobar(
@@ -756,6 +1076,103 @@ namespace SMK069Shipment
             }
 
             return summary;
+        }
+
+        private static string BuildOneShipmentInfobar(
+            long dnNo,
+            string logRowPointer,
+            int success,
+            string prepareInfobar,
+            string transportInfobar,
+            string completeInfobar)
+        {
+            string summary =
+                "SMK069 Shipment DN=" +
+                dnNo.ToString(CultureInfo.InvariantCulture) +
+                "; Log=" +
+                (logRowPointer ?? string.Empty) +
+                "; Result=" +
+                (success == 1 ? "SUCCESS" : "FAILED") +
+                ".";
+
+            if (!string.IsNullOrWhiteSpace(transportInfobar))
+            {
+                summary += " " + transportInfobar;
+            }
+
+            if (!string.IsNullOrWhiteSpace(completeInfobar))
+            {
+                summary += " Complete=" + completeInfobar;
+            }
+            else if (!string.IsNullOrWhiteSpace(prepareInfobar))
+            {
+                summary += " Prepare=" + prepareInfobar;
+            }
+
+            return summary;
+        }
+
+        private static string AppendMessage(string current, string next)
+        {
+            if (string.IsNullOrWhiteSpace(current))
+            {
+                return next;
+            }
+
+            if (string.IsNullOrWhiteSpace(next))
+            {
+                return current;
+            }
+
+            return current + " | " + next;
+        }
+
+        private static string JsonEscape(string value)
+        {
+            if (value == null)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder escaped = new StringBuilder(value.Length + 16);
+
+            foreach (char c in value)
+            {
+                switch (c)
+                {
+                    case '\\':
+                        escaped.Append("\\\\");
+                        break;
+                    case '"':
+                        escaped.Append("\\\"");
+                        break;
+                    case '\r':
+                        escaped.Append("\\r");
+                        break;
+                    case '\n':
+                        escaped.Append("\\n");
+                        break;
+                    case '\t':
+                        escaped.Append("\\t");
+                        break;
+                    default:
+                        if (c < 32)
+                        {
+                            escaped.Append(
+                                "\\u" +
+                                ((int)c).ToString(
+                                    "x4",
+                                    CultureInfo.InvariantCulture));
+                        }
+                        else
+                        {
+                            escaped.Append(c);
+                        }
+                        break;
+                }
+            }
+
+            return escaped.ToString();
         }
 
         private static string LimitBody(string body)
