@@ -1,13 +1,12 @@
-CREATE   VIEW dbo.SMK069_ShipmentAPI_mst
+CREATE OR ALTER VIEW dbo.SMK069_ShipmentAPI_mst
 AS
 
 SELECT
     sh.site_ref AS site_ref,
 
-    sh.cust_num AS cust_code,
+    NULLIF(LTRIM(RTRIM(cmap.KacsCustCode)), '') AS cust_code,
 
-    -- Temporary, nanti mapping ke POS warehouse code
-    sh.whse AS whse_code,
+    NULLIF(LTRIM(RTRIM(wmap.KacsWhsCode)), '') AS whse_code,
 
     co.co_num AS doc_no,
 
@@ -17,7 +16,7 @@ SELECT
 
     co.cust_po AS Store_Order_No,
 
-    cst.cust_type AS store_code,
+    NULLIF(LTRIM(RTRIM(cmap.KacsStoreCode)), '') AS store_code,
 
     sh.veh_num AS Vehicle_number,
 
@@ -25,7 +24,9 @@ SELECT
 
     shipseq.qty_shipped AS shipment_qty,
 
-    coi.u_m AS UOM,
+    -- KACS contract uses numeric UOM in JSON (example: 1).
+    -- Mapping is Shipment-specific; do not reuse POS inbound/CO mapping.
+    umap.KacsUom AS UOM,
 
     coi.price AS Price,
 
@@ -53,11 +54,6 @@ LEFT JOIN dbo.co_mst co
     ON co.co_num = coi.co_num
    AND co.site_ref = coi.site_ref
 
-LEFT JOIN dbo.customer_mst cst
-    ON cst.cust_num = sh.cust_num
-   AND cst.cust_seq = 0
-   AND cst.site_ref = sh.site_ref
-
 LEFT JOIN dbo.shipment_seq_mst shipseq
     ON shipseq.shipment_id = shl.shipment_id
    AND shipseq.shipment_line = shl.shipment_line
@@ -66,4 +62,19 @@ LEFT JOIN dbo.shipment_seq_mst shipseq
 LEFT JOIN dbo.lot_mst lot
     ON lot.lot = shipseq.lot
    AND lot.item = coi.item
-   AND lot.site_ref = sh.site_ref;
+   AND lot.site_ref = sh.site_ref
+
+LEFT JOIN dbo.ue_SMK069_shipment_customer_map_mst cmap
+    ON cmap.SiteRef = sh.site_ref
+   AND cmap.SytelineCustNum = sh.cust_num
+   AND cmap.IsActive = 1
+
+LEFT JOIN dbo.ue_SMK069_shipment_whse_map_mst wmap
+    ON wmap.SiteRef = sh.site_ref
+   AND wmap.SytelineWhse = sh.whse
+   AND wmap.IsActive = 1
+
+LEFT JOIN dbo.ue_SMK069_shipment_uom_map_mst umap
+    ON umap.SiteRef = sh.site_ref
+   AND umap.SytelineUom = coi.u_m
+   AND umap.IsActive = 1;
