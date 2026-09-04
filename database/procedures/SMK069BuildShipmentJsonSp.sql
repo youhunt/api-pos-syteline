@@ -1,4 +1,4 @@
-CREATE OR ALTER PROCEDURE dbo.SMK069BuildShipmentJsonSp
+CREATE   PROCEDURE dbo.SMK069BuildShipmentJsonSp
 (
     @DN_No       BIGINT,
     @PayloadJson NVARCHAR(MAX) OUTPUT,
@@ -12,12 +12,12 @@ BEGIN
     ------------------------------------------------------------
     -- SITE CONTEXT
     ------------------------------------------------------------
-    DECLARE @Site SiteType;
+    DECLARE @Site SiteType
 
     SELECT @Site =
-        RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0));
+        RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
 
-    EXEC SetSiteSp @Site, NULL;
+    EXEC SetSiteSp @Site, NULL
 
     ------------------------------------------------------------
     -- INITIAL OUTPUT
@@ -151,15 +151,13 @@ BEGIN
     ------------------------------------------------------------
     IF NULLIF(LTRIM(RTRIM(ISNULL(@CustCode, ''))), '') IS NULL
     BEGIN
-        SET @Infobar =
-            'CUST_CODE KACS kosong/belum dimapping pada Shipment.';
+        SET @Infobar = 'CUST_CODE kosong.';
         RETURN 0;
     END;
 
     IF NULLIF(LTRIM(RTRIM(ISNULL(@WhseCode, ''))), '') IS NULL
     BEGIN
-        SET @Infobar =
-            'WHS_CODE KACS kosong/belum dimapping pada Shipment.';
+        SET @Infobar = 'WHS_CODE kosong.';
         RETURN 0;
     END;
 
@@ -181,15 +179,8 @@ BEGIN
         RETURN 0;
     END;
 
-    IF NULLIF(LTRIM(RTRIM(ISNULL(@StoreCode, ''))), '') IS NULL
-    BEGIN
-        SET @Infobar =
-            'STORE_CODE KACS kosong/belum dimapping pada Shipment.';
-        RETURN 0;
-    END;
-
     ------------------------------------------------------------
-    -- DETAIL VALIDATION
+    -- PRODUCT VALIDATION
     ------------------------------------------------------------
     IF EXISTS
     (
@@ -211,23 +202,6 @@ BEGIN
         RETURN 0;
     END;
 
-    IF EXISTS
-    (
-        SELECT 1
-        FROM dbo.SMK069_ShipmentAPI_mst
-        WHERE site_ref = @Site
-          AND DN_No = @DN_No
-          AND ISNULL(Api_post, 0) = 0
-          AND ISNULL(shipment_qty, 0) > 0
-          AND (UOM IS NULL OR UOM <= 0)
-    )
-    BEGIN
-        SET @Infobar =
-            'Terdapat detail shipment dengan UOM KACS kosong/belum dimapping.';
-
-        RETURN 0;
-    END;
-
     ------------------------------------------------------------
     -- BUILD JSON
     ------------------------------------------------------------
@@ -244,7 +218,8 @@ BEGIN
 
             @StoreOrderNo AS [STORE_ORDER_NO],
 
-            @StoreCode AS [STORE_CODE],
+            ISNULL(@StoreCode, '')
+                AS [STORE_CODE],
 
             ISNULL(@VehicleNumber, '')
                 AS [VEHICLE_NUMBER],
@@ -303,14 +278,29 @@ BEGIN
     -- SUCCESS
     ------------------------------------------------------------
     SET @Success = 1;
-    SET @Infobar =
-        CONCAT(
-            'Shipment DN ',
-            CONVERT(VARCHAR(30), @DN_No),
-            ' berhasil dibuat menjadi JSON KACS untuk Site ',
-            @Site,
-            '.'
-        );
+
+    IF NULLIF(LTRIM(RTRIM(ISNULL(@StoreCode, ''))), '') IS NULL
+    BEGIN
+        SET @Infobar =
+            CONCAT(
+                'Shipment DN ',
+                CONVERT(VARCHAR(30), @DN_No),
+                ' berhasil dibuat menjadi JSON untuk Site ',
+                @Site,
+                '. WARNING: STORE_CODE masih kosong.'
+            );
+    END
+    ELSE
+    BEGIN
+        SET @Infobar =
+            CONCAT(
+                'Shipment DN ',
+                CONVERT(VARCHAR(30), @DN_No),
+                ' berhasil dibuat menjadi JSON untuk Site ',
+                @Site,
+                '.'
+            );
+    END;
 
     RETURN 0;
 END;
