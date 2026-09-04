@@ -10,15 +10,8 @@ using Mongoose.IDO.Protocol;
 namespace SMK069Shipment
 {
     /// <summary>
-    /// Server-side HTTP transport foundation for SMK069 Shipment outbound.
-    ///
-    /// This class intentionally does not update shipment_mst or the outbound log.
-    /// The stable SQL contract remains:
-    ///   Build -> Prepare -> HTTP -> Complete
-    ///
-    /// The one-shipment orchestrator invokes Prepare and Complete through
-    /// Mongoose IDO stored-procedure methods, keeping direct database access out
-    /// of the extension class and preserving the caller's Mongoose context.
+    /// Server-side HTTP transport for SMK069 Shipment outbound.
+    /// Stable flow: Prepare -> HTTP -> Complete.
     /// </summary>
     [IDOExtensionClass("ue_SMK069ShipmentTransport")]
     public class SMK069ShipmentTransportExtension : IDOExtensionClass
@@ -28,16 +21,9 @@ namespace SMK069Shipment
         private const int MaximumReturnedBodyChars = 1048576;
 
         /// <summary>
-        /// Executes one complete Shipment outbound attempt:
-        /// Prepare -> HTTP POST -> Complete.
-        ///
-        /// Important:
-        /// - this IDO method must be configured as NON-TRANSACTIONAL because it
-        ///   performs an external HTTP call between two database operations;
-        /// - the stable Shipment stored procedures remain the source of truth
-        ///   for Site scoping, log lifecycle and shipment_mst posted flags;
-        /// - a handled POS/transport failure returns method code 0 with
-        ///   Success=0 after Complete has persisted the failed attempt.
+        /// Executes one complete Shipment outbound attempt.
+        /// This method must remain non-transactional because an external HTTP
+        /// call occurs between Prepare and Complete.
         /// </summary>
         [IDOMethod(MethodFlags.None, "Infobar")]
         public int SMK069SendOneShipment(
@@ -147,19 +133,24 @@ namespace SMK069Shipment
                 return 16;
             }
 
-            if (completeSuccess != 1)
+            // Complete's output Success follows the business outcome. Therefore
+            // Complete Success=0 is expected for a failed HTTP/business attempt
+            // that has already been persisted as log E. It is not a technical
+            // orchestration failure. A positive POS result, however, must also
+            // be successfully completed before we may report success.
+            if (BusinessSuccess == 1 && completeSuccess != 1)
             {
                 Success = 0;
                 ErrorMessage = AppendMessage(
                     ErrorMessage,
                     string.IsNullOrWhiteSpace(completeInfobar)
-                        ? "Complete Shipment mengembalikan Success=0."
+                        ? "POS menerima Shipment tetapi Complete tidak mengonfirmasi update sukses."
                         : completeInfobar);
                 Infobar = ErrorMessage;
                 return 16;
             }
 
-            Success = BusinessSuccess == 1 ? 1 : 0;
+            Success = BusinessSuccess == 1 && completeSuccess == 1 ? 1 : 0;
 
             Infobar = BuildOneShipmentInfobar(
                 DN_No,
@@ -169,8 +160,10 @@ namespace SMK069Shipment
                 transportInfobar,
                 completeInfobar);
 
-            // Business/HTTP failure is a handled attempt. Complete has already
-            // persisted log E and left shipment_mst pending.
+            // A failed HTTP/business attempt is a handled result once Complete
+            // has executed without an IDO/std-error. The database log remains E
+            // and shipment_mst remains pending, so ReturnValue must be 0 while
+            // the business output Success remains 0.
             return 0;
         }
 
@@ -490,13 +483,13 @@ namespace SMK069Shipment
                 byte[] requestBytes = Encoding.UTF8.GetBytes(RequestJson);
                 request.ContentLength = requestBytes.Length;
 
-                using (Stream requestStream = request.GetRequestStream())
-                {
-                    requestStream.Write(requestBytes, 0, requestBytes.Length);
-                }
-
                 try
                 {
+                    using (Stream requestStream = request.GetRequestStream())
+                    {
+                        requestStream.Write(requestBytes, 0, requestBytes.Length);
+                    }
+
                     using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
                     {
                         TransportSuccess = 1;
@@ -545,9 +538,8 @@ namespace SMK069Shipment
                     successMode,
                     ErrorMessage);
 
-                // A transport/business failure is returned as handled output (0), not
-                // a method exception, so the caller can still execute Complete with
-                // Success=0 and persist the failed attempt.
+                // Transport/business failures are handled outputs so SendOne can
+                // call Complete and persist E/retry state.
                 return 0;
             }
             catch (Exception ex)
@@ -721,7 +713,6 @@ namespace SMK069Shipment
                 return;
             }
 
-            // Conservative default while the POS business-response contract is open.
             businessSuccess = 0;
             errorMessage =
                 "HTTP 2xx diterima, tetapi POS success contract belum dikonfirmasi. " +
