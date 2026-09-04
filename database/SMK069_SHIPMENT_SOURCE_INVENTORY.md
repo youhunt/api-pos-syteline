@@ -13,6 +13,28 @@ Purpose: ensure tenant Shipment runtime objects are also preserved as standalone
 | `dbo.ue_SMK069_shipment_api_log_mst` | Implemented / UAT-used | ⚠️ exact tenant DDL not yet captured as standalone file |
 | `SMK069ShipmentSenderExtension.cs` | Implemented / UAT-used | ✅ `extension-classes/SMK069ShipmentSenderExtension.cs` |
 
+## Shipment source boundary
+
+Shipment outbound and POS inbound Customer Order are separate mapping domains.
+
+Shipment outbound business source is:
+
+```text
+dbo.SMK069_ShipmentAPI_mst
+```
+
+`dbo.SMK069BuildShipmentJsonSp` consumes that Shipment view.
+
+Do **not** use the POS inbound Customer Order mapping view below as a Shipment source or reverse mapping source:
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mapping_view
+```
+
+That view belongs only to the POS inbound -> Customer Order flow.
+
+If KACS rejects Shipment field values, the correction must be made in the Shipment view/source mapping (or a Shipment-specific mapping explicitly designed for it), not by reusing the inbound CO mapping view.
+
 ## Rule going forward
 
 A tenant Shipment object must not be considered fully source-controlled until its exact applied/runtime definition is preserved in Git.
