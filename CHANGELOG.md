@@ -1,3 +1,48 @@
+## 2026-09-07 — Multi-error response for POS Receive
+
+- recorded the POS team request: one API call must report every invalid material, not the first one;
+- reproduced with a three-line `DEV4-202` payload where only `AA00015C` was returned and `AH00034A` surfaced only after the first item was removed;
+- identified the cause: `SMK069ReceivePosSalesJsonSp` reduced the error set to `SELECT TOP (1)` before raising it;
+- received the tenant source and confirmed the procedure is a pure wrapper over Core, with no additional business logic at risk from a `CREATE OR ALTER`;
+- added `database/patches/2026-09-07-smk069-04-public-receive-multi-error.sql`: the message is now built with `FOR XML PATH` over every offending row, prefixed with the offending row count, and truncated with an explicit note when it exceeds the `THROW` limit;
+- added a `POS-103` branch so an unregistered material reads as such instead of falling through to the generic `POS-101` text;
+- excluded atomic-order sibling rows (`[POS-203]`) from the list whenever the batch has at least one real error, so valid lines do not bury the materials that actually need fixing; the filter is skipped when a batch contains nothing else;
+- established that `SMK069ReceivePosSalesJsonCoreSp` needs no change: its `TOP (10)` cap governs only its own `@Infobar`, which `THROW` discards;
+- kept `THROW 51069` deliberately, so the POS integrator needs no change on their side — `Parameters`/`ReturnValue` therefore stay null and the list remains capped at 2048 characters;
+- signature unchanged, so no IDO method metadata change and the Postman collection keeps working;
+- recorded that `[POS-101]` still cannot name the offending field, because it is raised when the mapping view returns no row at all; per-key match flags in the view would be a separate change;
+- incidental finding: `whse = P963` validated successfully, so `ue_SMK069_pos_sales_inbound_mapping_view` already translates POS-side warehouse codes — a lead for the Shipment `WHS_CODE` / `1009 Invalid params` issue in `docs/24` §17;
+- deferred to a later patch, pending agreement with the POS team: `RETURN 16` instead of `THROW` so the counts and an uncapped list reach the caller, plus a structured `@ErrorsJson` output;
+- new document: `docs/27-pos-receive-multi-error-response.md`.
+
+## 2026-09-04 — Partial success + CSV to Customer Order in one call
+
+- added `SMK069ProcessBatchCustomerOrdersSp`: the order loop shared by the JSON and CSV paths;
+- the loop now skips orders already at `process_status = 'P'`, so a retry no longer counts
+  pre-existing Customer Orders as newly created;
+- added `@CreatedCoNums` output to all three procedures, appended with a default so existing
+  IDO method metadata keeps binding by position;
+- reduced both wrapper validation gates to `@TransferredRows = 0`;
+- fixed the defect where a batch with one invalid order left every valid order stranded in
+  `ue_SMK069_temp_sales_mst` at status `V`, unreachable by retry under the same or a new
+  `batch_id` (`[POS-204]`);
+- removed `THROW 51071`; per-order Process failures are reported through the OUTPUT
+  parameters instead of aborting the T-SQL batch and discarding them;
+- kept `THROW 51070` for total failure only;
+- `SMK069RunCsvTestBatchSp` now calls Process and persists real `processed_orders` /
+  `process_error_orders`, which were previously written as literal zeros;
+- added `batch_status = 'P'` for partial batches; `upload_status` is now per row;
+- documented the new result contract: a partial batch returns `0` with the marker `PARTIAL`
+  in the Infobar, so callers must branch on `ProcessErrors` / `ValidationErrorOrders` rather
+  than on `ReturnValue` alone;
+- confirmed `ue_SMK069TempSales.SMK069ReceiveAndProcessPosSalesJsonSp` is NOT Transactional,
+  which is required because `SMK069ProcessCustomerOrderSp` issues an unqualified
+  `ROLLBACK TRANSACTION` in its CATCH block;
+- `SMK069ReceivePosSalesJsonCoreSp`, `SMK069ProcessCustomerOrderSp` and
+  `SMK069ImportCsvFileSp` were not modified;
+- new documents: `docs/26-partial-success-and-csv-to-customer-order.md`,
+  `implementation/25-deploy-partial-success-and-csv-to-co.md`.
+
 ## 2026-09-03 — Add KACS Shipment success contract mode
 
 - confirmed Shipment auth header is `Authorization: Bearer <token>`;
@@ -93,7 +138,6 @@ All notable changes to this repository will be documented in this file.
 - Open items remain the actual POS Shipment endpoint/auth/response contract,
   final WHS_CODE / STORE_CODE mapping, server-side HTTP sender, retry orchestration,
   scheduler, and final UAT.
-
 
 ### Added
 

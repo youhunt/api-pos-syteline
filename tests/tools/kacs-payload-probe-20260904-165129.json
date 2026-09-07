@@ -1,0 +1,26 @@
+﻿[
+    {
+        "Test":  "replay apa adanya",
+        "Http":  400,
+        "Verdict":  "GAGAL",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "V1 numerik",
+        "Http":  400,
+        "Verdict":  "GAGAL",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "V2 UOM=1",
+        "Http":  400,
+        "Verdict":  "GAGAL",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "V3 WHS=R963",
+        "Http":  400,
+        "Verdict":  "GAGAL",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    }
+]
