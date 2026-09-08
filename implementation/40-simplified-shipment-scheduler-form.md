@@ -1,106 +1,131 @@
-# Simplified Shipment Scheduler Form
+# Shipment Scheduler Form with Multi-Schedule Support
 
 Date: 2026-09-08
 
-This document supersedes the earlier need for a permanent Schedule selector grid on the left side of the first operational Shipment Scheduler form.
+This document corrects the earlier over-simplification that proposed hiding the Schedule list permanently.
 
-## Decision
+## Final decision
 
-For the first operational version, the form is simplified to three main sections:
+Because users must be able to add and maintain more than one scheduler definition, the Schedule selector/list remains part of the main form.
 
-1. Scheduler Configuration / Current Schedule
-2. Dashboard / Status Summary
-3. Shipment Queue Detail
+The Queue is still Site-level and is not owned by the currently selected Schedule while it is still READY.
 
-The permanent Schedule grid on the left is **not required** while the tenant is operating a single active schedule definition (`HOURLY`) for UAT/initial rollout.
-
-## Why
-
-A READY Shipment queue row is not owned by one schedule yet. It is a Site-level queue item. A schedule only becomes traceable to a Shipment after a scheduler run claims/processes the Shipment. Therefore a left-side Schedule selector does not add useful context to the READY queue for the first version.
-
-Current baseline:
+## Final first operational layout
 
 ```text
-ScheduleCode     = HOURLY
-ScheduleName     = Every 60 Minutes
-IntervalMinutes  = 60
-MaxShipments     = blank/default
-IsEnabled        = 0
++----------------------+-----------------------------------------------+
+| SCHEDULE LIST        | SELECTED SCHEDULE                             |
+|                      | Code         : HOURLY                          |
+| [New] [Delete]       | Name         : Every 60 Minutes               |
+|                      | Interval     : 60                              |
+| HOURLY               | Max/Run      : blank = default                |
+| FAST-15              | Enabled      : 0                              |
+| NIGHTLY              | Next Run     : --                             |
+|                      | Last Status  : N                              |
++----------------------+-----------------------------------------------+
+| DASHBOARD / SITE STATUS                                             |
+| API Active 1 | Master 0 | Ready 2 | Waiting 0 | Exhausted 0 | Max 50 |
++----------------------------------------------------------------------+
+| SHIPMENT QUEUE                                                       |
+| DN       | Status | Attempts | Max | Next Retry | HTTP | Last Error  |
+| P96327   | READY  | 0        | 5   |            |      |             |
+| P96328   | READY  | 0        | 5   |            |      |             |
++----------------------------------------------------------------------+
 ```
 
-## Recommended first-version layout
+## Collection semantics
 
 ```text
-+------------------------------------------------------------------+
-| Shipment Scheduler Control Center                                |
-+------------------------------------------------------------------+
-| SCHEDULER                                                        |
-| Code            : HOURLY                                         |
-| Name            : Every 60 Minutes                               |
-| Interval        : 60 Minutes                                     |
-| Max Shipments   : blank = Default Max Batch                      |
-| Enabled         : No                                             |
-| Next Run        : --                                             |
-| Run State       : Idle                                           |
-+------------------------------------------------------------------+
-| DASHBOARD                                                        |
-| API Active      : 1                                              |
-| Master Scheduler: 0                                              |
-| Ready           : 2                                              |
-| Waiting Retry   : 0                                              |
-| Exhausted       : 0                                              |
-| Default Max     : 50                                             |
-| Max Attempts    : 5                                              |
-+------------------------------------------------------------------+
-| SHIPMENT QUEUE                                                   |
-| DN       | Status | Attempts | Max | Next Retry | HTTP | Error   |
-| P96327   | READY  | 0        | 5   |            |      |         |
-| P96328   | READY  | 0        | 5   |            |      |         |
-+------------------------------------------------------------------+
+Schedule list/detail  = ue_SMK069ShipmentSchedules
+Dashboard             = ue_SMK069ShipmentSchedulerDashboard
+Queue                 = ue_SMK069ShipmentSchedulerQueue
+Config                = ue_SMK069ShipmentApiConfigs
 ```
 
-## Collection behavior
+The Schedule list and selected Schedule detail are two presentations of the same Schedule collection.
 
-The form still uses the existing IDOs:
+Dashboard and Queue are Site-level data.
+
+Do not link Queue to `ScheduleCode`.
+Do not treat Dashboard as owned by one Schedule.
+
+## Adding schedules
+
+Users must be able to add schedule definitions from the main form.
+
+Recommended controls:
 
 ```text
-ue_SMK069ShipmentSchedules
-ue_SMK069ShipmentSchedulerDashboard
-ue_SMK069ShipmentSchedulerQueue
-ue_SMK069ShipmentApiConfigs   (later/config section)
+New Schedule
+Delete/Deactivate Schedule
+Save Schedule
+Run Now
 ```
 
-For the first version, `ue_SMK069ShipmentSchedules` is filtered to the current Site and the single `HOURLY` row. There is no need to expose a left-side multi-row selector.
+A new Schedule row captures at least:
 
-Dashboard and Queue remain Site-level data. Queue is not linked by ScheduleCode.
+```text
+ScheduleCode
+ScheduleName
+IntervalMinutes
+MaxShipments
+IsEnabled
+StartAt / NextRunDate when applicable
+```
 
-## Future multi-schedule support
+The existing `SMK069SaveShipmentScheduleSp` already supports inserting a new Schedule when the `(SiteRef, ScheduleCode)` row does not exist.
 
-The database design continues to support multiple schedules. If the business later needs multiple active schedules such as `HOURLY`, `FAST-15`, or different batch policies, add one of these later:
+Examples:
 
-- a Schedule maintenance form, or
-- a Schedule dropdown/selector on this form.
+```text
+HOURLY   | Every 60 Minutes | 60 | default batch
+FAST-15  | Every 15 Minutes | 15 | 10 shipments/run
+NIGHTLY  | Nightly          | configured schedule policy
+```
 
-Do not add a permanent left-side grid merely to anticipate a future requirement that is not yet needed.
+## Queue ownership and traceability
 
-## Run traceability
+A READY queue row has no owning schedule yet.
 
-READY queue rows have no owning schedule. After a scheduler run claims/processes them, traceability must be captured through a Run Header / Run Detail model:
+When a due Schedule actually claims and processes a queue item, traceability should be recorded through the run model:
 
 ```text
 Schedule -> Run Header -> Run Detail -> Shipment
 ```
 
-This is documented in `implementation/39-shipment-scheduler-run-traceability-model.md`.
+This lets the operator answer:
 
-## Current next step
+```text
+Which schedule processed P96327?
+At what time?
+In which run?
+What was the result?
+```
 
-Keep the existing form objects but simplify the visible layout:
+The run traceability model is documented in:
 
-1. Remove/hide the left Schedule grid from the user-facing first version.
-2. Keep the `HOURLY` schedule fields as the Scheduler section.
-3. Load/show Dashboard values.
-4. Load/show Queue rows.
-5. Do not enable automatic sending yet.
-6. After the visible form works, wire Save Schedule / Master ON-OFF / Run Now.
-7. First UAT send uses `MaxShipments = 1`.
+```text
+implementation/39-shipment-scheduler-run-traceability-model.md
+```
+
+## Form behavior
+
+1. Left Schedule list stays visible so the user can select/add schedules.
+2. Right-side fields edit/show the selected Schedule.
+3. Dashboard is a global Site summary and must not change merely because a different Schedule row is selected.
+4. Queue is a global Site queue and must not change merely because a different Schedule row is selected.
+5. Later, Run History can be filtered by selected Schedule if desired, because a completed run does have a ScheduleCode.
+
+## Current UAT baseline
+
+```text
+Schedule: HOURLY
+Interval: 60
+Enabled : 0
+Dashboard ReadyCount: 2
+Queue:
+P96327 READY
+P96328 READY
+```
+
+Scheduler execution remains OFF until the form read model, run traceability, and first-send UAT are ready.
