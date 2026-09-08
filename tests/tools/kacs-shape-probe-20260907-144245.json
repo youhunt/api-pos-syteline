@@ -1,0 +1,51 @@
+﻿[
+    {
+        "Test":  "P0 payload asli",
+        "Hipotesis":  "Baseline. Harus mereproduksi 1009 yang sama seperti dari SyteLine.",
+        "Http":  400,
+        "BizCode":  "1009",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "P1 object kosong",
+        "Hipotesis":  "Kalau balasannya sama persis dengan P0, validator tidak membedakan apa pun.",
+        "Http":  400,
+        "BizCode":  "1009",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "P2 json asing",
+        "Hipotesis":  "Sama seperti P1. Dua-duanya identik dengan P0 = 1009 itu generik.",
+        "Http":  400,
+        "BizCode":  "1009",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "P3 dibungkus array",
+        "Hipotesis":  "Kalau berubah, KACS mengharapkan array of DN, bukan satu object.",
+        "Http":  400,
+        "BizCode":  "1009",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "P4 dibungkus data",
+        "Hipotesis":  "Kalau berubah, payload bisnis harus berada di dalam amplop.",
+        "Http":  400,
+        "BizCode":  "1009",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "P5 tanpa DETAIL",
+        "Hipotesis":  "Kalau berubah, masalahnya ada di dalam DETAIL, bukan di header.",
+        "Http":  400,
+        "BizCode":  "1009",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    },
+    {
+        "Test":  "P6 DETAIL satu baris",
+        "Hipotesis":  "Kalau berubah, ada baris DETAIL tertentu yang bermasalah.",
+        "Http":  400,
+        "BizCode":  "1009",
+        "Body":  "{\"code\":1009,\"message\":\"Invalid params\",\"data\":null}"
+    }
+]

@@ -1,3 +1,33 @@
+## 2026-09-08 — Shipment scheduler: config, retry state, backoff
+
+- Shipment send confirmed working end to end from Postman against `infor_dn`, so the transport investigation is closed;
+- withdrew patches 05 and 06 without applying them: `SMK069_ShipmentAPI_mst` now emits `UOM` as a number and `DN_No` as a prefixed string (`P96325`), so the UOM mapping table is unnecessary and the patch would have reverted `@DN_No` to `BIGINT`; both files carry a "DITARIK" header and are kept only as a record of the path taken;
+- added `database/patches/2026-09-08-smk069-07-shipment-scheduler-tables.sql`: `ue_SMK069_shipment_config_mst` (endpoint, timeout, batch size, retry policy, master switch) and `ue_SMK069_shipment_retry_mst` (per-shipment attempt state keyed on `SiteRef + ShipmentId`);
+- established that `ue_SMK069_shipment_api_log_mst.RetryCount` cannot drive a backoff, because Prepare creates a new log row whenever the previous one is in error, so the counter never grows past 1 for a repeatedly failing shipment;
+- added `database/patches/2026-09-08-smk069-08-shipment-scheduler-procs.sql`: `SMK069GetShipmentConfigSp`, `SMK069GetPendingShipmentsSp`, `SMK069RecordShipmentAttemptSp`;
+- retry policy is exponential backoff with an attempt budget — default 5 attempts at 15, 30, 60 and 120 minutes, then state `X` and no further automatic sends, so a malformed DN can no longer hit the POS API 24 times a day indefinitely;
+- credentials are TaskMan task parameters, not config columns, so no `SELECT` on the config table reveals them; recorded that Mongoose echoes input parameters back in the IDO response, so the method must not be invoked interactively with production credentials;
+- kept the scheduling interval out of the stored procedures entirely, per `docs/24` §2 — it belongs to the task schedule;
+- did not rewrite `SMK069ShipmentSenderExtension.cs`: `SMK069SendPendingShipments` must live in the same class because Mongoose binds one extension class per IDO, so `docs/29` §5 carries the method to paste in;
+- flagged two things to verify before building the task: that the `DN_No` type is `String` end to end after the 7 Sep change, and that `ue_SMK069_shipment_api_log_mst.ShipmentId` can hold `P96325` — if it is an integer, `SiteRef + ShipmentId` stops working as an idempotency key;
+- flagged that whether TaskMan can invoke an IDO method directly is unverified in this tenant; if it can only run a stored procedure, the HTTP call needs a different host;
+- new document: `docs/29-shipment-scheduler.md`.
+
+## 2026-09-07 — Shipment endpoint corrected to infor_dn; UOM mapping
+
+- POS team confirmed the Shipment endpoint for the Infor direction is `infor_dn`, not `kacs_dn`; every `1009 Invalid params` recorded between 3 and 7 September was a request to the wrong route;
+- POS team confirmed `UOM` must be a JSON integer, not a numeric string;
+- established that `1010 data is exist` proves the payload passed field validation, since a malformed payload answers `1009`;
+- therefore closed the theory that `CUST_CODE`, `WHS_CODE` and `STORE_CODE` needed translating into POS-side codes: the accepted payload carried the SyteLine values `PHD0001`, `P963`, `DEV4` and `R260902058` and all were accepted;
+- proposed closing `docs/24` §17 (WHS_CODE not finalized) and §18 (STORE_CODE source) on that evidence;
+- confirmed eight-decimal `SHIPMENT_QTY` and `PRICE` are accepted, so they are deliberately left unchanged;
+- added `database/patches/2026-09-07-smk069-05-create-pos-uom-map.sql`: new table `ue_SMK069_pos_uom_map_mst` mapping `SiteRef` + `syteline_um` to an integer `pos_uom_code`, seeded empty on purpose because the only value seen so far came from a hand-edited UAT payload rather than the POS team;
+- added `database/patches/2026-09-07-smk069-06-shipment-uom-integer.sql`: `SMK069BuildShipmentJsonSp` now emits `UOM` as a number resolved through that table, and refuses to build a payload when any line's `u_m` is unmapped, naming the offending values;
+- signature of `SMK069BuildShipmentJsonSp` unchanged, so no IDO method metadata change;
+- did not rewrite `SMK069ShipmentSenderExtension.cs`: its hard-coded shipment path is wrong, but the correct base path is still disputed and the class is ~1200 lines of working code — the constant is edited in place once the path is confirmed; for UAT, `SMK069SendOneShipment` already accepts `EndpointUrl` as a parameter;
+- open with the POS team: whether the base path is `/inventory/v1/` or `/inventory-phi/v1/`, and how globally unique `DN_NO` must be, given that SyteLine's `shipment_id` restarts at 1 per site while the POS sample used `DN98112`;
+- new document: `docs/28-shipment-infor-endpoint-and-uom.md`.
+
 ## 2026-09-07 — Multi-error response for POS Receive
 
 - recorded the POS team request: one API call must report every invalid material, not the first one;
