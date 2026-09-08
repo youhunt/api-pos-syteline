@@ -22,6 +22,32 @@ Default | P96328 | 0 | 5 | P | READY
 
 The scheduler must remain OFF during this form-build milestone.
 
+## Important: collection relationship model
+
+The four collections on this form are **not** a master-detail chain.
+
+They represent different views of the same Site-level Shipment Scheduler subsystem:
+
+```text
+Schedules  = schedule definitions for the Site
+Dashboard  = aggregate Site-level scheduler status
+Queue      = all eligible/pending Shipment DN for the Site
+Config     = SHIPMENT API/scheduler configuration for the Site
+```
+
+Therefore:
+
+- do **not** link Queue to the selected Schedule;
+- do **not** link Dashboard to the selected Schedule;
+- do **not** make Config a child of one Schedule;
+- all of them may load independently on the same form;
+- each collection must be constrained by the current `SiteRef`;
+- Config must additionally be constrained to `ApiName = 'SHIPMENT'`.
+
+This is intentional. Every active schedule consumes the same Site-level Shipment queue. A DN does not belong to one specific schedule.
+
+For current UAT evidence the Site is `Default`. If the tenant form expression for the current Site has not yet been confirmed, using a temporary `SiteRef = 'Default'` collection filter is acceptable for this UAT form only; replace it with the current-site expression before production/multi-site rollout.
+
 ## 1. Create the base form
 
 Use the Form Wizard / New Form flow.
@@ -37,6 +63,12 @@ Device Type        : Any
 Use the existing custom project/scope used by SMK069 tenant customizations.
 
 Do not create a new database object from the Form Wizard.
+
+Primary Schedule collection filter for current UAT:
+
+```text
+SiteRef = Default
+```
 
 ## 2. Primary Schedule fields for first visible version
 
@@ -88,7 +120,7 @@ RunState         = I
 LastRunStatus    = N
 ```
 
-## 3. Add Dashboard secondary collection
+## 3. Add Dashboard independent collection
 
 In Design Mode add a collection using:
 
@@ -96,7 +128,13 @@ In Design Mode add a collection using:
 IDO : ue_SMK069ShipmentSchedulerDashboard
 ```
 
-Filter/current-site behavior should resolve to the current Site. For the current tenant baseline this is `Default`.
+This is an **independent Site-level collection**, not a child of Schedule.
+
+Current UAT filter:
+
+```text
+SiteRef = Default
+```
 
 Bind visible components to:
 
@@ -140,12 +178,20 @@ Waiting Retry    = 0
 Exhausted        = 0
 ```
 
-## 4. Add Queue secondary collection/grid
+## 4. Add Queue independent collection/grid
 
 Add another collection:
 
 ```text
 IDO : ue_SMK069ShipmentSchedulerQueue
+```
+
+This is also an **independent Site-level collection**. It must show the whole current Shipment queue for the Site, regardless of which schedule row is selected.
+
+Current UAT filter:
+
+```text
+SiteRef = Default
 ```
 
 Display a read-only grid with:
@@ -182,11 +228,24 @@ P96328 | READY | 0 | 5
 
 This grid is read-only. Do not allow direct editing of retry state.
 
-## 5. Configuration section/tab
+## 5. Configuration independent collection/tab
 
-Use `ue_SMK069ShipmentApiConfigs` as another secondary collection or defer it until the base form is visible.
+Use:
 
-When added, show:
+```text
+IDO : ue_SMK069ShipmentApiConfigs
+```
+
+This is not linked to the selected Schedule. It represents the Site-level SHIPMENT configuration.
+
+Current UAT filter:
+
+```text
+SiteRef = Default
+AND ApiName = SHIPMENT
+```
+
+Show:
 
 ```text
 EndpointUrl
@@ -232,7 +291,20 @@ P96328 | READY | 0/5
 
 This is enough for the first stakeholder screenshot/demo.
 
-## 7. Do not wire yet in this milestone
+## 7. Expected runtime behavior with independent collections
+
+It is correct for all sections to be visible at once:
+
+```text
+Schedule area  -> one or more Site schedule rows
+Dashboard      -> one Site summary row
+Queue          -> all current Site pending/retry DN rows
+Config         -> one SHIPMENT config row for the Site
+```
+
+Changing the selected schedule must **not** hide or change the queue just because of a collection link. Only schedule-specific fields such as `LastRunStatus`, `LastSucceeded`, `LastFailed`, etc. belong to the selected Schedule row.
+
+## 8. Do not wire yet in this milestone
 
 Do not yet enable:
 
@@ -244,17 +316,18 @@ automatic HTTP sending
 Reset Retry
 ```
 
-Those are wired after the form proves all four IDOs load correctly.
+Those are wired after the form proves all four IDOs load correctly with the proper Site filters.
 
-## 8. Next phase after visible form
+## 9. Next phase after visible form
 
 ```text
-1. Register form-control stored procedure methods on ue_SMK069ShipmentTransport.
-2. Wire Save Schedule.
-3. Wire Master ON/OFF.
-4. Wire Run Now (mark due only; no credentials on form).
-5. Add Retry Reset action.
-6. Add/verify SMK069RunDueShipmentSchedule extension method.
-7. Create TaskMan heartbeat.
-8. UAT first with MaxShipments = 1.
+1. Confirm Site filters on all four collections.
+2. Register form-control stored procedure methods on ue_SMK069ShipmentTransport.
+3. Wire Save Schedule.
+4. Wire Master ON/OFF.
+5. Wire Run Now (mark due only; no credentials on form).
+6. Add Retry Reset action.
+7. Add/verify SMK069RunDueShipmentSchedule extension method.
+8. Create TaskMan heartbeat.
+9. UAT first with MaxShipments = 1.
 ```
