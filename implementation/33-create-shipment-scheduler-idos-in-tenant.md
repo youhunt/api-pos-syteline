@@ -180,7 +180,9 @@ Extends            : blank
 Extend And Replace : unchecked
 ```
 
-Expose:
+### Confirmed tenant wizard result
+
+The view exposes exactly these **11 properties** in the IDO Wizard:
 
 ```text
 SiteRef
@@ -195,6 +197,15 @@ NextAttemptDate
 LastHttpCode
 LastError
 ```
+
+Because this is a view and has no physical table primary key, use a logical pseudo-key for Mongoose row identity:
+
+```text
+SiteRef     = Pseudo Key
+ShipmentId  = Pseudo Key
+```
+
+Do not mark status/date/error columns as pseudo keys. The logical queue row is one Shipment per Site.
 
 This IDO is read-only and is intended for the form queue grid.
 
@@ -225,6 +236,34 @@ Extends            : blank
 Extend And Replace : unchecked
 ```
 
+### Confirmed tenant wizard result
+
+The view exposes exactly these **13 properties**:
+
+```text
+SiteRef
+MasterEnabled
+ApiActive
+ScheduleCount
+ActiveScheduleCount
+NextRunDate
+DefaultMaxBatchSize
+MaxAttempts
+ReadyCount
+WaitingBackoffCount
+ExhaustedCount
+SucceededToday
+FailedToday
+```
+
+The dashboard view is one row per Site, so use:
+
+```text
+SiteRef = Pseudo Key
+```
+
+Do not mark the count/status columns as pseudo keys.
+
 Current verified tenant baseline:
 
 ```text
@@ -248,11 +287,12 @@ FailedToday         = 0
 1. Verify ue_SMK069ShipmentSchedules loads HOURLY.
 2. Finish/create ue_SMK069ShipmentApiConfigs with the 24 generated properties.
 3. Verify the SHIPMENT config row through Load Collection.
-4. Create read-only ue_SMK069ShipmentSchedulerDashboard.
-5. Create read-only ue_SMK069ShipmentSchedulerQueue.
-6. Build minimum SMK069ShipmentScheduler form.
-7. Keep scheduler OFF while building/testing the form.
-8. Register control SP methods and runner only after the visible form is stable.
+4. Finish/create read-only ue_SMK069ShipmentSchedulerDashboard with SiteRef pseudo key.
+5. Finish/create read-only ue_SMK069ShipmentSchedulerQueue with SiteRef + ShipmentId pseudo keys.
+6. Verify both view IDOs through Load Collection.
+7. Build minimum SMK069ShipmentScheduler form.
+8. Keep scheduler OFF while building/testing the form.
+9. Register control SP methods and runner only after the visible form is stable.
 ```
 
 ## Form editability rule
