@@ -64,11 +64,54 @@ Max Concurrent  : 1 for first UAT
 
 For IDOMTH tasks, Infor TaskMan uses the `IDO.Method` executable-name format.
 
-Do not store POS credentials in database config or on the Scheduler form. Credentials are runtime TaskMan inputs only.
+## Important correction: Background Queue is parent-driven
+
+`Background Queue` is not a standalone task selector. It is a recurrence/scheduling dialog that receives the task name and the event to execute from a parent form.
+
+Opening `Background Queue` directly therefore shows only:
+
+```text
+Once / Daily / Weekly / Monthly
+Occurs At / Occurs Every
+Start Date / End Date
+```
+
+and does NOT show a Task Name field.
+
+For the custom Shipment Scheduler form, use a form event with Response Type:
+
+```text
+Run Background Task
+```
+
+Task Name:
+
+```text
+SMK069ShipmentScheduler
+```
+
+For immediate one-time execution, use Task Status `READY`.
+
+If a recurrence dialog is desired, add a second event/menu action that opens `BackgroundQueue` as a modal child and passes the task/event context to it. Do not expect a task selector when `BackgroundQueue` is opened standalone.
+
+## Credential warning
+
+The current runner signature still has:
+
+```text
+Username IN
+Password IN
+```
+
+Do NOT place production POS credentials in visible Task Parameters. Mongoose can expose background-task parameters in Active Background Tasks / task diagnostics. This supersedes the earlier wording that said TaskMan parameters were automatically a safe secret store.
+
+Before production recurring scheduling, change the runner to obtain POS credentials from an approved secure secret/configuration mechanism, or use a dedicated UAT-only disposable credential for a controlled one-time test and rotate it immediately afterward.
+
+Do not store a production password in the Scheduler form, plain database columns, or GitHub.
 
 ## Heartbeat design
 
-TaskMan is only a fixed heartbeat. Suggested UAT heartbeat:
+TaskMan is only a fixed heartbeat. Suggested production heartbeat after credential handling is solved:
 
 ```text
 Every 5 minutes
@@ -81,10 +124,6 @@ ue_SMK069_shipment_schedule_mst.IntervalMinutes
 ```
 
 So TaskMan may wake every 5 minutes while `HOURLY` runs only when `NextRunDate` is due.
-
-## Important: do not manually invoke with production credentials
-
-Do not test `SMK069RunDueShipmentSchedule` interactively from an IDO invoke form with production credentials. Mongoose method inputs can be echoed in method responses/history. Use TaskMan parameters.
 
 ## Expected first run
 
