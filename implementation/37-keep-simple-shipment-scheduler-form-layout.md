@@ -2,45 +2,49 @@
 
 Date: 2026-09-08
 
-This note records the current tenant form state and removes the earlier idea of nested splitters/tabs as a requirement for the first usable version.
+This document is the **final layout decision for the first usable Shipment Scheduler form**. Earlier exploratory ideas about nested splitters, moving Dashboard into the left grid, or making Queue a Schedule detail are superseded by this file.
 
-## Current tenant layout
+## Final first-version layout
 
-The current `SMK069ShipmentScheduler` form already uses one MultiView-style split:
+Keep the form that already exists. Do **not** rebuild it.
+
+The current `SMK069ShipmentScheduler` form uses one MultiView-style split:
 
 - left pane: Schedule grid (`ue_SMK069ShipmentSchedules`)
 - right pane: Schedule detail fields
-- right pane also contains Dashboard display fields
-- bottom area in the right pane contains the Shipment Queue grid
+- right pane: Dashboard/status display fields
+- bottom area: Shipment Queue grid
 
-This layout is acceptable for the first operational version.
-
-Do **not** rebuild the form just to create nested splitters.
-Do **not** make Queue a child of Schedule.
-Do **not** make Dashboard a child of Schedule.
-
-## Recommended visual order inside the existing right pane
-
-Keep one splitter only and arrange the right pane vertically:
+This is the approved first usable layout.
 
 ```text
-+--------------------------------------------------------------+
-| Dashboard / Status                                           |
-| API Active | Master | Ready | Waiting | Exhausted | Max/Run  |
-+--------------------------------------------------------------+
-| Selected Schedule                                            |
-| Code | Name | Interval | Max Shipments | Enabled | Status    |
-+--------------------------------------------------------------+
-| Shipment Queue                                               |
-| DN | Queue Status | Attempt | Max | Retry | HTTP | Error      |
++----------------------+---------------------------------------+
+| SCHEDULE LIST        | SHIPMENT SCHEDULER STATUS             |
+|                      | Master Scheduler : 0                   |
+| HOURLY               | API Active       : 1                   |
+|                      | Ready            : 2                   |
+|                      | Waiting Retry    : 0                   |
+|                      | Exhausted        : 0                   |
+|                      | Default Max      : 50                  |
+|                      +---------------------------------------+
+|                      | SELECTED SCHEDULE                     |
+|                      | Code       : HOURLY                   |
+|                      | Name       : Every 60 Minutes         |
+|                      | Interval   : 60                       |
+|                      | Max / Run  : blank = default 50       |
+|                      | Enabled    : 0                        |
++----------------------+---------------------------------------+
+| SHIPMENT QUEUE                                               |
+| P96327 | READY | Attempt 0 | Max 5                           |
+| P96328 | READY | Attempt 0 | Max 5                           |
 +--------------------------------------------------------------+
 ```
 
-The left pane remains the Schedule selector/grid.
+No nested splitter is required for the first version. Tabs are optional later, not a prerequisite.
 
 ## Collection semantics
 
-The collections remain independent at Site level:
+The four collections are not a master-detail chain.
 
 ```text
 Schedules  -> one or more schedule definitions for the Site
@@ -51,7 +55,11 @@ Config     -> one SHIPMENT config row for the Site
 
 Only the Schedule grid and Schedule detail are two presentations of the same primary collection.
 
-Queue and Dashboard must not be linked to the selected Schedule.
+Do **not** link Queue to the selected Schedule.
+Do **not** link Dashboard to the selected Schedule.
+Do **not** make Config a child of Schedule.
+
+Every active schedule consumes the same Site-level Shipment queue.
 
 ## Current UAT filters
 
@@ -66,37 +74,52 @@ Replace the hardcoded UAT Site filter with the current-Site expression before pr
 
 ## Current data-load issue
 
-The primary Schedule collection loads on form open. The Dashboard and Queue are secondary/independent collections and are currently blank until explicitly loaded/refreshed.
+The primary Schedule collection already loads correctly when the form opens.
 
-The next technical task is **not layout redesign**. It is to wire reliable load/refresh of the independent Dashboard and Queue collections when the form opens/refreshes.
+The current blank Dashboard and Queue are **not a layout problem**. They are the next technical wiring task: the independent secondary collections must be explicitly loaded/refreshed by the form.
 
-## First usable visual target
+Therefore the next work item is:
 
 ```text
-Left Schedule grid:
-HOURLY
+Load Dashboard collection
+Load Queue collection
+```
+
+Do not redesign the screen again until these two collections have been proven to load.
+
+## Expected baseline after secondary collections load
 
 Dashboard:
+
+```text
 Master Scheduler = 0
 API Active       = 1
 Ready            = 2
 Waiting Retry    = 0
 Exhausted        = 0
 Default Max      = 50
-
-Selected Schedule:
-HOURLY | Every 60 Minutes | 60 | Max blank/default | Enabled 0
+```
 
 Queue:
+
+```text
 P96327 | READY | 0 | 5
 P96328 | READY | 0 | 5
 ```
 
-## Next step
+## Work order from here
 
-1. Keep the current one-splitter form.
-2. Reorder Dashboard above Schedule detail if desired; this is cosmetic only.
-3. Wire load/refresh for Dashboard and Queue.
-4. Confirm Dashboard shows `0 / 1 / 2 / 0 / 0 / 50` baseline.
-5. Confirm Queue shows `P96327` and `P96328`.
-6. Only after the read model is visible, wire Save Schedule / Master ON-OFF / Run Now.
+1. Keep the current form and one splitter.
+2. Do not change collection relationships.
+3. Configure reliable form-open/refresh loading for `ue_SMK069ShipmentSchedulerDashboard`.
+4. Configure reliable form-open/refresh loading for `ue_SMK069ShipmentSchedulerQueue`.
+5. Verify the baseline values above.
+6. Then wire configuration display if needed.
+7. Then register/wire Save Schedule.
+8. Then wire Master Scheduler ON/OFF.
+9. Then wire Run Now.
+10. Then wire retry reset and API log display.
+11. Only after the visible form is stable, wire the background runner and TaskMan heartbeat.
+12. First send UAT should use `MaxShipments = 1`.
+
+This file is the reference layout decision going forward.
