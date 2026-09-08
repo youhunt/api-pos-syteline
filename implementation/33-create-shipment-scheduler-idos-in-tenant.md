@@ -78,7 +78,45 @@ Extends            : blank
 Extend And Replace : unchecked
 ```
 
-Keep the generated properties. The Scheduler form will use at least:
+### Confirmed tenant wizard result
+
+The tenant wizard exposes **24 columns/properties** for this table and the generated bound properties include the scheduler fields added by Patch 07 Rev.2:
+
+```text
+EndpointUrl
+HttpMethod
+ContentType
+AuthType
+AuthHeader
+AuthValue
+TimeoutSeconds
+IsActive
+LoginUrl
+SuccessMode
+SchedulerEnabled
+MaxBatchSize
+MaxAttempts
+BackoffBaseMinutes
+BackoffCapMinutes
+```
+
+The standard Mongoose/audit properties are also generated, including:
+
+```text
+CreatedBy
+UpdatedBy
+CreateDate
+RecordDate
+RowPointer
+NoteExistsFlag
+InWorkflow
+SiteRef
+ApiName
+```
+
+Keep the generated properties. Do **not** set the standard audit fields as pseudo keys unless there is a separate tenant-specific reason.
+
+The Scheduler form will use at least:
 
 ```text
 SiteRef
@@ -101,7 +139,7 @@ RecordDate
 RowPointer
 ```
 
-Security rule: `AuthValue` may exist on the IDO because the wizard exposes the table, but **do not bind it to or display it on the Shipment Scheduler form**.
+Security rule: `AuthValue` may exist on the IDO because the wizard exposes the table, but **do not bind it to or display it on the Shipment Scheduler form**. Do not use it as the runtime bearer token source.
 
 Expected row filter for form/runtime testing:
 
@@ -208,12 +246,13 @@ FailedToday         = 0
 
 ```text
 1. Verify ue_SMK069ShipmentSchedules loads HOURLY.
-2. Create/verify ue_SMK069ShipmentApiConfigs.
-3. Create read-only ue_SMK069ShipmentSchedulerDashboard.
-4. Create read-only ue_SMK069ShipmentSchedulerQueue.
-5. Build minimum SMK069ShipmentScheduler form.
-6. Keep scheduler OFF while building/testing the form.
-7. Register control SP methods and runner only after the visible form is stable.
+2. Finish/create ue_SMK069ShipmentApiConfigs with the 24 generated properties.
+3. Verify the SHIPMENT config row through Load Collection.
+4. Create read-only ue_SMK069ShipmentSchedulerDashboard.
+5. Create read-only ue_SMK069ShipmentSchedulerQueue.
+6. Build minimum SMK069ShipmentScheduler form.
+7. Keep scheduler OFF while building/testing the form.
+8. Register control SP methods and runner only after the visible form is stable.
 ```
 
 ## Form editability rule
