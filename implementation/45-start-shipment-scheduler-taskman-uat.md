@@ -94,6 +94,40 @@ For immediate one-time execution, use Task Status `READY`.
 
 If a recurrence dialog is desired, add a second event/menu action that opens `BackgroundQueue` as a modal child and passes the task/event context to it. Do not expect a task selector when `BackgroundQueue` is opened standalone.
 
+## TaskMan parameter count requirement
+
+The current extension method signature is:
+
+```text
+1 Username      IN
+2 Password      IN
+3 ScheduleCode  REF/OUT
+4 Candidates    REF/OUT
+5 Succeeded     REF/OUT
+6 Failed        REF/OUT
+7 Exhausted     REF/OUT
+8 Infobar       REF/OUT
+```
+
+TaskMan IDOMTH invokes require a comma-delimited Task Parameters list whose item count matches the IDO method parameter count.
+
+Observed tenant error when no/too-few Task Parameters were supplied:
+
+```text
+Too few items in the invokeParameters list for
+ue_SMK069ShipmentTransport.SMK069RunDueShipmentSchedule.
+```
+
+For a controlled UAT using a disposable UAT credential, supply all 8 items. To avoid trailing-empty parsing ambiguity, initialize the REF/OUT slots with harmless dummy values:
+
+```text
+<UAT_USERNAME>,<UAT_PASSWORD>,X,0,0,0,0,X
+```
+
+The runner immediately resets `ScheduleCode`, counters, and `Infobar`, so the dummy values do not affect business logic.
+
+Do NOT use a production credential in Task Parameters because task parameters can be visible in background-task diagnostics/history.
+
 ## Credential warning
 
 The current runner signature still has:
@@ -108,6 +142,20 @@ Do NOT place production POS credentials in visible Task Parameters. Mongoose can
 Before production recurring scheduling, change the runner to obtain POS credentials from an approved secure secret/configuration mechanism, or use a dedicated UAT-only disposable credential for a controlled one-time test and rotate it immediately afterward.
 
 Do not store a production password in the Scheduler form, plain database columns, or GitHub.
+
+## Make the schedule eligible before testing
+
+The TaskMan heartbeat will return cleanly without sending if the schedule is not eligible. Confirm all of these before the one-DN test:
+
+```text
+HOURLY.IsEnabled = 1
+Master SchedulerEnabled = 1
+MaxShipments = 1
+```
+
+For immediate testing, either mark the schedule due using `SMK069RequestShipmentRunNowSp` or ensure `NextRunDate <= current server time`.
+
+The recommended UI action is `Run Now`, which calls `SMK069RequestShipmentRunNowSp`; do not directly update `RunRequested` in production UI code.
 
 ## Heartbeat design
 
