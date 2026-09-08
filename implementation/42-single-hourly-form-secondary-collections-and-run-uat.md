@@ -40,54 +40,94 @@ LastMessage
 
 The database remains capable of multiple schedules, but this tenant form intentionally exposes only the seeded `HOURLY` schedule.
 
-## 2. Why Dashboard and Queue were blank
+## 2. Dashboard and Queue are FORM SECONDARY COLLECTIONS
 
-The form primary collection is:
-
-```text
-ue_SMK069ShipmentSchedules
-```
-
-The Dashboard and Queue IDOs were added as independent secondary collections. In this tenant that arrangement does not load/refresh them reliably from the form.
-
-Use a parent/child form-collection relationship based only on `SiteRef`.
-
-### Dashboard collection
+Current form collections:
 
 ```text
-IDO               : ue_SMK069ShipmentSchedulerDashboard
-Parent Collection : ue_SMK069ShipmentSchedules
-Link By            : child SiteRef = parent SiteRef
+Primary Collection      : ue_SMK069ShipmentSchedules
+Secondary Collection 2  : ue_SMK069ShipmentSchedulerDashboard
+Secondary Collection 3  : ue_SMK069ShipmentSchedulerQueue
 ```
 
-### Queue collection
+Important correction:
+
+The Form Designer `Collections` tab does NOT provide a Parent/Child or LinkBy setting for these top-level secondary collections.
+
+A true Mongoose **Subcollection** is a different mechanism. It is defined as a Subcollection property on a parent IDO in IDO metadata. Do not confuse a Form Secondary Collection with an IDO Subcollection.
+
+For the current tenant form, keep Dashboard and Queue as secondary collections. Do NOT redesign the IDOs just to make the form load.
+
+### Secondary Collection settings
+
+For Secondary Collection 2 and Secondary Collection 3:
 
 ```text
-IDO               : ue_SMK069ShipmentSchedulerQueue
-Parent Collection : ue_SMK069ShipmentSchedules
-Link By            : child SiteRef = parent SiteRef
+Refresh standard operation       : enabled
+Defer Refresh Until Visible      : False
+Read-only / Save disabled        : recommended
+New/Copy/Delete                  : disabled
 ```
 
-Important: this LinkBy is only a Mongoose form-loading relationship. It does NOT mean that a READY Shipment is owned by `HOURLY`.
-
-Queue ownership semantics remain Site-level:
+Temporary UAT filters:
 
 ```text
-READY queue -> no owning schedule yet
-schedule run -> claims/processes queue
-run history -> records which schedule processed which DN
+Dashboard : SiteRef = 'Default'
+Queue     : SiteRef = 'Default'
 ```
 
-Do not LinkBy `ScheduleCode` to Queue or Dashboard.
+Dashboard and Queue are Site-level data. Queue is not linked by ScheduleCode.
 
-If the collection dialog exposes these options, use:
+## 3. Explicitly refresh secondary collections on form open
+
+The normal form Refresh primarily refreshes the primary collection. The two secondary collections must be refreshed explicitly.
+
+Use Form Event Handlers.
+
+Recommended event:
 
 ```text
-Defer Refresh Until Visible : False
-Read-only                    : True for Dashboard and Queue
+StdFormInitCompleted
 ```
 
-Current UAT expected Dashboard:
+Handler sequence:
+
+```text
+Sequence 10
+Response Type : Collection Refresh
+Collection    : Secondary Collection 2 / ue_SMK069ShipmentSchedulerDashboard
+
+Sequence 20
+Response Type : Collection Refresh
+Collection    : Secondary Collection 3 / ue_SMK069ShipmentSchedulerQueue
+```
+
+Infor Mongoose Collection Refresh is specifically designed to refresh a named collection on a form.
+
+Optionally repeat the same two handlers on:
+
+```text
+StdFormRefreshCompleted
+```
+
+if the dashboard/queue must also follow a later manual refresh of the primary schedule.
+
+Do not create a Parent/Child link in the Form Collections tab; that option does not exist for normal secondary collections.
+
+### Alternative only if later needed: IDO Subcollection
+
+If explicit secondary refresh proves unreliable, a true Subcollection can be created on `ue_SMK069ShipmentSchedules` in the IDO definition:
+
+```text
+New Property
+Property Type : Subcollection
+Child IDO     : ue_SMK069ShipmentSchedulerDashboard or ue_SMK069ShipmentSchedulerQueue
+LinkBy        : SiteRef = SiteRef
+```
+
+That is an IDO metadata change, not a Form Secondary Collection setting. Do not do this unless needed.
+
+Current expected Dashboard:
 
 ```text
 MasterEnabled       = 0
@@ -99,14 +139,14 @@ DefaultMaxBatchSize = 50
 MaxAttempts         = 5
 ```
 
-Current UAT expected Queue:
+Current expected Queue:
 
 ```text
 P96327 | READY | 0 | 5
 P96328 | READY | 0 | 5
 ```
 
-## 3. Extension class source to use
+## 4. Extension class source to use
 
 Do NOT use `extension-classes/SMK069ShipmentSenderExtension.cs` for the scheduler rollout. That file is the older source and still contains the pre-revision DN/route model.
 
@@ -128,7 +168,7 @@ one-login-per-batch behavior
 
 Before replacing tenant source, diff against the current tenant extension class because tenant-side edits may be newer than the repo copy.
 
-## 4. Add scheduler runner into the same extension class
+## 5. Add scheduler runner into the same extension class
 
 Paste the members from:
 
@@ -162,7 +202,7 @@ TaskMan heartbeat
   -> complete schedule and calculate NextRunDate
 ```
 
-## 5. Required IDO methods on ue_SMK069ShipmentTransport
+## 6. Required IDO methods on ue_SMK069ShipmentTransport
 
 Patch 08 Rev.2 methods required by the batch sender:
 
@@ -201,7 +241,7 @@ Parameters:
 
 Credentials must be supplied by TaskMan parameters only. Do not expose them on the form.
 
-## 6. First UAT - send only one Shipment
+## 7. First UAT - send only one Shipment
 
 Before enabling automatic execution:
 
@@ -248,7 +288,7 @@ failure enters retry/backoff
 Dashboard and Queue refresh correctly
 ```
 
-## 7. TaskMan
+## 8. TaskMan
 
 After the runner compiles and IDO method metadata is registered:
 
@@ -261,7 +301,7 @@ Password  : TaskMan parameter
 
 TaskMan is only the heartbeat. `IntervalMinutes` on `HOURLY` remains the business schedule.
 
-## 8. Form actions after read collections work
+## 9. Form actions after read collections work
 
 Current form should provide:
 
