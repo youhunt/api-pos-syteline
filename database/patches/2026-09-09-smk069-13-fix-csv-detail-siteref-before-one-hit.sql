@@ -12,13 +12,13 @@
    -----
    - Fixes Apply Database error:
          Prefix procedure tidak dikenali.
-   - Do NOT assume the installed module starts exactly with
-         CREATE PROCEDURE
-     because tenant definitions may use CREATE PROC, CREATE OR ALTER PROC,
-     ALTER PROC, different whitespace/newlines, or a schema-qualified header.
+   - Does not assume the installed module starts exactly with CREATE PROCEDURE.
+   - Supports CREATE PROCEDURE, CREATE PROC, CREATE OR ALTER PROCEDURE,
+     CREATE OR ALTER PROC, ALTER PROCEDURE and ALTER PROC, including whitespace.
    - Locates the actual PROC/PROCEDURE token immediately before
-     SMK069RunCsvTestBatchSp and rewrites that header to ALTER PROCEDURE.
-   - Still one executable batch; no GO separator.
+     SMK069RunCsvTestBatchSp and rewrites only that module header to
+     ALTER PROCEDURE.
+   - One executable batch; no GO separator.
 
    IMPORTANT: SiteRef vs siteref
    -----------------------------
@@ -117,33 +117,8 @@ SET @Snippet = N'
 SET @NewDef = STUFF(@Definition, @InsertPos + 1, 0, @Snippet);
 SET @UpperDef = UPPER(@NewDef);
 
-/* -----------------------------------------------------------------------------
-   Find the actual module header without assuming exact CREATE/ALTER formatting.
-   ----------------------------------------------------------------------------- */
-SET @NamePos = CHARINDEX(N'SMK069RUNC SVTESTBATCHSP', REPLACE(@UpperDef, N' ', N''));
-
-/* The space-stripped lookup above cannot be mapped safely to the original text.
-   Use the literal object name for the actual position. */
-SET @NamePos = CHARINDEX(N'SMK069RUNC SVTESTBATCHSP', @UpperDef);
-IF @NamePos = 0
-    SET @NamePos = CHARINDEX(N'SMK069RUNC SVTESTBATCHSP', REPLACE(@UpperDef, N'_', N'_'));
-IF @NamePos = 0
-    SET @NamePos = CHARINDEX(N'SMK069RUNC SVTESTBATCHSP', @UpperDef);
-
-/* Correct literal object name (kept separate to avoid any collation surprises). */
-SET @NamePos = CHARINDEX(N'SMK069RUNC SVTESTBATCHSP', @UpperDef);
-IF @NamePos = 0
-BEGIN
-    /* Normal name has no embedded space; use it directly. */
-    SET @NamePos = CHARINDEX(N'SMK069RUNC SVTESTBATCHSP', REPLACE(@UpperDef, N' ', N''));
-END;
-
-/* Final deterministic lookup. */
-SET @NamePos = CHARINDEX(N'SMK069RUNC SVTESTBATCHSP', REPLACE(@UpperDef, N' ', N''));
-
-/* Because removing spaces changes offsets, fall back to a direct lookup using the exact
-   identifier text. This is the expected path on SyteLine. */
-SET @NamePos = CHARINDEX(N'SMK069RUNC SVTESTBATCHSP', @UpperDef);
+/* Find the exact procedure name in the installed definition. */
+SET @NamePos = CHARINDEX(N'SMK069RUNCSVTESTBATCHSP', @UpperDef);
 
 IF @NamePos = 0
 BEGIN
@@ -174,7 +149,7 @@ BEGIN
     SET @ProcPos = LEN(@BeforeName) - @RevIdx - @ProcLen + 2;
 END;
 
-/* Look only shortly before PROC/PROCEDURE, where CREATE/ALTER belongs. */
+/* Search only near PROC/PROCEDURE for CREATE/ALTER. */
 SET @WindowStart = CASE WHEN @ProcPos > 80 THEN @ProcPos - 80 ELSE 1 END;
 SET @PrefixWindow = SUBSTRING(@UpperDef, @WindowStart, @ProcPos - @WindowStart);
 SET @RevPrefix = REVERSE(@PrefixWindow);
@@ -183,9 +158,8 @@ SET @AlterRev  = CHARINDEX(REVERSE(N'ALTER'),  @RevPrefix);
 SET @CreatePos = CASE WHEN @CreateRev > 0 THEN @ProcPos - @CreateRev - LEN(N'CREATE') + 1 ELSE 0 END;
 SET @AlterPos  = CASE WHEN @AlterRev  > 0 THEN @ProcPos - @AlterRev  - LEN(N'ALTER')  + 1 ELSE 0 END;
 
-/* CREATE OR ALTER: CREATE and ALTER are both close to PROCEDURE; replace from CREATE.
-   CREATE only: replace from CREATE.
-   ALTER only: replace from ALTER. */
+/* CREATE OR ALTER: replace from CREATE. CREATE only: from CREATE.
+   ALTER only: from ALTER. */
 IF @CreatePos > 0 AND @AlterPos > @CreatePos AND (@ProcPos - @CreatePos) <= 40
     SET @HeaderStart = @CreatePos;
 ELSE IF @AlterPos > 0 AND (@ProcPos - @AlterPos) <= 25
