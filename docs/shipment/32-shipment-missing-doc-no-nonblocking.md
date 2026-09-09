@@ -2,7 +2,8 @@
 
 > Date: 9 September 2026  
 > Scope: **Shipment Outbound SyteLine → POS API only**  
-> Patch: `database/patches/shipment/2026-09-09-smk069-14-allow-missing-doc-no.sql`
+> Patch: `database/patches/shipment/2026-09-09-smk069-14-allow-missing-doc-no.sql`  
+> Current revision: **Revision 2**
 
 ## 1. Business request
 
@@ -13,69 +14,89 @@ P96331 WAITING_BACKOFF attempt 3/5 HTTP 0
 Shipment DN P96331 tidak mempunyai DOC_NO/Customer Order.
 ```
 
-The requested behavior is that a Shipment must not stop locally only because
-`DOC_NO` is empty.
+Requested behavior:
 
-Patch 14 implements that request without mixing the Shipment workstream with
-CSV→CO processing.
+> A Shipment must not stop locally only because `DOC_NO` is empty.
 
-## 2. New DOC_NO resolution
+The Shipment should still be allowed to Build/Prepare and reach the POS API.
 
-The Shipment view now prefers a real existing order reference in this order:
+## 2. Revision 1 tenant result
+
+Patch 14 Rev.1 attempted an optional Shipment View fallback and deliberately
+looked for this exact projection in the installed tenant View:
 
 ```text
-1. co_mst.co_num
-2. coitem_mst.co_num
-3. shipment_line_mst.ref_num
-4. empty if none exists
+co.co_num AS doc_no
 ```
 
-This is important because `shipment_line.ref_num` is already the Shipment's
-source-document reference used to join to `coitem_mst`. A missing `co_mst`
-header should not automatically erase that source reference from the outbound
-payload.
+Tenant Apply Database returned:
 
-The patch edits the installed tenant view through `OBJECT_DEFINITION`; it does
-not replace the full view with the stale 4 Sep Git copy. Current prefixed DN and
-numeric-UOM tenant logic are therefore preserved.
+```text
+Projection "co.co_num AS doc_no" tidak ditemukan pada tenant View.
+Patch 14 dihentikan; jangan replace full View dari Git.
+```
 
-## 3. Build behavior when all DOC_NO sources are blank
+This is a **safe abort**, not a partial deployment. Rev.1 was inside a
+transaction and rolled back. It did not replace the tenant View or Build SP.
 
-Previously `SMK069BuildShipmentJsonSp` stopped in two places:
+The result also proves again that the historical standalone View source in Git
+is not identical to the current tenant runtime.
+
+## 3. Revision 2 design
+
+The View fallback is not required for the actual business request, so Revision 2
+removes that dependency entirely.
+
+**Revision 2 does not alter `dbo.SMK069_ShipmentAPI_mst`.**
+
+It patches only the installed current tenant definition of:
+
+```text
+dbo.SMK069BuildShipmentJsonSp
+```
+
+The patch first verifies that `@DN_No` is already a String data type so it cannot
+accidentally restore the obsolete BIGINT contract for values such as `P96331`.
+
+## 4. New Build behavior
+
+Previously the Build procedure stopped in the missing-DOC_NO path:
 
 ```text
 DocCount = 0
 -> "tidak mempunyai DOC_NO/Customer Order."
 -> RETURN
+```
 
+and the header validation could stop again at:
+
+```text
 @DocNo blank
 -> "DOC_NO kosong."
 -> RETURN
 ```
 
-Patch 14 makes both guards non-blocking.
+Revision 2 removes only those two local `RETURN` operations.
 
-If no real reference exists, the payload is still built with:
+If `DOC_NO` remains NULL/blank, JSON is normalized to:
 
 ```json
 "DOC_NO": ""
 ```
 
-The POS API becomes the final authority on whether blank DOC_NO is acceptable.
-SyteLine no longer blocks the Shipment before the HTTP call.
+The POS API becomes the final authority on whether a blank DOC_NO is accepted.
+SyteLine no longer blocks the Shipment before HTTP solely for that reason.
 
-## 4. What remains protected
+## 5. What remains protected
 
-The existing multiple-document guard remains active:
+The existing multiple-document protection remains active:
 
 ```text
-one Shipment -> more than one distinct DOC_NO
+one Shipment -> more than one distinct nonblank DOC_NO
               -> reject before HTTP
 ```
 
-Patch 14 does **not** silently choose one of several Customer Orders.
-
-Other required Shipment validation also remains unchanged:
+Other Shipment validation remains unchanged, including:
 
 - Shipment exists and is pending;
 - shipment quantity > 0;
@@ -86,9 +107,9 @@ Other required Shipment validation also remains unchanged:
 - PRODUCT_CODE required;
 - lot/batch detail preserved.
 
-## 5. Apply
+## 6. Apply Revision 2
 
-Infor **Apply Database**:
+Use Infor **Apply Database** with the current Git file:
 
 ```text
 database/patches/shipment/2026-09-09-smk069-14-allow-missing-doc-no.sql
@@ -97,20 +118,48 @@ database/patches/shipment/2026-09-09-smk069-14-allow-missing-doc-no.sql
 Expected final messages:
 
 ```text
-OK - Patch 14 applied.
-DOC_NO sekarang fallback co_mst -> coitem -> shipment_line.ref_num.
-Jika tetap kosong, Build tetap menghasilkan JSON dengan DOC_NO="".
-Multiple DOC_NO protection tetap aktif.
-JANGAN retry sebelum HTTP 404 dan Complete nvarchar->bigint diperbaiki.
+OK - Patch 14 Revision 2 applied.
+Shipment View TIDAK diubah.
+Missing DOC_NO tidak lagi menghentikan Build.
+Jika DOC_NO tetap kosong, JSON berisi DOC_NO="".
+Multiple distinct DOC_NO protection tetap aktif.
+Patch ini TIDAK melakukan retry / HTTP call.
+JANGAN Run Now sebelum HTTP 404 dan Complete nvarchar->bigint dibereskan.
 ```
 
-The patch is guarded and transactional. If the tenant source differs from the
-expected fragments, it rolls back instead of overwriting the object using stale
-Git source.
+## 7. Verification — no Shipment send yet
 
-## 6. Verification — Query Select
+Verify the markers through Query Select:
 
-After Apply Database, verify P96331 without sending it:
+```sql
+SELECT
+    TYPE_NAME(p.user_type_id) AS DN_No_Type,
+    CASE
+        WHEN OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P'))
+             LIKE N'%SMK069-DOC-NONBLOCKING-R2%'
+            THEN N'PASS'
+        ELSE N'FAIL'
+    END AS DocNoNonBlocking,
+    CASE
+        WHEN OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P'))
+             LIKE N'%ISNULL(@DocNo, N'''') AS [DOC_NO]%'
+            THEN N'PASS'
+        ELSE N'FAIL'
+    END AS EmptyStringJson
+FROM sys.parameters AS p
+WHERE p.object_id = OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P')
+  AND p.parameter_id = 1;
+```
+
+Expected:
+
+```text
+DN_No_Type       nvarchar/varchar
+DocNoNonBlocking PASS
+EmptyStringJson  PASS
+```
+
+Then inspect the P96331 View rows without sending:
 
 ```sql
 SELECT
@@ -130,56 +179,15 @@ WHERE LTRIM(RTRIM(CONVERT(NVARCHAR(40), DN_No))) = N'P96331'
 ORDER BY product_code, Batch;
 ```
 
-Then verify the underlying reference chain:
+The View may still show `doc_no = NULL/blank`; that is allowed by Revision 2.
+The important change is that Build no longer returns failure only for that blank
+value.
 
-```sql
-SELECT
-    sh.site_ref,
-    sh.shipment_id,
-    shl.shipment_line,
-    shl.ref_num AS shipment_ref_num,
-    shl.ref_line_suf,
-    shl.ref_release,
-    coi.co_num AS coitem_co_num,
-    co.co_num AS co_header_num,
-    CASE
-        WHEN NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(50), co.co_num))), N'') IS NOT NULL
-            THEN N'CO_HEADER'
-        WHEN NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(50), coi.co_num))), N'') IS NOT NULL
-            THEN N'COITEM'
-        WHEN NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(50), shl.ref_num))), N'') IS NOT NULL
-            THEN N'SHIPMENT_REF'
-        ELSE N'BLANK'
-    END AS DocNoSource
-FROM dbo.shipment_mst AS sh
-LEFT JOIN dbo.shipment_line_mst AS shl
-  ON shl.site_ref = sh.site_ref
- AND shl.shipment_id = sh.shipment_id
-LEFT JOIN dbo.coitem_mst AS coi
-  ON coi.site_ref = sh.site_ref
- AND coi.co_num = shl.ref_num
- AND coi.co_line = shl.ref_line_suf
- AND coi.co_release = shl.ref_release
-LEFT JOIN dbo.co_mst AS co
-  ON co.site_ref = coi.site_ref
- AND co.co_num = coi.co_num
-WHERE sh.site_ref = RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
-  AND (
-        LTRIM(RTRIM(CONVERT(NVARCHAR(40), sh.shipment_id))) = N'31'
-        OR LTRIM(RTRIM(CONVERT(NVARCHAR(40), shl.ref_num))) = N'P96331'
-      )
-ORDER BY sh.shipment_id, shl.shipment_line;
-```
+## 8. Important: do not retry yet
 
-The second query is diagnostic only. Depending on how the current tenant builds
-the `P963xx` DN prefix, use the first view query as the authoritative P96331
-check.
+Patch 14 Revision 2 fixes only the **local DOC_NO gate**.
 
-## 7. Important: do not retry yet
-
-Patch 14 fixes only the **local DOC_NO gate**.
-
-Current independent blockers remain:
+Independent shared blockers remain:
 
 ```text
 P96330 / P96332
@@ -190,36 +198,21 @@ P96330 / P96332
   nvarchar -> bigint conversion
 ```
 
-Those issues can affect the same sender used by P96331. Therefore do not spend
-another retry yet.
+Those shared sender/Complete paths will also be used once P96331 gets past
+Build/Prepare.
 
-The correct sequence is:
-
-```text
-1. Apply Patch 14.
-2. Verify P96331 now builds / exposes DOC_NO fallback or blank.
-3. Fix/confirm EndpointUrl.
-4. Fix Complete Shipment string-DN handling from exact tenant source.
-5. Set Max/Run = 1.
-6. Reset ONE DN only.
-7. Run controlled UAT.
-8. Verify HTTP + Complete + API log + retry + Api_post.
-```
-
-## 8. Retry policy after root causes are fixed
-
-Do not reset all three DNs together.
-
-Recommended first candidate:
+Correct sequence:
 
 ```text
-P96331
+1. Apply Patch 14 Revision 2.
+2. Verify PASS/PASS markers.
+3. Keep scheduler/retry held.
+4. Capture/fix exact tenant Complete line 36.
+5. Confirm the correct POS EndpointUrl.
+6. Set Max/Run = 1.
+7. Reset ONE DN only.
+8. Controlled UAT.
+9. Verify HTTP + Complete + API log + retry + Api_post.
 ```
 
-because Patch 14 directly targets its previous local validation failure. But it
-should only be used after the shared HTTP/Complete path is clean.
-
-If the resulting payload has `DOC_NO=""` and POS rejects it, keep that response
-as contract evidence. At that point we will know blank DOC_NO is rejected by POS
-rather than blocked by SyteLine, and a business-approved substitute value can be
-defined explicitly instead of invented in the integration.
+Do not reset all three DNs at once.
