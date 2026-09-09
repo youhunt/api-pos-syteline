@@ -23,13 +23,14 @@ Patch 14 Rev.2 is already verified PASS/PASS for P96331's missing-DOC_NO Build g
 - stores query output through `dbo.ue_LNS00_QueryExecutionResults`;
 - its `value2` result buffer is too small for a 3500-character procedure chunk;
 - rejects the attempted `ROW_NUMBER` + XML-nodes line-splitting query;
-- wraps the supplied SELECT in another query/derived table, therefore a plain trailing `ORDER BY` is rejected unless paired with TOP/OFFSET/FOR XML.
+- wraps the supplied SELECT in another query/derived table, therefore a plain `ORDER BY` is rejected unless paired with TOP/OFFSET/FOR XML;
+- also rejects a trailing semicolon because the form embeds the supplied text inside another statement.
 
-Therefore use only simple pure `SELECT` statements, short scalar output values, and **no trailing ORDER BY**. Returned rows may be visually unsorted; use the explicit numeric key (`ChunkNo`, `parameter_id`, `column_id`) to identify them.
+Therefore use only simple pure `SELECT` statements, short scalar output values, **no trailing ORDER BY**, and **no trailing semicolon**. Returned rows may be visually unsorted; use the explicit numeric key (`ChunkNo`, `parameter_id`, `column_id`) to identify them.
 
 ## Query A — authoritative Complete source in 200-character chunks
 
-Run exactly this version **without ORDER BY**:
+Run exactly this version, with **no ORDER BY and no semicolon at the end**:
 
 ```sql
 SELECT
@@ -48,7 +49,7 @@ CROSS JOIN
         (21),(22),(23),(24),(25),(26),(27),(28),(29),(30)
 ) AS v(ChunkNo)
 WHERE m.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')
-  AND LEN(m.definition) >= ((v.ChunkNo - 1) * 200) + 1;
+  AND LEN(m.definition) >= ((v.ChunkNo - 1) * 200) + 1
 ```
 
 Each row is at most 200 characters. Copy all returned `ChunkNo` + `SourceText` rows; they do not need to be displayed in numeric order because `ChunkNo` identifies the original position.
@@ -57,7 +58,7 @@ If `value2` still truncates at 200 on this tenant, change both occurrences of `2
 
 ## Query A0 — targeted context if full chunk capture is inconvenient
 
-This query returns short contexts around the first `shipment_id`, `ShipmentId`, and `DN_No` tokens in the current Complete source. It is also a pure SELECT and has no ORDER BY:
+This query returns short contexts around the first `shipment_id`, `ShipmentId`, and `DN_No` tokens in the current Complete source. It is also a pure SELECT and has no ORDER BY/semicolon:
 
 ```sql
 SELECT
@@ -78,7 +79,7 @@ SELECT
     CHARINDEX(N'shipmentid', LOWER(m.definition)) AS ShipmentIdTokenPos,
     CHARINDEX(N'dn_no', LOWER(m.definition)) AS DnNoPos
 FROM sys.sql_modules AS m
-WHERE m.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P');
+WHERE m.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')
 ```
 
 If Query A works, it remains the preferred evidence because it preserves the complete current tenant body in small pieces.
@@ -96,7 +97,7 @@ SELECT
     p.scale,
     p.is_output
 FROM sys.parameters AS p
-WHERE p.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P');
+WHERE p.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')
 ```
 
 Historical shape was:
@@ -125,7 +126,7 @@ SELECT
     c.scale,
     c.is_nullable
 FROM sys.columns AS c
-WHERE c.object_id = OBJECT_ID(N'dbo.ue_SMK069_shipment_api_log_mst', N'U');
+WHERE c.object_id = OBJECT_ID(N'dbo.ue_SMK069_shipment_api_log_mst', N'U')
 ```
 
 ## Query D — standard Shipment key type
@@ -142,7 +143,7 @@ SELECT
     c.is_nullable
 FROM sys.columns AS c
 WHERE c.object_id = OBJECT_ID(N'dbo.shipment_mst', N'U')
-  AND c.name IN (N'shipment_id', N'Api_post', N'Api_post_date');
+  AND c.name IN (N'shipment_id', N'Api_post', N'Api_post_date')
 ```
 
 ## Patch decision
