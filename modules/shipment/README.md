@@ -146,7 +146,22 @@ Jika View tetap menghasilkan DOC_NO kosong, JSON tetap dibentuk sebagai:
 
 Proteksi Shipment yang mempunyai **lebih dari satu distinct nonblank DOC_NO** tetap aktif; jangan memilih salah satu order secara diam-diam.
 
-Patch 14 hanya menghilangkan local DOC_NO gate. Ia **tidak** memperbaiki HTTP 404 dan **tidak** memperbaiki Complete `nvarchar→bigint`.
+### Tenant verification — PASS
+
+Query Select pada 9 Sep 2026 menghasilkan:
+
+```text
+DN_No_Type        DocNoNonBlocking   EmptyStringJson
+nvarchar          PASS               PASS
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-09-09-smk069-patch14-docno-nonblocking-pass.md
+```
+
+Dengan demikian local Build blocker P96331 karena missing `DOC_NO` dianggap **fixed**. Ini belum berarti full Shipment send path sudah siap, karena HTTP 404 dan Complete conversion masih aktif.
 
 ## Tiga masalah yang harus dipisahkan
 
@@ -164,26 +179,17 @@ Jangan melakukan probe dengan Shipment retry. Cocokkan nilai tenant dengan URL P
 Error converting data type nvarchar to bigint
 ```
 
-Exact tenant source untuk Complete belum tersimpan di Git. Jangan menebak atau menulis ulang full procedure. Jalankan Patch 13 read-only audit untuk capture:
+Exact tenant source untuk Complete belum tersimpan di Git. Jangan menebak atau menulis ulang full procedure. Capture tenant source/metadata dengan pure SELECT dan patch minimal berdasarkan exact crossing yang ditemukan.
 
-```text
-sys.parameters
-OBJECT_DEFINITION
-line 36
-API log column metadata
-```
+### 3. P96331 sebelumnya berhenti karena DOC_NO kosong — FIXED AT BUILD LAYER
 
-Setelah actual string→BIGINT crossing terbukti, buat patch minimal seperti Patch 11 dan preserve seluruh body tenant lainnya.
-
-### 3. P96331 sebelumnya berhenti karena DOC_NO kosong
-
-Patch 14 Revision 2 mengubah behavior ini menjadi non-blocking:
+Patch 14 Revision 2 sudah terverifikasi:
 
 ```text
 DOC_NO kosong
 -> Build tetap lanjut
 -> JSON DOC_NO=""
--> Prepare dapat lanjut
+-> local DOC_NO hard stop hilang
 ```
 
 Dengan demikian CSV→CO **tidak perlu dicampur** hanya agar sender lewat local validation. CSV→CO baru dibuka jika bisnis memang perlu memperbaiki Customer Order upstream, bukan sebagai dependency teknis sender.
@@ -206,9 +212,9 @@ Max/Run = 1
 Reset satu DN saja
 ```
 
-P96331 adalah kandidat bagus setelah Patch 14 karena local DOC_NO blocker sudah dihilangkan, **tetapi hanya setelah endpoint dan Complete path bersih**.
+P96331 adalah kandidat bagus karena local DOC_NO blocker sudah dihilangkan, **tetapi hanya setelah endpoint dan Complete path bersih**.
 
-Selama incident ini, pastikan scheduler tidak otomatis menghabiskan attempt berikutnya. Patch 13 audit menampilkan `SchedulerEnabled` dan schedule state. Jika masih aktif, hold melalui Shipment Scheduler Control Center sebelum `NextAttemptDate`.
+Selama incident ini, pastikan scheduler tidak otomatis menghabiskan attempt berikutnya.
 
 ## Scheduler
 
@@ -243,7 +249,8 @@ Patch 05 dan Patch 06 berada di `database/patches/shipment/withdrawn/` dan **jan
 ## Aturan tenant SyteLine
 
 - Apply Database: satu executable batch, tanpa `GO`.
-- Verification SELECT terpisah di Query Select.
+- `SMK Query Select Execution` pada tenant ini harus diperlakukan sebagai **pure SELECT only** untuk diagnostics; hindari `DECLARE`, `SET`, `EXEC`, `BEGIN/END`, dan `GO`.
+- Verification SELECT dilakukan terpisah di Query Select.
 - Jangan pakai `System.Data` di extension class; tenant sebelumnya tidak menyediakan reference itu. Gunakan `Context.Commands.Invoke` untuk IDO/SP calls.
 - Credentials POS tetap runtime/TaskMan concern, bukan static token config.
 - Exact tenant definition harus dicapture ke Git setelah runtime object berubah; source lama tidak boleh dianggap authoritative hanya karena nama object sama.
@@ -253,12 +260,11 @@ Patch 05 dan Patch 06 berada di `database/patches/shipment/withdrawn/` dan **jan
 
 **Belum boleh retry saat HTTP 404 + Complete error masih aktif.**
 
-1. Apply current `2026-09-09-smk069-14-allow-missing-doc-no.sql` (**Revision 2**);
-2. Query Select dan pastikan `DocNoNonBlocking=PASS` + `EmptyStringJson=PASS`;
-3. jalankan/lihat hasil `2026-09-09-smk069-13-shipment-root-cause-audit.sql` untuk current EndpointUrl + exact Complete definition;
+1. Patch 14 Rev.2 verification sudah **PASS/PASS** — tidak perlu apply ulang;
+2. capture exact `SMK069CompleteShipmentSendSp` source/metadata menggunakan pure SELECT Query Select;
+3. patch `SMK069CompleteShipmentSendSp` string-DN handling minimal berdasarkan exact tenant code around line 36;
 4. verify/fix `EndpointUrl` berdasarkan known-good POS evidence;
-5. patch `SMK069CompleteShipmentSendSp` string-DN handling minimal berdasarkan exact tenant line 36;
-6. capture exact fixed View / Build / Prepare / Complete source ke Git;
-7. set Max/Run = 1;
-8. reset **satu** DN saja — P96331 boleh menjadi kandidat pertama;
-9. verify Prepare → HTTP → Complete → API log → retry state → `Api_post` sebelum memperluas batch.
+5. capture exact fixed View / Build / Prepare / Complete source ke Git;
+6. set Max/Run = 1;
+7. reset **satu** DN saja — P96331 boleh menjadi kandidat pertama;
+8. verify Prepare → HTTP → Complete → API log → retry state → `Api_post` sebelum memperluas batch.
