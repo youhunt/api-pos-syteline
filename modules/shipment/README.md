@@ -40,27 +40,64 @@ P96332 WAITING_BACKOFF attempt 2/5 HTTP 404
   Complete exception: nvarchar -> bigint (FIXED by Patch 15)
 ```
 
-**Jangan Reset Retry / Run Now sampai endpoint 404 dibereskan.**
+## Endpoint evidence + Patch 16
 
-## Endpoint dan login
-
-Konfigurasi UAT terakhir yang tercatat di repo:
+Tenant Query Select before Patch 16 returned:
 
 ```text
-LoginUrl    = https://api-uat.pizzahut.co.id/service-auth/login-once
-EndpointUrl = https://api-uat.pizzahut.co.id/inventory/v1/infor_dn
+SiteRef          Default
+ApiName          SHIPMENT
+IsActive         1
+SchedulerEnabled 1
+LoginUrl         https://api-uat.pizzahut.co.id/service-auth/login-once
+EndpointUrl      https://api-uat.pizzahut.co.id/inventory/v1/infor_dn
+HttpMethod       POST
+ContentType      application/json
+SuccessMode      KACS_V1
 ```
 
-Ada histori ambiguity:
+P96330/P96332 using that active route returned:
 
 ```text
-/inventory/v1/infor_dn
-/inventory-phi/v1/infor_dn
+HTTP 404
+Response=404 page not found
 ```
 
-HTTP 404 terbaru berarti route aktif harus diverifikasi dari tenant + evidence POS yang benar sebelum retry.
+Repo evidence from 7 Sep preserves two POS-provided `infor_dn` candidates:
 
-Repo `SMK069ShipmentSenderExtension.rev3.cs` menunjukkan batch sender membaca `endpointUrl` dari konfigurasi lalu menyerahkannya ke `SMK069SendOneShipment`; constant `PosShipmentPath` hanya digunakan jalur manual environment resolver. Jadi audit 404 berikutnya harus dimulai dari **active tenant configuration**, bukan rebuild extension berdasarkan tebakan route.
+```text
+https://api-uat.pizzahut.co.id/inventory/v1/infor_dn
+https://api-uat.pizzahut.co.id/inventory-phi/v1/infor_dn
+```
+
+and records that one `infor_dn` attempt reached POS business validation (`1010 data is exist`). Because the currently active `/inventory/v1/infor_dn` is now proven to return route-level 404, Patch 16 moves UAT to the remaining documented candidate:
+
+```text
+https://api-uat.pizzahut.co.id/inventory-phi/v1/infor_dn
+```
+
+Patch:
+
+```text
+database/patches/shipment/2026-09-09-smk069-16-fix-shipment-endpoint-and-hold-scheduler.sql
+```
+
+Documentation/evidence:
+
+```text
+docs/shipment/35-shipment-endpoint-404-fix-and-controlled-retry.md
+tests/evidence/2026-09-09-smk069-active-shipment-config-before-patch16.md
+```
+
+Patch 16 also sets:
+
+```text
+SchedulerEnabled = 0
+```
+
+as a safety hold. It does **not** perform HTTP, Reset Retry, or alter retry counters.
+
+Repo `SMK069ShipmentSenderExtension.rev3.cs` shows the batch sender reads `endpointUrl` from configuration and passes it directly to `SMK069SendOneShipment`; therefore the batch path can be corrected in config without rebuilding the extension.
 
 ## DN contract — current tenant evidence
 
@@ -132,7 +169,7 @@ SELECT
 FROM dbo.ue_SMK069_shipment_api_log_mst
 ```
 
-Karena `ShipmentId` pada log sekarang berisi `P96330`/`P96332`, SQL Server melakukan implicit conversion `nvarchar -> bigint` dan gagal.
+Karena `ShipmentId` pada log berisi `P96330`/`P96332`, SQL Server melakukan implicit conversion `nvarchar -> bigint` dan gagal.
 
 Patch:
 
@@ -167,11 +204,7 @@ PLG     -> P963 + shipment_id
 non-PLG -> R975 + shipment_id
 ```
 
-Historical numeric-only log tetap didukung melalui `TRY_CONVERT(BIGINT, @ShipmentDn)` fallback.
-
 ### Tenant verification Patch 15 — PASS
-
-Tenant Query Select pada 9 Sep 2026 menghasilkan:
 
 ```text
 Patch15Marker               OldBigintAssignmentRemoved   StringDnPresent
@@ -196,14 +229,21 @@ tests/evidence/2026-09-09-smk069-patch15-complete-dn-pass.md
 ```text
 P96331 missing DOC_NO local Build gate    FIXED + VERIFIED (Patch 14 Rev.2)
 Complete nvarchar -> bigint               FIXED + VERIFIED (Patch 15)
-HTTP 404 page not found                   STILL OPEN
+HTTP 404 / active route                   PATCH 16 READY — endpoint switch + scheduler hold
 ```
 
-Jadi sekarang **HTTP 404 adalah satu-satunya known blocker** sebelum controlled retry.
+## Controlled retry policy after Patch 16 verification
 
-## Retry policy
+Do **not** re-enable scheduler immediately.
 
-Setelah endpoint bersih/terkonfirmasi:
+First verify tenant config:
+
+```text
+EndpointUrl      https://api-uat.pizzahut.co.id/inventory-phi/v1/infor_dn
+SchedulerEnabled 0
+```
+
+Then:
 
 ```text
 Max/Run = 1
@@ -211,20 +251,24 @@ Reset ONE DN only
 Controlled UAT
 ```
 
-P96331 boleh menjadi kandidat pertama karena local DOC_NO blocker sudah dihilangkan.
+Recommended first DN: **P96331**.
 
-Verify seluruh flow:
+Reason: local DOC_NO blocker is fixed; Complete is fixed; it has not yet spent an attempt against the corrected route. If POS rejects `DOC_NO=""`, that becomes direct POS-contract evidence instead of a local SyteLine validation block.
+
+Decision gate:
 
 ```text
-Prepare
-→ HTTP
-→ Complete
-→ API log
-→ retry state
-→ shipment_mst.SMK069_Uf_api_post
+HTTP 404 again
+  -> STOP; do not try another DN
+
+HTTP reaches POS business response
+  -> route fixed; inspect business code/response
+
+Business success
+  -> verify Complete -> API log -> retry state -> shipment_mst.SMK069_Uf_api_post
 ```
 
-Jangan reset semua DN sekaligus.
+Do not reset all DN together.
 
 ## Scheduler
 
@@ -275,9 +319,10 @@ Patch 05 dan Patch 06 berada di `database/patches/shipment/withdrawn/` dan **jan
 
 ## Next steps
 
-1. Capture current active Shipment `EndpointUrl`, `LoginUrl`, method, success mode, and scheduler state dari tenant.
-2. Cocokkan route dengan known-good POS evidence; fix HTTP 404 tanpa membakar retry.
-3. Pastikan scheduler tetap held selama investigation.
-4. Set Max/Run = 1.
-5. Reset **satu** DN saja.
-6. Controlled UAT dan verify full lifecycle.
+1. Apply Patch 16.
+2. Query Select config -> endpoint target + SchedulerEnabled=0.
+3. Set Max/Run = 1 while scheduler remains held.
+4. Reset **P96331 only**.
+5. Controlled one-DN UAT.
+6. Review HTTP/body + Complete/API log/retry state/Api_post.
+7. Only after successful review, decide whether to re-enable scheduler and process P96330/P96332.
