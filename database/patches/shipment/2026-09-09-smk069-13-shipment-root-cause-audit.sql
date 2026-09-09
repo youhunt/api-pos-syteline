@@ -164,8 +164,8 @@ SELECT
     MIN(v.cust_code) AS CustCode,
     MIN(v.whse_code) AS WhseCode,
     MIN(v.store_code) AS StoreCode,
-    MIN(v.Api_post) AS MinApiPost,
-    MAX(v.Api_post) AS MaxApiPost,
+    MIN(CONVERT(INT, ISNULL(v.Api_post, 0))) AS MinApiPost,
+    MAX(CONVERT(INT, ISNULL(v.Api_post, 0))) AS MaxApiPost,
     MIN(v.Api_post_date) AS FirstApiPostDate,
     MAX(v.Api_post_date) AS LastApiPostDate
 FROM dbo.SMK069_ShipmentAPI_mst AS v
