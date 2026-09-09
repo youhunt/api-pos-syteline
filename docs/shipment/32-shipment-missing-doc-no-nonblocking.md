@@ -129,20 +129,25 @@ JANGAN Run Now sebelum HTTP 404 dan Complete nvarchar->bigint dibereskan.
 
 ## 7. Verification — no Shipment send yet
 
-Verify the markers through Query Select:
+Use `CHARINDEX`, not `LIKE`, for source-fragment verification. In SQL Server a
+pattern such as `[DOC_NO]` inside `LIKE` is interpreted as a character class,
+not as literal square-bracket text, and can therefore report a false FAIL.
+
+Verify through Query Select:
 
 ```sql
+DECLARE @BuildDef NVARCHAR(MAX) =
+    OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P'));
+
 SELECT
     TYPE_NAME(p.user_type_id) AS DN_No_Type,
     CASE
-        WHEN OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P'))
-             LIKE N'%SMK069-DOC-NONBLOCKING-R2%'
+        WHEN CHARINDEX(N'SMK069-DOC-NONBLOCKING-R2', ISNULL(@BuildDef, N'')) > 0
             THEN N'PASS'
         ELSE N'FAIL'
     END AS DocNoNonBlocking,
     CASE
-        WHEN OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P'))
-             LIKE N'%ISNULL(@DocNo, N'''') AS [DOC_NO]%'
+        WHEN CHARINDEX(N'ISNULL(@DocNo, N'''') AS [DOC_NO]', ISNULL(@BuildDef, N'')) > 0
             THEN N'PASS'
         ELSE N'FAIL'
     END AS EmptyStringJson
@@ -158,6 +163,11 @@ DN_No_Type       nvarchar/varchar
 DocNoNonBlocking PASS
 EmptyStringJson  PASS
 ```
+
+If a previous verification using `LIKE N'%... [DOC_NO]%'` returned
+`EmptyStringJson = FAIL` while Patch 14 Rev.2 had already completed successfully,
+do **not** reapply the patch based on that result alone. Run the `CHARINDEX`
+verification above instead.
 
 Then inspect the P96331 View rows without sending:
 
@@ -205,7 +215,7 @@ Correct sequence:
 
 ```text
 1. Apply Patch 14 Revision 2.
-2. Verify PASS/PASS markers.
+2. Verify PASS/PASS markers with CHARINDEX.
 3. Keep scheduler/retry held.
 4. Capture/fix exact tenant Complete line 36.
 5. Confirm the correct POS EndpointUrl.
