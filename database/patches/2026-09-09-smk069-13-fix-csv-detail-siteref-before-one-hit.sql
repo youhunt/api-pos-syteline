@@ -1,5 +1,5 @@
 /* =============================================================================
-   SMK069 - Patch 13 - Fix CSV detail SiteRef before CSV -> CO one-hit
+   SMK069 - Patch 13 Rev.2 - Fix CSV detail SiteRef before CSV -> CO one-hit
    -----------------------------------------------------------------------------
    Date    : 2026-09-09
    Object  : dbo.SMK069RunCsvTestBatchSp
@@ -7,6 +7,16 @@
              one-hit CSV -> Customer Order procedure cannot see them because
              ue_SMK069_pos_csv_upload_mst.SiteRef is NULL/blank or not aligned
              with the active Mongoose site.
+
+   REV.2
+   -----
+   - Fixes Infor Apply Database error:
+         Incorrect syntax near the keyword 'ELSE'
+   - The previous revision had an effectively empty BEGIN/END branch containing
+     only a comment. Some tenant SQL execution paths reject that shape at the
+     following ELSE.
+   - Prefix detection now uses LEN() instead of hard-coded lengths and gives
+     every BEGIN/END branch an executable statement.
 
    TENANT / CODE EVIDENCE
    ----------------------
@@ -20,12 +30,14 @@
      processor returns:
          [POS-402] Batch CSV belum memiliki detail transaksi.
 
-   SAFE BEHAVIOR
-   -------------
-   The injected normalization runs only after the batch header has already been
-   resolved in the active site context. It updates detail rows for the same
-   batch_id only when SiteRef is NULL/blank/different, then the original stored
-   procedure continues unchanged.
+   IMPORTANT: SiteRef vs siteref
+   -----------------------------
+   SiteRef = standard Mongoose site ownership column used by site-aware SQL.
+   siteref = business/source field parsed from the CSV and may legitimately be
+             blank when the CSV does not provide site/site_ref/siteref.
+
+   Patch 13 fixes SiteRef because that is the field used by the one-hit
+   preflight. It does not require the CSV business field siteref to be populated.
 
    Designed for Infor Apply Database: one executable batch, no GO separator.
    ============================================================================= */
@@ -33,13 +45,17 @@
 SET NOCOUNT ON;
 
 DECLARE
-    @ObjectId    INT,
-    @Definition  NVARCHAR(MAX),
-    @Needle      NVARCHAR(400),
-    @InsertPos   INT,
-    @PatchMarker NVARCHAR(200),
-    @Snippet     NVARCHAR(MAX),
-    @NewDef      NVARCHAR(MAX);
+    @ObjectId          INT,
+    @Definition        NVARCHAR(MAX),
+    @Needle            NVARCHAR(400),
+    @InsertPos         INT,
+    @PatchMarker       NVARCHAR(200),
+    @Snippet           NVARCHAR(MAX),
+    @NewDef            NVARCHAR(MAX),
+    @TrimmedNewDef     NVARCHAR(MAX),
+    @CreatePrefix      NVARCHAR(50),
+    @CreateAlterPrefix NVARCHAR(50),
+    @AlterPrefix       NVARCHAR(50);
 
 SET @ObjectId = OBJECT_ID(N'dbo.SMK069RunCsvTestBatchSp', N'P');
 
@@ -79,9 +95,7 @@ SET @InsertPos = @InsertPos + LEN(@Needle);
 SET @Snippet = N'
 
     /* SMK069 PATCH13 CSV DETAIL SITEREF NORMALIZATION */
-    /* The CSV parser historically did not explicitly populate the standard
-       Mongoose SiteRef column on detail rows. Normalize it here only for a
-       batch header that belongs to the active site. */
+    /* Normalize STANDARD Mongoose SiteRef for parsed detail rows. */
     IF EXISTS
     (
         SELECT 1
@@ -101,23 +115,33 @@ SET @Snippet = N'
 ';
 
 SET @NewDef = STUFF(@Definition, @InsertPos + 1, 0, @Snippet);
+SET @TrimmedNewDef = LTRIM(@NewDef);
+SET @CreatePrefix = N'CREATE PROCEDURE';
+SET @CreateAlterPrefix = N'CREATE OR ALTER PROCEDURE';
+SET @AlterPrefix = N'ALTER PROCEDURE';
 
-/* OBJECT_DEFINITION normally returns CREATE/ALTER text. Force an ALTER-safe
-   prefix so this remains idempotent for an existing procedure. */
-IF UPPER(LEFT(LTRIM(@NewDef), 16)) = N'CREATE PROCEDURE'
+/* Normalize the installed definition to an executable ALTER-safe definition. */
+IF UPPER(LEFT(@TrimmedNewDef, LEN(@CreateAlterPrefix))) = @CreateAlterPrefix
 BEGIN
-    SET @NewDef = STUFF(
+    /* CREATE OR ALTER is already safe. Keep a real statement in this branch. */
+    SET @NewDef = @NewDef;
+END
+ELSE IF UPPER(LEFT(@TrimmedNewDef, LEN(@CreatePrefix))) = @CreatePrefix
+BEGIN
+    SET @NewDef = STUFF
+    (
         @NewDef,
-        CHARINDEX(N'CREATE PROCEDURE', UPPER(@NewDef)),
-        LEN(N'CREATE PROCEDURE'),
-        N'ALTER PROCEDURE'
+        CHARINDEX(@CreatePrefix, UPPER(@NewDef)),
+        LEN(@CreatePrefix),
+        @AlterPrefix
     );
 END
-ELSE IF UPPER(LEFT(LTRIM(@NewDef), 22)) = N'CREATE OR ALTER PROCEDURE'
+ELSE IF UPPER(LEFT(@TrimmedNewDef, LEN(@AlterPrefix))) = @AlterPrefix
 BEGIN
-    /* supported as-is */
+    /* Already ALTER PROCEDURE. Keep a real statement in this branch. */
+    SET @NewDef = @NewDef;
 END
-ELSE IF CHARINDEX(N'ALTER PROCEDURE', UPPER(@NewDef)) = 0
+ELSE
 BEGIN
     RAISERROR('Prefix procedure tidak dikenali. Patch dihentikan untuk keamanan.', 16, 1);
     RETURN;
@@ -125,7 +149,8 @@ END;
 
 EXEC sys.sp_executesql @NewDef;
 
-IF CHARINDEX(
+IF CHARINDEX
+   (
        @PatchMarker,
        OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069RunCsvTestBatchSp', N'P'))
    ) = 0
@@ -134,4 +159,4 @@ BEGIN
     RETURN;
 END;
 
-PRINT 'OK - SMK069RunCsvTestBatchSp sekarang menormalisasi SiteRef detail CSV sebelum one-hit processing.';
+PRINT 'OK - Patch 13 Rev.2 terpasang. Standard SiteRef detail CSV dinormalisasi sebelum one-hit processing.';
