@@ -111,7 +111,7 @@ docs/shipment/31-shipment-root-cause-audit-2026-09-09.md
 
 Audit ini tidak mengirim Shipment dan tidak mengubah retry/data. Ia harus digunakan untuk capture exact tenant definition sebelum patch Complete dibuat.
 
-## Patch 14 — DOC_NO tidak lagi hard stop
+## Patch 14 Revision 2 — DOC_NO tidak lagi hard stop
 
 Business request 9 Sep: Shipment yang tidak mempunyai `DOC_NO` harus tetap dapat melewati Build/Prepare.
 
@@ -122,24 +122,29 @@ database/patches/shipment/2026-09-09-smk069-14-allow-missing-doc-no.sql
 docs/shipment/32-shipment-missing-doc-no-nonblocking.md
 ```
 
-Patch 14 menjaga current tenant source dengan `OBJECT_DEFINITION`; tidak me-replace full View/Build menggunakan source Git lama.
+### Revision 1 result
 
-Urutan effective `DOC_NO` sekarang:
+Rev.1 mencoba optional View fallback dan mencari exact fragment:
 
 ```text
-1. co_mst.co_num
-2. coitem_mst.co_num
-3. shipment_line_mst.ref_num
-4. "" jika semuanya kosong
+co.co_num AS doc_no
 ```
 
-Jika semua referensi nyata kosong, `SMK069BuildShipmentJsonSp` **tidak lagi RETURN gagal hanya karena DOC_NO kosong** dan JSON tetap dibentuk sebagai:
+Current tenant View tidak memiliki fragment tersebut. Apply Database berhenti aman dan transaksi rollback. Tidak ada partial change.
+
+### Revision 2 behavior
+
+Revision 2 **tidak mengubah `SMK069_ShipmentAPI_mst` sama sekali**.
+
+Ia membaca exact installed `SMK069BuildShipmentJsonSp` melalui `OBJECT_DEFINITION` dan hanya mengubah missing-DOC_NO validation agar tidak lagi `RETURN` gagal.
+
+Jika View tetap menghasilkan DOC_NO kosong, JSON tetap dibentuk sebagai:
 
 ```json
 "DOC_NO": ""
 ```
 
-Proteksi Shipment yang mempunyai **lebih dari satu distinct DOC_NO** tetap aktif; jangan memilih salah satu order secara diam-diam.
+Proteksi Shipment yang mempunyai **lebih dari satu distinct nonblank DOC_NO** tetap aktif; jangan memilih salah satu order secara diam-diam.
 
 Patch 14 hanya menghilangkan local DOC_NO gate. Ia **tidak** memperbaiki HTTP 404 dan **tidak** memperbaiki Complete `nvarchar→bigint`.
 
@@ -172,12 +177,14 @@ Setelah actual string→BIGINT crossing terbukti, buat patch minimal seperti Pat
 
 ### 3. P96331 sebelumnya berhenti karena DOC_NO kosong
 
-Patch 14 mengubah behavior ini menjadi non-blocking:
+Patch 14 Revision 2 mengubah behavior ini menjadi non-blocking:
 
-- coba pakai `co_mst.co_num`;
-- fallback ke `coitem_mst.co_num`;
-- fallback ke `shipment_line_mst.ref_num`;
-- jika tetap kosong, Build JSON dengan `DOC_NO=""` dan lanjut ke transport.
+```text
+DOC_NO kosong
+-> Build tetap lanjut
+-> JSON DOC_NO=""
+-> Prepare dapat lanjut
+```
 
 Dengan demikian CSV→CO **tidak perlu dicampur** hanya agar sender lewat local validation. CSV→CO baru dibuka jika bisnis memang perlu memperbaiki Customer Order upstream, bukan sebagai dependency teknis sender.
 
@@ -246,8 +253,8 @@ Patch 05 dan Patch 06 berada di `database/patches/shipment/withdrawn/` dan **jan
 
 **Belum boleh retry saat HTTP 404 + Complete error masih aktif.**
 
-1. Apply `2026-09-09-smk069-14-allow-missing-doc-no.sql`;
-2. Query Select P96331 dan pastikan Build source sekarang non-blocking / effective DOC_NO terlihat;
+1. Apply current `2026-09-09-smk069-14-allow-missing-doc-no.sql` (**Revision 2**);
+2. Query Select dan pastikan `DocNoNonBlocking=PASS` + `EmptyStringJson=PASS`;
 3. jalankan/lihat hasil `2026-09-09-smk069-13-shipment-root-cause-audit.sql` untuk current EndpointUrl + exact Complete definition;
 4. verify/fix `EndpointUrl` berdasarkan known-good POS evidence;
 5. patch `SMK069CompleteShipmentSendSp` string-DN handling minimal berdasarkan exact tenant line 36;
