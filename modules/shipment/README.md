@@ -39,7 +39,8 @@ Known blockers sekarang:
 P96331 missing DOC_NO local Build gate    FIXED + VERIFIED (Patch 14 Rev.2)
 Complete nvarchar -> bigint               FIXED + VERIFIED (Patch 15)
 Old /inventory/v1/infor_dn route          REPLACED + VERIFIED (Patch 16)
-Scheduler automatic sending               HELD OFF (SchedulerEnabled=0)
+Scheduler automatic sending               HELD OFF (master SchedulerEnabled=0)
+Controlled one-DN arm state               PATCH 17 READY
 ```
 
 ## Endpoint — Patch 16 verified
@@ -140,26 +141,68 @@ docs/shipment/34-complete-shipment-prefixed-dn-fix.md
 tests/evidence/2026-09-09-smk069-patch15-complete-dn-pass.md
 ```
 
+## Patch 17 — arm controlled P96331 UAT only
+
+Pre-UAT verification after Patch 16 showed:
+
+```text
+HOURLY MaxShipments    NULL
+HOURLY IsEnabled       1
+HOURLY RunRequested    0
+HOURLY RunState        I
+P96331 AttemptCount    3
+P96331 RetryState      P
+P96331 NextAttemptDate Sep 9 2026 9:24AM
+```
+
+Therefore the previous form operation did **not** reset P96331 and did not set the per-schedule max to 1.
+
+Patch 17:
+
+```text
+database/patches/shipment/2026-09-09-smk069-17-arm-controlled-uat-p96331.sql
+```
+
+Documentation/evidence:
+
+```text
+docs/shipment/36-controlled-uat-p96331-arm.md
+tests/evidence/2026-09-09-smk069-pre-uat-p96331-state.md
+```
+
+Patch 17 performs no HTTP. It requires master scheduler OFF and endpoint Patch 16 already active, then sets:
+
+```text
+HOURLY MaxShipments    = 1
+HOURLY IsEnabled       = 1
+HOURLY RunRequested    = 0
+HOURLY RunState        = I
+HOURLY NextRunDate     = GETDATE() + 1 day
+
+P96331 AttemptCount    = 0
+P96331 RetryState      = P
+P96331 NextAttemptDate = NULL
+```
+
+Why park `NextRunDate` in the future: `SMK069ClaimDueShipmentScheduleSp` treats `NextRunDate IS NULL` or `NextRunDate <= GETDATE()` as due. Without parking it, merely turning master ON could let TaskMan claim HOURLY before the operator explicitly presses Run Now.
+
+Historical LastHttpCode/LastError remain for audit, matching existing Reset Retry semantics.
+
 ## Controlled one-DN UAT policy
 
 Do not enable normal scheduling yet.
 
-Scheduler design supports two limits:
+Before any HTTP run:
 
 ```text
-Configuration.MaxBatchSize = default maximum
-Schedule.MaxShipments      = per-schedule override
+1. Apply Patch 17.
+2. Verify master remains OFF.
+3. Verify HOURLY MaxShipments=1 and NextRunDate is future.
+4. Verify P96331 AttemptCount=0, RetryState=P, NextAttemptDate=NULL.
+5. Verify queue ranking and confirm P96331 is the first candidate for MaxShipments=1.
 ```
 
-For first sender UAT use:
-
-```text
-HOURLY MaxShipments = 1
-Reset exactly ONE DN only
-Recommended DN = P96331
-```
-
-The queue picker orders lower attempt count first. A Reset Retry for P96331 should return it to pending with the lowest attempt count; verify the retry row before enabling the run.
+Only then open the master/run path for one controlled run.
 
 Decision gate:
 
@@ -224,11 +267,10 @@ Patch 05 and Patch 06 under `database/patches/shipment/withdrawn/` must not be r
 
 ## Next steps
 
-1. Keep Master Scheduler OFF.
-2. Set HOURLY `Max Shipments / Run = 1`.
-3. Reset **P96331 only** from Retry Queue.
-4. Verify P96331 retry state is pending/ready before any HTTP run.
-5. Enable only the controlled UAT path and execute one run.
-6. Review HTTP/body + Complete/API log/retry state/Api_post.
-7. Keep/restore master OFF immediately after the one-DN run until results are reviewed.
-8. Only after clean evidence decide whether to process P96330/P96332 and re-enable normal schedule.
+1. Apply Patch 17.
+2. Query Select Patch 17 state -> target master OFF, MaxShipments=1, P96331 attempt 0/pending.
+3. Query Select candidate ranking -> confirm P96331 is candidate #1.
+4. Only then enable the controlled one-run path.
+5. Execute one run and immediately review HTTP/body + Complete/API log/retry state/Api_post.
+6. Keep/restore master OFF after the one-DN run until results are reviewed.
+7. Only after clean evidence decide whether to process P96330/P96332 and re-enable normal schedule.
