@@ -22,13 +22,14 @@ Patch 14 Rev.2 is already verified PASS/PASS for P96331's missing-DOC_NO Build g
 - rejects procedural statements such as `DECLARE`, `SET`, `EXEC`, `BEGIN/END`, and `GO`;
 - stores query output through `dbo.ue_LNS00_QueryExecutionResults`;
 - its `value2` result buffer is too small for a 3500-character procedure chunk;
-- also rejects the attempted `ROW_NUMBER` + XML-nodes line-splitting query near alias `LineNo`.
+- rejects the attempted `ROW_NUMBER` + XML-nodes line-splitting query;
+- wraps the supplied SELECT in another query/derived table, therefore a plain trailing `ORDER BY` is rejected unless paired with TOP/OFFSET/FOR XML.
 
-Therefore use only simple pure `SELECT` statements with short scalar output values.
+Therefore use only simple pure `SELECT` statements, short scalar output values, and **no trailing ORDER BY**. Returned rows may be visually unsorted; use the explicit numeric key (`ChunkNo`, `parameter_id`, `column_id`) to identify them.
 
 ## Query A — authoritative Complete source in 200-character chunks
 
-This pattern already passed the Query Select parser; only the old 3500-character value was too large. Run:
+Run exactly this version **without ORDER BY**:
 
 ```sql
 SELECT
@@ -47,13 +48,40 @@ CROSS JOIN
         (21),(22),(23),(24),(25),(26),(27),(28),(29),(30)
 ) AS v(ChunkNo)
 WHERE m.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')
-  AND LEN(m.definition) >= ((v.ChunkNo - 1) * 200) + 1
-ORDER BY v.ChunkNo;
+  AND LEN(m.definition) >= ((v.ChunkNo - 1) * 200) + 1;
 ```
 
-Each row is at most 200 characters, well below the failed 3500-character value. Copy all returned `ChunkNo` + `SourceText` rows. Up to 6000 source characters are captured.
+Each row is at most 200 characters. Copy all returned `ChunkNo` + `SourceText` rows; they do not need to be displayed in numeric order because `ChunkNo` identifies the original position.
 
 If `value2` still truncates at 200 on this tenant, change both occurrences of `200` to `120` and extend the VALUES list as needed. Do not switch back to large chunks.
+
+## Query A0 — targeted context if full chunk capture is inconvenient
+
+This query returns short contexts around the first `shipment_id`, `ShipmentId`, and `DN_No` tokens in the current Complete source. It is also a pure SELECT and has no ORDER BY:
+
+```sql
+SELECT
+    CHARINDEX(N'shipment_id', LOWER(m.definition)) AS ShipmentIdColumnPos,
+    CASE
+        WHEN CHARINDEX(N'shipment_id', LOWER(m.definition)) > 0
+        THEN SUBSTRING(
+                 m.definition,
+                 CASE
+                     WHEN CHARINDEX(N'shipment_id', LOWER(m.definition)) > 80
+                     THEN CHARINDEX(N'shipment_id', LOWER(m.definition)) - 80
+                     ELSE 1
+                 END,
+                 180
+             )
+        ELSE N''
+    END AS ShipmentIdContext,
+    CHARINDEX(N'shipmentid', LOWER(m.definition)) AS ShipmentIdTokenPos,
+    CHARINDEX(N'dn_no', LOWER(m.definition)) AS DnNoPos
+FROM sys.sql_modules AS m
+WHERE m.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P');
+```
+
+If Query A works, it remains the preferred evidence because it preserves the complete current tenant body in small pieces.
 
 ## Query B — current Complete parameter metadata
 
@@ -68,8 +96,7 @@ SELECT
     p.scale,
     p.is_output
 FROM sys.parameters AS p
-WHERE p.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')
-ORDER BY p.parameter_id;
+WHERE p.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P');
 ```
 
 Historical shape was:
@@ -98,8 +125,7 @@ SELECT
     c.scale,
     c.is_nullable
 FROM sys.columns AS c
-WHERE c.object_id = OBJECT_ID(N'dbo.ue_SMK069_shipment_api_log_mst', N'U')
-ORDER BY c.column_id;
+WHERE c.object_id = OBJECT_ID(N'dbo.ue_SMK069_shipment_api_log_mst', N'U');
 ```
 
 ## Query D — standard Shipment key type
@@ -116,13 +142,12 @@ SELECT
     c.is_nullable
 FROM sys.columns AS c
 WHERE c.object_id = OBJECT_ID(N'dbo.shipment_mst', N'U')
-  AND c.name IN (N'shipment_id', N'Api_post', N'Api_post_date')
-ORDER BY c.column_id;
+  AND c.name IN (N'shipment_id', N'Api_post', N'Api_post_date');
 ```
 
 ## Patch decision
 
-Do not create or apply the Complete fix until Query A is captured.
+Do not create or apply the Complete fix until Query A (or at minimum A0 plus metadata C/D) identifies the exact string/numeric crossing.
 
 The likely failure class is a prefixed text outbound DN crossing into a numeric Shipment key, but the exact conversion must be proven from the tenant procedure body before modifying it.
 
