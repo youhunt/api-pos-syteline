@@ -21,76 +21,14 @@ Patch 14 Rev.2 is already verified PASS/PASS for P96331's missing-DOC_NO Build g
 
 - rejects procedural statements such as `DECLARE`, `SET`, `EXEC`, `BEGIN/END`, and `GO`;
 - stores query output through `dbo.ue_LNS00_QueryExecutionResults`;
-- its `value2` result buffer is too small for a 3500-character procedure chunk.
+- its `value2` result buffer is too small for a 3500-character procedure chunk;
+- also rejects the attempted `ROW_NUMBER` + XML-nodes line-splitting query near alias `LineNo`.
 
-The attempted 3500-character source dump failed with:
+Therefore use only simple pure `SELECT` statements with short scalar output values.
 
-```text
-String or binary data would be truncated in table
-'dbo.ue_LNS00_QueryExecutionResults', column 'value2'.
-```
+## Query A — authoritative Complete source in 200-character chunks
 
-Therefore do **not** dump the whole procedure in large chunks from this form.
-
-## Query A — line 28 through 44 around failing line 36
-
-Run this first. It is one pure `SELECT` and limits each source row to 200 characters:
-
-```sql
-SELECT
-    q.LineNo,
-    q.SourceLine
-FROM
-(
-    SELECT
-        ROW_NUMBER() OVER (ORDER BY (SELECT 1)) AS LineNo,
-        LEFT(x.n.value('(text())[1]', 'nvarchar(4000)'), 200) AS SourceLine
-    FROM
-    (
-        SELECT CONVERT(
-            XML,
-            N'<r><l>' +
-            REPLACE(
-                REPLACE(
-                    (
-                        SELECT m.definition AS [text()]
-                        FROM sys.sql_modules AS m
-                        WHERE m.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')
-                        FOR XML PATH(N'')
-                    ),
-                    CHAR(13),
-                    N''
-                ),
-                CHAR(10),
-                N'</l><l>'
-            ) +
-            N'</l></r>'
-        ) AS DefinitionXml
-    ) AS d
-    CROSS APPLY d.DefinitionXml.nodes('/r/l') AS x(n)
-) AS q
-WHERE q.LineNo BETWEEN 28 AND 44
-ORDER BY q.LineNo;
-```
-
-Expected output shape:
-
-```text
-LineNo | SourceLine
-28     | ...
-...
-36     | <failing statement>
-...
-44     | ...
-```
-
-Copy all returned rows 28–44. This is enough to identify the exact statement around SQL Server-reported line 36 without exceeding the form result buffer.
-
-If Query A itself is rejected by the tenant XML parser, use fallback Query A2 below.
-
-## Query A2 — fallback small source chunks
-
-This fallback returns only 200 characters per row:
+This pattern already passed the Query Select parser; only the old 3500-character value was too large. Run:
 
 ```sql
 SELECT
@@ -113,7 +51,9 @@ WHERE m.object_id = OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')
 ORDER BY v.ChunkNo;
 ```
 
-This captures up to the first 6000 characters while staying far below the previous 3500-character per-row failure.
+Each row is at most 200 characters, well below the failed 3500-character value. Copy all returned `ChunkNo` + `SourceText` rows. Up to 6000 source characters are captured.
+
+If `value2` still truncates at 200 on this tenant, change both occurrences of `200` to `120` and extend the VALUES list as needed. Do not switch back to large chunks.
 
 ## Query B — current Complete parameter metadata
 
@@ -182,7 +122,7 @@ ORDER BY c.column_id;
 
 ## Patch decision
 
-Do not create or apply the Complete fix until Query A/A2 is captured.
+Do not create or apply the Complete fix until Query A is captured.
 
 The likely failure class is a prefixed text outbound DN crossing into a numeric Shipment key, but the exact conversion must be proven from the tenant procedure body before modifying it.
 
