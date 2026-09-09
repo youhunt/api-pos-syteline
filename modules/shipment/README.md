@@ -30,21 +30,21 @@ Form       : Shipment Scheduler Control Center
 ```text
 P96330 WAITING_BACKOFF attempt 3/5 HTTP 404
   POS API HTTP error 404; Response=404 page not found
-  Complete exception: nvarchar -> bigint
+  Complete exception: nvarchar -> bigint (FIXED by Patch 15)
 
 P96331 WAITING_BACKOFF attempt 3/5 HTTP 0
-  sebelumnya berhenti karena DOC_NO kosong
+  sebelumnya berhenti karena DOC_NO kosong (FIXED by Patch 14 Rev.2)
 
 P96332 WAITING_BACKOFF attempt 2/5 HTTP 404
   POS API HTTP error 404; Response=404 page not found
-  Complete exception: nvarchar -> bigint
+  Complete exception: nvarchar -> bigint (FIXED by Patch 15)
 ```
 
 **Jangan Reset Retry / Run Now sampai endpoint 404 dibereskan.**
 
 ## Endpoint dan login
 
-Konfigurasi UAT terakhir yang tercatat:
+Konfigurasi UAT terakhir yang tercatat di repo:
 
 ```text
 LoginUrl    = https://api-uat.pizzahut.co.id/service-auth/login-once
@@ -59,6 +59,8 @@ Ada histori ambiguity:
 ```
 
 HTTP 404 terbaru berarti route aktif harus diverifikasi dari tenant + evidence POS yang benar sebelum retry.
+
+Repo `SMK069ShipmentSenderExtension.rev3.cs` menunjukkan batch sender membaca `endpointUrl` dari konfigurasi lalu menyerahkannya ke `SMK069SendOneShipment`; constant `PosShipmentPath` hanya digunakan jalur manual environment resolver. Jadi audit 404 berikutnya harus dimulai dari **active tenant configuration**, bukan rebuild extension berdasarkan tebakan route.
 
 ## DN contract — current tenant evidence
 
@@ -109,6 +111,12 @@ Artinya P96331 tidak lagi berhenti hanya karena `DOC_NO` kosong. Build tetap mem
 ```
 
 Proteksi multiple distinct DOC_NO tetap aktif.
+
+Evidence:
+
+```text
+tests/evidence/2026-09-09-smk069-patch14-docno-nonblocking-pass.md
+```
 
 ## Patch 15 — Complete Shipment string DN fix
 
@@ -161,59 +169,41 @@ non-PLG -> R975 + shipment_id
 
 Historical numeric-only log tetap didukung melalui `TRY_CONVERT(BIGINT, @ShipmentDn)` fallback.
 
-Patch 15 tidak mengubah endpoint, tidak Reset Retry, dan tidak melakukan HTTP call.
+### Tenant verification Patch 15 — PASS
 
-### Verification Patch 15 — Query Select
-
-Tenant Query Select membungkus supplied SQL. Gunakan pure SELECT, tanpa `ORDER BY`, tanpa trailing `;`:
-
-```sql
-SELECT
-    CASE
-        WHEN CHARINDEX(
-            N'SMK069-COMPLETE-DN-STRING-R1',
-            ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')), N'')
-        ) > 0
-        THEN N'PASS'
-        ELSE N'FAIL'
-    END AS Patch15Marker,
-    CASE
-        WHEN CHARINDEX(
-            N'@ShipmentId = ShipmentId',
-            ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')), N'')
-        ) = 0
-        THEN N'PASS'
-        ELSE N'FAIL'
-    END AS OldBigintAssignmentRemoved,
-    CASE
-        WHEN CHARINDEX(
-            N'@ShipmentDn',
-            ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')), N'')
-        ) > 0
-        THEN N'PASS'
-        ELSE N'FAIL'
-    END AS StringDnPresent
-```
-
-Expected:
+Tenant Query Select pada 9 Sep 2026 menghasilkan:
 
 ```text
-PASS | PASS | PASS
+Patch15Marker               OldBigintAssignmentRemoved   StringDnPresent
+PASS                        PASS                         PASS
+```
+
+Dengan demikian error berikut dianggap **fixed at stored-procedure layer**:
+
+```text
+Error converting data type nvarchar to bigint.
+dbo.SMK069CompleteShipmentSendSp:36
+```
+
+Evidence:
+
+```text
+tests/evidence/2026-09-09-smk069-patch15-complete-dn-pass.md
 ```
 
 ## Current blocker matrix
 
 ```text
-P96331 missing DOC_NO local Build gate    FIXED by Patch 14 Rev.2
-Complete nvarchar -> bigint               PATCH 15 ready to apply/verify
+P96331 missing DOC_NO local Build gate    FIXED + VERIFIED (Patch 14 Rev.2)
+Complete nvarchar -> bigint               FIXED + VERIFIED (Patch 15)
 HTTP 404 page not found                   STILL OPEN
 ```
 
-Jadi walaupun Patch 15 sudah PASS, **belum boleh retry** sampai HTTP 404 route dikonfirmasi/diperbaiki.
+Jadi sekarang **HTTP 404 adalah satu-satunya known blocker** sebelum controlled retry.
 
 ## Retry policy
 
-Setelah endpoint dan Complete path bersih:
+Setelah endpoint bersih/terkonfirmasi:
 
 ```text
 Max/Run = 1
@@ -285,10 +275,9 @@ Patch 05 dan Patch 06 berada di `database/patches/shipment/withdrawn/` dan **jan
 
 ## Next steps
 
-1. Apply Patch 15.
-2. Query Select Patch 15 -> target PASS/PASS/PASS.
-3. Capture current active Shipment `EndpointUrl` dari tenant.
-4. Cocokkan route dengan known-good POS evidence; fix HTTP 404 tanpa membakar retry.
-5. Set Max/Run = 1.
-6. Reset satu DN saja.
-7. Controlled UAT dan verify full lifecycle.
+1. Capture current active Shipment `EndpointUrl`, `LoginUrl`, method, success mode, and scheduler state dari tenant.
+2. Cocokkan route dengan known-good POS evidence; fix HTTP 404 tanpa membakar retry.
+3. Pastikan scheduler tetap held selama investigation.
+4. Set Max/Run = 1.
+5. Reset **satu** DN saja.
+6. Controlled UAT dan verify full lifecycle.
