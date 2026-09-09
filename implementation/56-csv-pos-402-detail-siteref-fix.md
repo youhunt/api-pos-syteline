@@ -48,7 +48,7 @@ WHERE SiteRef = @Site
 This allows detail rows to be visible on a form linked by `batch_id` but still be
 invisible to the site-aware one-hit processor.
 
-## Patch 13 Rev.2
+## Patch 13 Rev.3
 
 Apply:
 
@@ -64,18 +64,38 @@ runs.
 
 ### Rev.1 Apply Database error
 
-The first revision failed in the tenant with:
+The first revision failed with:
 
 ```text
 Incorrect syntax near the keyword 'ELSE'
 ```
 
-Cause: a prefix-detection branch had an effectively empty `BEGIN/END` block that
-contained only a comment. Rev.2 gives each branch an executable statement and
-uses `LEN()` for `CREATE PROCEDURE`, `CREATE OR ALTER PROCEDURE`, and
-`ALTER PROCEDURE` prefix detection.
+Cause: an effectively empty prefix-detection branch.
 
-The patch remains one executable batch with no `GO`, suitable for Infor Apply Database.
+### Rev.2 Apply Database error
+
+The second revision failed with:
+
+```text
+Prefix procedure tidak dikenali. Patch dihentikan untuk keamanan.
+```
+
+Cause: it still assumed the installed module began with one exact prefix shape
+(`CREATE PROCEDURE`, `CREATE OR ALTER PROCEDURE`, or `ALTER PROCEDURE`). The
+tenant definition can use `PROC` instead of `PROCEDURE`, different whitespace,
+or another equivalent module header form.
+
+### Rev.3 behavior
+
+Rev.3 no longer depends on an exact starting prefix. It:
+
+1. Finds `SMK069RunCsvTestBatchSp` inside the installed definition.
+2. Locates the nearest `PROC` / `PROCEDURE` token before the object name.
+3. Looks only in the nearby header for `CREATE` / `ALTER`.
+4. Rewrites that header to `ALTER PROCEDURE`.
+5. Executes the modified installed definition.
+
+The patch is still one executable batch with no `GO`, suitable for Infor Apply Database.
 
 ## Verification query
 
@@ -98,7 +118,7 @@ WHERE batch_id = N'CSV-20260909-072038-835E3D'
 ORDER BY row_no;
 ```
 
-After Patch 13 Rev.2 and the next one-hit execution:
+After Patch 13 Rev.3 and the next one-hit execution:
 
 ```text
 SiteRef = active Mongoose site (tenant currently expected: Default)
@@ -107,7 +127,7 @@ siteref = may remain blank if CSV did not supply it
 
 ## UAT flow after patch
 
-1. Apply Patch 13 Rev.2.
+1. Apply Patch 13 Rev.3.
 2. Refresh the CSV Test Console.
 3. Click Import & Validate / one-hit CSV -> CO using the same batch.
 4. Expected: POS-402 disappears.
@@ -120,6 +140,6 @@ siteref = may remain blank if CSV did not supply it
 ## Follow-up hardening
 
 The parser source should eventually be revised so `SMK069ImportCsvFileSp`
-explicitly sets the standard `SiteRef` during parse/persistence. Patch 13 is kept
-small and tenant-compatible so the currently installed one-hit procedure can be
-repaired without replacing its full body.
+explicitly sets the standard `SiteRef` during parse/persistence. Patch 13 remains
+small so the currently installed one-hit procedure can be repaired without
+replacing its full body.
