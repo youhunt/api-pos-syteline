@@ -29,18 +29,18 @@ Form       : Shipment Scheduler Control Center
 
 ```text
 P96330 WAITING_BACKOFF attempt 3/5 HTTP 404
-P96331 WAITING_BACKOFF attempt 3/5 sebelumnya DOC_NO kosong
+P96331 sebelumnya WAITING_BACKOFF attempt 3/5 karena DOC_NO kosong
 P96332 WAITING_BACKOFF attempt 2/5 HTTP 404
 ```
 
-Known blockers sekarang:
+Known blockers/status sekarang:
 
 ```text
 P96331 missing DOC_NO local Build gate    FIXED + VERIFIED (Patch 14 Rev.2)
 Complete nvarchar -> bigint               FIXED + VERIFIED (Patch 15)
 Old /inventory/v1/infor_dn route          REPLACED + VERIFIED (Patch 16)
 Scheduler automatic sending               HELD OFF (master SchedulerEnabled=0)
-Controlled one-DN arm state               PATCH 17 READY
+Controlled P96331 arm state               VERIFIED (Patch 17)
 ```
 
 ## Endpoint — Patch 16 verified
@@ -71,8 +71,6 @@ Evidence:
 tests/evidence/2026-09-09-smk069-active-shipment-config-before-patch16.md
 tests/evidence/2026-09-09-smk069-patch16-endpoint-hold-pass.md
 ```
-
-Patch 16 does not perform HTTP and does not reset retry counters.
 
 ## DN contract — current tenant evidence
 
@@ -141,70 +139,63 @@ docs/shipment/34-complete-shipment-prefixed-dn-fix.md
 tests/evidence/2026-09-09-smk069-patch15-complete-dn-pass.md
 ```
 
-## Patch 17 — arm controlled P96331 UAT only
+## Patch 17 — controlled P96331 UAT arm verified
 
-Pre-UAT verification after Patch 16 showed:
-
-```text
-HOURLY MaxShipments    NULL
-HOURLY IsEnabled       1
-HOURLY RunRequested    0
-HOURLY RunState        I
-P96331 AttemptCount    3
-P96331 RetryState      P
-P96331 NextAttemptDate Sep 9 2026 9:24AM
-```
-
-Therefore the previous form operation did **not** reset P96331 and did not set the per-schedule max to 1.
-
-Patch 17:
+Patch:
 
 ```text
 database/patches/shipment/2026-09-09-smk069-17-arm-controlled-uat-p96331.sql
 ```
+
+Tenant verification after Patch 17:
+
+```text
+MasterEnabled     0
+EndpointUrl       https://api-uat.pizzahut.co.id/inventory-phi/v1/infor_dn
+ScheduleCode      HOURLY
+MaxShipments      1
+ScheduleEnabled   1
+RunRequested      0
+RunState          I
+NextRunDate       Sep 10 2026 10:35AM
+ShipmentId        P96331
+AttemptCount      0
+RetryState        P
+NextAttemptDate   NULL
+LastHttpCode      0
+```
+
+Interpretation:
+
+- master remains OFF;
+- endpoint Patch 16 remains active;
+- one-run cap is 1;
+- HOURLY is not requested/running;
+- NextRunDate is parked in the future;
+- P96331 has been reset to pending attempt 0;
+- no HTTP was sent by Patch 17.
 
 Documentation/evidence:
 
 ```text
 docs/shipment/36-controlled-uat-p96331-arm.md
 tests/evidence/2026-09-09-smk069-pre-uat-p96331-state.md
+tests/evidence/2026-09-09-smk069-patch17-arm-state-pass.md
 ```
-
-Patch 17 performs no HTTP. It requires master scheduler OFF and endpoint Patch 16 already active, then sets:
-
-```text
-HOURLY MaxShipments    = 1
-HOURLY IsEnabled       = 1
-HOURLY RunRequested    = 0
-HOURLY RunState        = I
-HOURLY NextRunDate     = GETDATE() + 1 day
-
-P96331 AttemptCount    = 0
-P96331 RetryState      = P
-P96331 NextAttemptDate = NULL
-```
-
-Why park `NextRunDate` in the future: `SMK069ClaimDueShipmentScheduleSp` treats `NextRunDate IS NULL` or `NextRunDate <= GETDATE()` as due. Without parking it, merely turning master ON could let TaskMan claim HOURLY before the operator explicitly presses Run Now.
-
-Historical LastHttpCode/LastError remain for audit, matching existing Reset Retry semantics.
 
 ## Controlled one-DN UAT policy
 
-Do not enable normal scheduling yet.
-
-Before any HTTP run:
+Before any HTTP run, one final gate remains: verify the actual first candidate under `SMK069GetPendingShipmentsSp` ordering:
 
 ```text
-1. Apply Patch 17.
-2. Verify master remains OFF.
-3. Verify HOURLY MaxShipments=1 and NextRunDate is future.
-4. Verify P96331 AttemptCount=0, RetryState=P, NextAttemptDate=NULL.
-5. Verify queue ranking and confirm P96331 is the first candidate for MaxShipments=1.
+AttemptCount ASC
+NextAttemptDate ASC
+ShipmentId ASC
 ```
 
-Only then open the master/run path for one controlled run.
+With `MaxShipments=1`, the first row is the only DN that will be attempted. Do not enable master / Run Now until P96331 is proven to be candidate #1.
 
-Decision gate:
+Decision gate after one-DN send:
 
 ```text
 HTTP 404 again
@@ -249,6 +240,8 @@ no trailing semicolon
 short output values only
 ```
 
+`ORDER BY` is only safe in this form when SQL Server permits it inside the wrapper, e.g. together with `TOP`.
+
 ## Source utama
 
 ```text
@@ -267,10 +260,8 @@ Patch 05 and Patch 06 under `database/patches/shipment/withdrawn/` must not be r
 
 ## Next steps
 
-1. Apply Patch 17.
-2. Query Select Patch 17 state -> target master OFF, MaxShipments=1, P96331 attempt 0/pending.
-3. Query Select candidate ranking -> confirm P96331 is candidate #1.
-4. Only then enable the controlled one-run path.
-5. Execute one run and immediately review HTTP/body + Complete/API log/retry state/Api_post.
-6. Keep/restore master OFF after the one-DN run until results are reviewed.
-7. Only after clean evidence decide whether to process P96330/P96332 and re-enable normal schedule.
+1. Query Select candidate ranking and confirm P96331 is candidate #1.
+2. Only then enable master and request exactly one HOURLY run.
+3. Execute one controlled run and immediately review HTTP/body + Complete/API log/retry state/Api_post.
+4. Keep/restore master OFF after the one-DN run until results are reviewed.
+5. Only after clean evidence decide whether to process P96330/P96332 and re-enable normal schedule.
