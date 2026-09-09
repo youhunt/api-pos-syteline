@@ -76,7 +76,7 @@ P96332 WAITING_BACKOFF attempt 2/5 HTTP 404
     dbo.SMK069CompleteShipmentSendSp:36
 ```
 
-**Jangan membakar sisa retry budget sebelum akar masalah diperbaiki.** Jangan `Reset Retry`, `Run Now`, atau invoke sender manual selama investigation gate ini.
+**Jangan membakar sisa retry budget sebelum akar masalah bersama diperbaiki.** Jangan `Reset Retry`, `Run Now`, atau invoke sender manual hanya untuk mengetes endpoint yang masih sama.
 
 ## Audit repo 9 Sep — source drift ditemukan
 
@@ -102,14 +102,46 @@ extension-classes/shipment/SMK069ShipmentSenderExtension.rev3.cs
 
 Artinya file 4 Sep tersebut **bukan current tenant source-of-truth** untuk menebak `SMK069CompleteShipmentSendSp`.
 
-Read-only root-cause capture sudah ditambahkan:
+Read-only root-cause capture:
 
 ```text
 database/patches/shipment/2026-09-09-smk069-13-shipment-root-cause-audit.sql
 docs/shipment/31-shipment-root-cause-audit-2026-09-09.md
 ```
 
-Audit ini tidak mengirim Shipment dan tidak mengubah retry/data. Ia harus dijalankan untuk capture exact tenant definition sebelum patch Complete dibuat.
+Audit ini tidak mengirim Shipment dan tidak mengubah retry/data. Ia harus digunakan untuk capture exact tenant definition sebelum patch Complete dibuat.
+
+## Patch 14 — DOC_NO tidak lagi hard stop
+
+Business request 9 Sep: Shipment yang tidak mempunyai `DOC_NO` harus tetap dapat melewati Build/Prepare.
+
+Patch:
+
+```text
+database/patches/shipment/2026-09-09-smk069-14-allow-missing-doc-no.sql
+docs/shipment/32-shipment-missing-doc-no-nonblocking.md
+```
+
+Patch 14 menjaga current tenant source dengan `OBJECT_DEFINITION`; tidak me-replace full View/Build menggunakan source Git lama.
+
+Urutan effective `DOC_NO` sekarang:
+
+```text
+1. co_mst.co_num
+2. coitem_mst.co_num
+3. shipment_line_mst.ref_num
+4. "" jika semuanya kosong
+```
+
+Jika semua referensi nyata kosong, `SMK069BuildShipmentJsonSp` **tidak lagi RETURN gagal hanya karena DOC_NO kosong** dan JSON tetap dibentuk sebagai:
+
+```json
+"DOC_NO": ""
+```
+
+Proteksi Shipment yang mempunyai **lebih dari satu distinct DOC_NO** tetap aktif; jangan memilih salah satu order secara diam-diam.
+
+Patch 14 hanya menghilangkan local DOC_NO gate. Ia **tidak** memperbaiki HTTP 404 dan **tidak** memperbaiki Complete `nvarchar→bigint`.
 
 ## Tiga masalah yang harus dipisahkan
 
@@ -138,20 +170,36 @@ API log column metadata
 
 Setelah actual string→BIGINT crossing terbukti, buat patch minimal seperti Patch 11 dan preserve seluruh body tenant lainnya.
 
-### 3. P96331 tidak punya DOC_NO / Customer Order
+### 3. P96331 sebelumnya berhenti karena DOC_NO kosong
 
-Ini data/upstream dependency, bukan HTTP error. Shipment tersebut tidak boleh dikirim sampai source Shipment memiliki `DOC_NO`/CO yang valid.
+Patch 14 mengubah behavior ini menjadi non-blocking:
 
-Cross ke workstream CSV→CO hanya jika tracing membuktikan Customer Order P96331 memang hilang karena upstream POS inbound creation.
+- coba pakai `co_mst.co_num`;
+- fallback ke `coitem_mst.co_num`;
+- fallback ke `shipment_line_mst.ref_num`;
+- jika tetap kosong, Build JSON dengan `DOC_NO=""` dan lanjut ke transport.
+
+Dengan demikian CSV→CO **tidak perlu dicampur** hanya agar sender lewat local validation. CSV→CO baru dibuka jika bisnis memang perlu memperbaiki Customer Order upstream, bukan sebagai dependency teknis sender.
+
+Jika POS kemudian menolak `DOC_NO=""`, response tersebut menjadi evidence contract POS. Jangan mengarang substitute document number tanpa business approval.
 
 ## Retry
 
-Shipment yang berada di `WAITING_BACKOFF` dapat diproses ulang **hanya setelah root cause diperbaiki**:
+Shipment yang berada di `WAITING_BACKOFF` dapat diproses ulang **setelah root cause bersama diperbaiki**:
 
 - tunggu `NextAttemptDate`, atau
 - gunakan controlled `SMK069ResetShipmentRetrySp` / Reset Retry.
 
 Reset retry tidak menyelesaikan root cause; jangan reset berulang hanya untuk mencoba endpoint yang sama.
+
+Untuk UAT berikutnya:
+
+```text
+Max/Run = 1
+Reset satu DN saja
+```
+
+P96331 adalah kandidat bagus setelah Patch 14 karena local DOC_NO blocker sudah dihilangkan, **tetapi hanya setelah endpoint dan Complete path bersih**.
 
 Selama incident ini, pastikan scheduler tidak otomatis menghabiskan attempt berikutnya. Patch 13 audit menampilkan `SchedulerEnabled` dan schedule state. Jika masih aktif, hold melalui Shipment Scheduler Control Center sebelum `NextAttemptDate`.
 
@@ -192,15 +240,18 @@ Patch 05 dan Patch 06 berada di `database/patches/shipment/withdrawn/` dan **jan
 - Jangan pakai `System.Data` di extension class; tenant sebelumnya tidak menyediakan reference itu. Gunakan `Context.Commands.Invoke` untuk IDO/SP calls.
 - Credentials POS tetap runtime/TaskMan concern, bukan static token config.
 - Exact tenant definition harus dicapture ke Git setelah runtime object berubah; source lama tidak boleh dianggap authoritative hanya karena nama object sama.
+- Patch terhadap stale standalone source harus tenant-preserving/guarded seperti Patch 11 dan Patch 14 sampai exact runtime source dicapture ulang.
 
 ## Next investigation
 
-**Tidak ada retry sebelum langkah 1–4 selesai.**
+**Belum boleh retry saat HTTP 404 + Complete error masih aktif.**
 
-1. jalankan `2026-09-09-smk069-13-shipment-root-cause-audit.sql` secara read-only;
-2. verify configured `EndpointUrl` terhadap known-good POS evidence;
-3. inspect exact tenant `SMK069CompleteShipmentSendSp` definition + parameter metadata + line 36 + API-log column types;
-4. patch string handling minimal dan capture exact fixed Complete source ke Git;
-5. trace P96331 `DOC_NO`/CO secara terpisah;
-6. baru reset **satu** DN yang valid dan UAT dengan Max/Run = 1;
-7. verify Prepare → HTTP → Complete → API log → retry state → `Api_post` sebelum memperluas batch.
+1. Apply `2026-09-09-smk069-14-allow-missing-doc-no.sql`;
+2. Query Select P96331 dan pastikan Build source sekarang non-blocking / effective DOC_NO terlihat;
+3. jalankan/lihat hasil `2026-09-09-smk069-13-shipment-root-cause-audit.sql` untuk current EndpointUrl + exact Complete definition;
+4. verify/fix `EndpointUrl` berdasarkan known-good POS evidence;
+5. patch `SMK069CompleteShipmentSendSp` string-DN handling minimal berdasarkan exact tenant line 36;
+6. capture exact fixed View / Build / Prepare / Complete source ke Git;
+7. set Max/Run = 1;
+8. reset **satu** DN saja — P96331 boleh menjadi kandidat pertama;
+9. verify Prepare → HTTP → Complete → API log → retry state → `Api_post` sebelum memperluas batch.
