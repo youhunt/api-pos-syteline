@@ -1,44 +1,32 @@
-# Test Workspace
+# Test Evidence Router
 
-Folder ini menyimpan payload sintetis, test case, expected result, dan bukti pengujian untuk integrasi POS → SyteLine.
+Folder `tests/` berisi evidence historis dari dua workstream. Untuk menghindari churn besar pada bukti UAT lama, file evidence historis **belum dipindahkan secara fisik** pada reorg 9 Sep 2026.
 
-## Structure
+Gunakan routing berikut:
 
-```text
-tests/
-├── README.md
-├── test-cases.md
-└── payloads/
-    ├── minimal-valid.json
-    ├── minimal-item-unmapped.json
-    └── minimal-negative-qty.json
-```
+## CSV → CO / inbound
 
-## First PoC Run
+Secara umum:
 
-Gunakan urutan berikut:
+- evidence Jul–Aug tentang inbound, staging, customer validation, `CreateCoAndLines`, Customer Order, CSV/import;
+- payload `minimal-*`;
+- test case Customer Order / inbound.
 
-1. buat mapping test untuk `PIZZA001`, `DRINK001`, dan `PIZZA002`;
-2. kirim `payloads/minimal-valid.json`;
-3. periksa satu inbound, satu batch, dan tiga raw lines;
-4. pastikan terdapat dua distinct transactions;
-5. pastikan batch total `350000`;
-6. kirim payload yang sama lagi tanpa mengubah `idempotencyKey`;
-7. pastikan tidak tercipta batch baru;
-8. kirim `minimal-item-unmapped.json`;
-9. pastikan item tidak dikenal menghasilkan status error dan message yang jelas;
-10. tambahkan mapping item tersebut, jalankan retry, lalu pastikan source row tidak dibuat ganda.
+## Shipment
 
-## Evidence Folder
+Secara umum:
 
-Saat eksekusi dimulai, buat folder per run:
+- evidence mulai 3 Sep yang nama filenya memuat `shipment`, `kacs`, `scheduler`, `taskman`, atau `dashboard`;
+- payload `dn*` dan `shipment-*`;
+- tools `Get-SmkShipmentPayload.ps1` dan `Test-Kacs*.ps1`.
+
+## Aturan baru
+
+Test/evidence baru harus dibuat pada:
 
 ```text
-tests/evidence/YYYYMMDD-<environment>-<site>/
+tests/csv-to-co/
+tests/shipment/
 ```
 
-Simpan request, response, screenshot, reconciliation, preview, dan hasil Pass/Fail. Jangan menyimpan token, password, secret, PIN, CVV, atau nomor kartu lengkap.
-
-## Important
-
-Payload pada folder ini adalah data sintetis. Nilai, item, outlet, dan account harus disesuaikan dengan master test tenant sebelum dijalankan.
+Legacy evidence dibiarkan di lokasi lama supaya referensi histori/commit tidak berubah lebih banyak dari yang diperlukan.
