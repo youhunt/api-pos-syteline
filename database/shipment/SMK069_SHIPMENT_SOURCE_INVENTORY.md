@@ -8,22 +8,40 @@ Purpose: ensure tenant Shipment runtime objects are preserved as exact standalon
 
 | Tenant object | Runtime / tenant evidence | Standalone Git source |
 |---|---|---|
-| `dbo.SMK069_ShipmentAPI_mst` | Runtime now emits prefixed string DN values such as `P96330` | ⚠️ **STALE** — `database/views/shipment/SMK069_ShipmentAPI_mst.sql` was captured on 2026-09-04 and still shows `sh.shipment_id AS DN_No`; recapture exact tenant definition |
-| `dbo.SMK069BuildShipmentJsonSp` | Patch 11 tenant `sys.parameters` evidence on 2026-09-09 says `@DN_No` is `nvarchar`; Patch 14 Rev.2 verified `DocNoNonBlocking=PASS` and `EmptyStringJson=PASS` | ⚠️ **STALE** standalone source — `database/procedures/shipment/SMK069BuildShipmentJsonSp.sql` was captured on 2026-09-04 and still declares `@DN_No BIGINT`; current tenant definition still needs recapture |
+| `dbo.SMK069_ShipmentAPI_mst` | Runtime emits prefixed string DN values. Current tenant evidence: `CAST(CONCAT(IIF(sh.whse = 'PLG', 'P963', 'R975'), sh.shipment_id) AS nvarchar(10)) AS DN_No` | ⚠️ historical standalone `database/views/shipment/SMK069_ShipmentAPI_mst.sql` is stale and still needs exact current tenant recapture |
+| `dbo.SMK069BuildShipmentJsonSp` | Patch 11 tenant `sys.parameters` evidence says `@DN_No` is `nvarchar`; Patch 14 Rev.2 verified `DocNoNonBlocking=PASS` and `EmptyStringJson=PASS` | ⚠️ historical standalone source is stale; current tenant definition still needs recapture |
 | `dbo.SMK069PrepareShipmentSendSp` | Patch 11 changed only `@DN_No` from `BIGINT` to `NVARCHAR(40)` while preserving the installed body | ⚠️ exact current tenant SQL source not yet captured as standalone file |
-| `dbo.SMK069CompleteShipmentSendSp` | Exact tenant source captured 2026-09-09; root cause proven: local `@ShipmentId BIGINT` receives text `ShipmentId` such as `P96330` from API log | ✅ pre-fix tenant source captured at `database/procedures/shipment/SMK069CompleteShipmentSendSp.tenant-2026-09-09.sql`; Patch 15 pending mapping verification |
+| `dbo.SMK069CompleteShipmentSendSp` | Exact pre-fix tenant source captured; root cause proven: local `@ShipmentId BIGINT` receives text DN such as `P96330`. Patch 15 maps outbound DN text back to standard numeric shipment key using current View contract | ✅ pre-fix capture: `SMK069CompleteShipmentSendSp.tenant-2026-09-09.sql`; ✅ fixed canonical source: `SMK069CompleteShipmentSendSp.sql`; apply patch: `2026-09-09-smk069-15-fix-complete-shipment-dn-string.sql` |
 | `dbo.ue_SMK069_shipment_api_log_mst` | Runtime/UAT-used; `ShipmentId` stores prefixed outbound DN text in current queue/log flow | ⚠️ exact tenant DDL not yet captured as standalone file |
-| `SMK069ShipmentTransportExtension` | Tenant runtime has progressed past the 4 Sep source and uses the string-DN/scheduler path | ⚠️ `extension-classes/shipment/SMK069ShipmentSenderExtension.cs` is legacy; `SMK069ShipmentSenderExtension.rev3.cs` is a newer candidate but explicitly is not guaranteed to equal the latest tenant source |
+| `SMK069ShipmentTransportExtension` | Tenant runtime uses the string-DN/scheduler path | ⚠️ `extension-classes/shipment/SMK069ShipmentSenderExtension.cs` is legacy; `SMK069ShipmentSenderExtension.rev3.cs` is newer but still must be compared with tenant before being declared authoritative |
 
-## 9 Sep root-cause audit
+## Confirmed DN contract — 9 Sep
 
-Use the read-only audit before any retry or Complete patch:
+Current tenant Shipment View evidence:
 
-```text
-database/patches/shipment/2026-09-09-smk069-13-shipment-root-cause-audit.sql
+```sql
+CAST(
+    CONCAT(
+        IIF(sh.whse = 'PLG', 'P963', 'R975'),
+        sh.shipment_id
+    )
+    AS nvarchar(10)
+) AS DN_No
 ```
 
-Confirmed Complete root cause from tenant source:
+Therefore:
+
+```text
+P96330 = prefix P963 + shipment_mst.shipment_id 30
+P96331 = prefix P963 + shipment_mst.shipment_id 31
+P96332 = prefix P963 + shipment_mst.shipment_id 32
+```
+
+Do not interpret `P96330` as numeric key `96330`.
+
+## Confirmed Complete root cause
+
+Pre-fix tenant Complete source:
 
 ```sql
 DECLARE @ShipmentId BIGINT;
@@ -35,17 +53,16 @@ WHERE SiteRef = @Site
   AND RowPointer = @LogRowPointer;
 ```
 
-Current queue/log DN values are text such as:
+Current API-log ShipmentId is text such as `P96330`, so the assignment performs an invalid implicit `nvarchar -> bigint` conversion.
+
+Patch 15 separates the two contracts:
 
 ```text
-P96330
-P96331
-P96332
+@ShipmentDn NVARCHAR(40) -> outbound DN such as P96330
+@ShipmentId BIGINT       -> internal shipment_mst key such as 30
 ```
 
-Therefore the assignment above attempts an implicit `nvarchar -> bigint` conversion before Complete can update the API log / Shipment state.
-
-The remaining Patch 15 gate is to verify exactly how the current tenant Shipment View maps prefixed outbound `DN_No` back to the numeric standard `shipment_mst.shipment_id`. Do not assume that stripping the `P` prefix is correct until the current tenant View definition confirms it.
+The numeric key is resolved against `shipment_mst` with the same P963/R975 + `shipment_id` expression used by the current tenant View. A numeric-only fallback remains for historical log rows.
 
 ## Shipment source boundary
 
@@ -67,17 +84,25 @@ dbo.ue_SMK069_pos_sales_inbound_mapping_view
 
 That view belongs only to the POS inbound -> Customer Order flow.
 
-If KACS/POS rejects Shipment field values, the correction must be made in the Shipment view/source mapping (or a Shipment-specific mapping explicitly designed for it), not by reusing the inbound CO mapping view.
+CSV→CO may be consulted only for a real upstream dependency, not as a workaround for Shipment sender validation.
 
-CSV→CO may be consulted only for a real upstream dependency, not as a workaround for the Shipment sender's DOC_NO validation.
+## Remaining incident gate
+
+Patch 14 resolves the local missing-DOC_NO hard stop and Patch 15 resolves the Complete string-DN conversion. The remaining independent blocker before retry is:
+
+```text
+HTTP 404 page not found
+```
+
+Do not consume another retry attempt until the configured Shipment EndpointUrl is confirmed/corrected.
 
 ## Rule going forward
 
-A tenant Shipment object must not be considered fully source-controlled until its **exact current applied/runtime definition** is preserved in Git.
+A tenant Shipment object must not be considered fully source-controlled until its exact current applied/runtime definition is preserved in Git.
 
-Documentation/evidence describing behavior is useful but does not replace the executable SQL/DDL/source.
+Documentation/evidence is useful but does not replace executable SQL/DDL/source.
 
-When the current tenant definitions are captured, preserve them under the Shipment workstream, for example:
+Preferred locations:
 
 ```text
 database/views/shipment/SMK069_ShipmentAPI_mst.sql
