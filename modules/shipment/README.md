@@ -76,13 +76,48 @@ P96332 WAITING_BACKOFF attempt 2/5 HTTP 404
     dbo.SMK069CompleteShipmentSendSp:36
 ```
 
-Jangan membakar sisa retry budget sebelum akar masalah diperbaiki.
+**Jangan membakar sisa retry budget sebelum akar masalah diperbaiki.** Jangan `Reset Retry`, `Run Now`, atau invoke sender manual selama investigation gate ini.
+
+## Audit repo 9 Sep — source drift ditemukan
+
+Repo standalone source tertinggal dari runtime tenant setelah DN berubah menjadi string berprefiks:
+
+```text
+database/views/shipment/SMK069_ShipmentAPI_mst.sql
+  masih: sh.shipment_id AS DN_No
+
+database/procedures/shipment/SMK069BuildShipmentJsonSp.sql
+  masih: @DN_No BIGINT
+
+Patch 11 tenant evidence:
+  SMK069BuildShipmentJsonSp.@DN_No = nvarchar
+
+extension-classes/shipment/SMK069ShipmentSenderExtension.cs
+  masih source legacy dengan DN long
+
+extension-classes/shipment/SMK069ShipmentSenderExtension.rev3.cs
+  sudah string DN, tetapi header-nya sendiri menyatakan harus dibandingkan
+  dengan tenant sebelum mengganti source runtime.
+```
+
+Artinya file 4 Sep tersebut **bukan current tenant source-of-truth** untuk menebak `SMK069CompleteShipmentSendSp`.
+
+Read-only root-cause capture sudah ditambahkan:
+
+```text
+database/patches/shipment/2026-09-09-smk069-13-shipment-root-cause-audit.sql
+docs/shipment/31-shipment-root-cause-audit-2026-09-09.md
+```
+
+Audit ini tidak mengirim Shipment dan tidak mengubah retry/data. Ia harus dijalankan untuk capture exact tenant definition sebelum patch Complete dibuat.
 
 ## Tiga masalah yang harus dipisahkan
 
 ### 1. HTTP 404 — P96330 / P96332
 
 Shipment sudah mencapai HTTP transport dan route menjawab `404 page not found`. Verifikasi configured `EndpointUrl` terhadap endpoint POS yang benar sebelum retry.
+
+Jangan melakukan probe dengan Shipment retry. Cocokkan nilai tenant dengan URL POS yang memang pernah terbukti mencapai business response, atau evidence resmi POS team.
 
 ### 2. Complete Shipment masih punya BIGINT conversion
 
@@ -92,20 +127,33 @@ Shipment sudah mencapai HTTP transport dan route menjawab `404 page not found`. 
 Error converting data type nvarchar to bigint
 ```
 
-Exact tenant source untuk Complete belum tersimpan di Git. Jangan menebak atau menulis ulang full procedure. Capture/inspect tenant definition dan parameter/column types dulu, lalu buat patch minimal seperti Patch 11 untuk Prepare.
+Exact tenant source untuk Complete belum tersimpan di Git. Jangan menebak atau menulis ulang full procedure. Jalankan Patch 13 read-only audit untuk capture:
+
+```text
+sys.parameters
+OBJECT_DEFINITION
+line 36
+API log column metadata
+```
+
+Setelah actual string→BIGINT crossing terbukti, buat patch minimal seperti Patch 11 dan preserve seluruh body tenant lainnya.
 
 ### 3. P96331 tidak punya DOC_NO / Customer Order
 
 Ini data/upstream dependency, bukan HTTP error. Shipment tersebut tidak boleh dikirim sampai source Shipment memiliki `DOC_NO`/CO yang valid.
 
+Cross ke workstream CSV→CO hanya jika tracing membuktikan Customer Order P96331 memang hilang karena upstream POS inbound creation.
+
 ## Retry
 
-Shipment yang berada di `WAITING_BACKOFF` dapat diproses ulang setelah root cause diperbaiki:
+Shipment yang berada di `WAITING_BACKOFF` dapat diproses ulang **hanya setelah root cause diperbaiki**:
 
 - tunggu `NextAttemptDate`, atau
 - gunakan controlled `SMK069ResetShipmentRetrySp` / Reset Retry.
 
 Reset retry tidak menyelesaikan root cause; jangan reset berulang hanya untuk mencoba endpoint yang sama.
+
+Selama incident ini, pastikan scheduler tidak otomatis menghabiskan attempt berikutnya. Patch 13 audit menampilkan `SchedulerEnabled` dan schedule state. Jika masih aktif, hold melalui Shipment Scheduler Control Center sebelum `NextAttemptDate`.
 
 ## Scheduler
 
@@ -143,12 +191,16 @@ Patch 05 dan Patch 06 berada di `database/patches/shipment/withdrawn/` dan **jan
 - Verification SELECT terpisah di Query Select.
 - Jangan pakai `System.Data` di extension class; tenant sebelumnya tidak menyediakan reference itu. Gunakan `Context.Commands.Invoke` untuk IDO/SP calls.
 - Credentials POS tetap runtime/TaskMan concern, bukan static token config.
+- Exact tenant definition harus dicapture ke Git setelah runtime object berubah; source lama tidak boleh dianggap authoritative hanya karena nama object sama.
 
 ## Next investigation
 
-Sebelum retry P96330/P96332:
+**Tidak ada retry sebelum langkah 1–4 selesai.**
 
-1. verify configured EndpointUrl;
-2. inspect exact tenant `SMK069CompleteShipmentSendSp` definition + parameter metadata + line 36 conversion;
-3. patch string handling minimal;
-4. baru reset satu DN dan UAT dengan Max/Run = 1.
+1. jalankan `2026-09-09-smk069-13-shipment-root-cause-audit.sql` secara read-only;
+2. verify configured `EndpointUrl` terhadap known-good POS evidence;
+3. inspect exact tenant `SMK069CompleteShipmentSendSp` definition + parameter metadata + line 36 + API-log column types;
+4. patch string handling minimal dan capture exact fixed Complete source ke Git;
+5. trace P96331 `DOC_NO`/CO secara terpisah;
+6. baru reset **satu** DN yang valid dan UAT dengan Max/Run = 1;
+7. verify Prepare → HTTP → Complete → API log → retry state → `Api_post` sebelum memperluas batch.
