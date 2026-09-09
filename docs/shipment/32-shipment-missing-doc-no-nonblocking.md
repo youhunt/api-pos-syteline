@@ -127,27 +127,33 @@ Patch ini TIDAK melakukan retry / HTTP call.
 JANGAN Run Now sebelum HTTP 404 dan Complete nvarchar->bigint dibereskan.
 ```
 
-## 7. Verification — no Shipment send yet
+## 7. Verification — SMK Query Select compatible
 
-Use `CHARINDEX`, not `LIKE`, for source-fragment verification. In SQL Server a
-pattern such as `[DOC_NO]` inside `LIKE` is interpreted as a character class,
+`SMK Query Select Execution` in this tenant accepts a SELECT query, not a full
+T-SQL batch. Do not use `DECLARE`, `SET`, `EXEC`, `BEGIN/END`, or `GO` there.
+
+Also use `CHARINDEX`, not `LIKE`, for source-fragment verification. In SQL Server
+a pattern such as `[DOC_NO]` inside `LIKE` is interpreted as a character class,
 not as literal square-bracket text, and can therefore report a false FAIL.
 
-Verify through Query Select:
+Use this **single SELECT** in Query Select:
 
 ```sql
-DECLARE @BuildDef NVARCHAR(MAX) =
-    OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P'));
-
 SELECT
     TYPE_NAME(p.user_type_id) AS DN_No_Type,
     CASE
-        WHEN CHARINDEX(N'SMK069-DOC-NONBLOCKING-R2', ISNULL(@BuildDef, N'')) > 0
+        WHEN CHARINDEX(
+            N'SMK069-DOC-NONBLOCKING-R2',
+            ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P')), N'')
+        ) > 0
             THEN N'PASS'
         ELSE N'FAIL'
     END AS DocNoNonBlocking,
     CASE
-        WHEN CHARINDEX(N'ISNULL(@DocNo, N'''') AS [DOC_NO]', ISNULL(@BuildDef, N'')) > 0
+        WHEN CHARINDEX(
+            N'ISNULL(@DocNo, N'''') AS [DOC_NO]',
+            ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069BuildShipmentJsonSp', N'P')), N'')
+        ) > 0
             THEN N'PASS'
         ELSE N'FAIL'
     END AS EmptyStringJson
@@ -166,8 +172,8 @@ EmptyStringJson  PASS
 
 If a previous verification using `LIKE N'%... [DOC_NO]%'` returned
 `EmptyStringJson = FAIL` while Patch 14 Rev.2 had already completed successfully,
-do **not** reapply the patch based on that result alone. Run the `CHARINDEX`
-verification above instead.
+do **not** reapply the patch based on that result alone. Run the single-SELECT
+`CHARINDEX` verification above instead.
 
 Then inspect the P96331 View rows without sending:
 
@@ -193,6 +199,14 @@ The View may still show `doc_no = NULL/blank`; that is allowed by Revision 2.
 The important change is that Build no longer returns failure only for that blank
 value.
 
+### Build JSON smoke test
+
+Do not try `DECLARE/EXEC dbo.SMK069BuildShipmentJsonSp` in SMK Query Select.
+That form is SELECT-only in this tenant. For a direct Build invocation, use a
+registered IDO method / Mongoose invoke path or a controlled Apply Database test
+batch. Do not use the live sender just to test Build because that would enter the
+HTTP/retry path.
+
 ## 8. Important: do not retry yet
 
 Patch 14 Revision 2 fixes only the **local DOC_NO gate**.
@@ -215,7 +229,7 @@ Correct sequence:
 
 ```text
 1. Apply Patch 14 Revision 2.
-2. Verify PASS/PASS markers with CHARINDEX.
+2. Verify PASS/PASS markers with the Query Select compatible SELECT.
 3. Keep scheduler/retry held.
 4. Capture/fix exact tenant Complete line 36.
 5. Confirm the correct POS EndpointUrl.
