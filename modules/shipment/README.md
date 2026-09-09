@@ -14,7 +14,7 @@ SMK069_ShipmentAPI_mst
 → Scheduler / TaskMan
 ```
 
-CSV parsing, `ue_SMK069_temp_sales_mst`, dan pembuatan Blanket Customer Order berada di modul `csv-to-co`. Modul CSV hanya boleh dibuka dari sini bila diperlukan untuk dependency data nyata, misalnya Shipment kehilangan `DOC_NO` karena upstream CO tidak ada.
+CSV parsing, `ue_SMK069_temp_sales_mst`, dan pembuatan Blanket Customer Order berada di modul `csv-to-co`. Modul CSV hanya boleh dibuka dari sini bila benar-benar diperlukan untuk dependency data Shipment.
 
 ## Runtime utama
 
@@ -25,95 +25,68 @@ Extension  : SMK069ShipmentTransportExtension
 Form       : Shipment Scheduler Control Center
 ```
 
-Extension class Mongoose harus tetap satu class yang terikat ke `ue_SMK069ShipmentTransport`; jangan membuat extension class kedua untuk IDO yang sama.
+## Queue incident — 9 Sep 2026
+
+```text
+P96330 WAITING_BACKOFF attempt 3/5 HTTP 404
+  POS API HTTP error 404; Response=404 page not found
+  Complete exception: nvarchar -> bigint
+
+P96331 WAITING_BACKOFF attempt 3/5 HTTP 0
+  sebelumnya berhenti karena DOC_NO kosong
+
+P96332 WAITING_BACKOFF attempt 2/5 HTTP 404
+  POS API HTTP error 404; Response=404 page not found
+  Complete exception: nvarchar -> bigint
+```
+
+**Jangan Reset Retry / Run Now sampai endpoint 404 dibereskan.**
 
 ## Endpoint dan login
 
-Konfigurasi UAT terakhir:
+Konfigurasi UAT terakhir yang tercatat:
 
 ```text
 LoginUrl    = https://api-uat.pizzahut.co.id/service-auth/login-once
 EndpointUrl = https://api-uat.pizzahut.co.id/inventory/v1/infor_dn
 ```
 
-Ada histori ambiguity base path:
+Ada histori ambiguity:
 
 ```text
 /inventory/v1/infor_dn
 /inventory-phi/v1/infor_dn
 ```
 
-Jangan mengganti EndpointUrl tanpa evidence dari POS team atau UAT. HTTP 404 terbaru menunjukkan endpoint/path harus diverifikasi lagi.
+HTTP 404 terbaru berarti route aktif harus diverifikasi dari tenant + evidence POS yang benar sebelum retry.
 
-## DN contract
+## DN contract — current tenant evidence
 
-DN sekarang adalah string berprefiks, contoh:
+DN adalah string berprefiks. Query Select current View pada 9 Sep menghasilkan:
 
-```text
-P96330
-P96331
-P96332
+```sql
+CAST(
+    CONCAT(
+        IIF(sh.whse = 'PLG', 'P963', 'R975'),
+        sh.shipment_id
+    )
+    AS nvarchar(10)
+) AS DN_No
 ```
 
-Patch 11 sudah mengubah `SMK069PrepareShipmentSendSp.@DN_No` menjadi `NVARCHAR(40)`. IDO metadata Prepare juga harus bertipe String.
-
-## Queue terakhir — 9 Sep 2026
+Sehingga:
 
 ```text
-P96330 WAITING_BACKOFF attempt 3/5 HTTP 404
-  POS API HTTP error 404; Response=404 page not found
-  + Complete Shipment exception:
-    Error converting data type nvarchar to bigint.
-    dbo.SMK069CompleteShipmentSendSp:36
-
-P96331 WAITING_BACKOFF attempt 3/5 HTTP 0
-  Shipment DN P96331 tidak mempunyai DOC_NO/Customer Order.
-
-P96332 WAITING_BACKOFF attempt 2/5 HTTP 404
-  POS API HTTP error 404; Response=404 page not found
-  + Complete Shipment exception:
-    Error converting data type nvarchar to bigint.
-    dbo.SMK069CompleteShipmentSendSp:36
+P96330 = P963 + shipment_id 30
+P96331 = P963 + shipment_id 31
+P96332 = P963 + shipment_id 32
 ```
 
-**Jangan membakar sisa retry budget sebelum akar masalah bersama diperbaiki.** Jangan `Reset Retry`, `Run Now`, atau invoke sender manual hanya untuk mengetes endpoint yang masih sama.
+**P96330 bukan shipment_id 96330.**
 
-## Audit repo 9 Sep — source drift ditemukan
+Patch 11 sudah mengubah `SMK069PrepareShipmentSendSp.@DN_No` menjadi `NVARCHAR(40)` dan IDO metadata Prepare harus String.
 
-Repo standalone source tertinggal dari runtime tenant setelah DN berubah menjadi string berprefiks:
-
-```text
-database/views/shipment/SMK069_ShipmentAPI_mst.sql
-  masih: sh.shipment_id AS DN_No
-
-database/procedures/shipment/SMK069BuildShipmentJsonSp.sql
-  masih: @DN_No BIGINT
-
-Patch 11 tenant evidence:
-  SMK069BuildShipmentJsonSp.@DN_No = nvarchar
-
-extension-classes/shipment/SMK069ShipmentSenderExtension.cs
-  masih source legacy dengan DN long
-
-extension-classes/shipment/SMK069ShipmentSenderExtension.rev3.cs
-  sudah string DN, tetapi header-nya sendiri menyatakan harus dibandingkan
-  dengan tenant sebelum mengganti source runtime.
-```
-
-Artinya file 4 Sep tersebut **bukan current tenant source-of-truth** untuk menebak `SMK069CompleteShipmentSendSp`.
-
-Read-only root-cause capture:
-
-```text
-database/patches/shipment/2026-09-09-smk069-13-shipment-root-cause-audit.sql
-docs/shipment/31-shipment-root-cause-audit-2026-09-09.md
-```
-
-Audit ini tidak mengirim Shipment dan tidak mengubah retry/data. Ia harus digunakan untuk capture exact tenant definition sebelum patch Complete dibuat.
-
-## Patch 14 Revision 2 — DOC_NO tidak lagi hard stop
-
-Business request 9 Sep: Shipment yang tidak mempunyai `DOC_NO` harus tetap dapat melewati Build/Prepare.
+## Patch 14 Revision 2 — missing DOC_NO non-blocking
 
 Patch:
 
@@ -122,115 +95,179 @@ database/patches/shipment/2026-09-09-smk069-14-allow-missing-doc-no.sql
 docs/shipment/32-shipment-missing-doc-no-nonblocking.md
 ```
 
-### Revision 1 result
-
-Rev.1 mencoba optional View fallback dan mencari exact fragment:
-
-```text
-co.co_num AS doc_no
-```
-
-Current tenant View tidak memiliki fragment tersebut. Apply Database berhenti aman dan transaksi rollback. Tidak ada partial change.
-
-### Revision 2 behavior
-
-Revision 2 **tidak mengubah `SMK069_ShipmentAPI_mst` sama sekali**.
-
-Ia membaca exact installed `SMK069BuildShipmentJsonSp` melalui `OBJECT_DEFINITION` dan hanya mengubah missing-DOC_NO validation agar tidak lagi `RETURN` gagal.
-
-Jika View tetap menghasilkan DOC_NO kosong, JSON tetap dibentuk sebagai:
-
-```json
-"DOC_NO": ""
-```
-
-Proteksi Shipment yang mempunyai **lebih dari satu distinct nonblank DOC_NO** tetap aktif; jangan memilih salah satu order secara diam-diam.
-
-### Tenant verification — PASS
-
-Query Select pada 9 Sep 2026 menghasilkan:
+Tenant verification:
 
 ```text
 DN_No_Type        DocNoNonBlocking   EmptyStringJson
 nvarchar          PASS               PASS
 ```
 
-Evidence:
+Artinya P96331 tidak lagi berhenti hanya karena `DOC_NO` kosong. Build tetap membentuk JSON dengan:
 
-```text
-tests/evidence/2026-09-09-smk069-patch14-docno-nonblocking-pass.md
+```json
+"DOC_NO": ""
 ```
 
-Dengan demikian local Build blocker P96331 karena missing `DOC_NO` dianggap **fixed**. Ini belum berarti full Shipment send path sudah siap, karena HTTP 404 dan Complete conversion masih aktif.
+Proteksi multiple distinct DOC_NO tetap aktif.
 
-## Tiga masalah yang harus dipisahkan
+## Patch 15 — Complete Shipment string DN fix
 
-### 1. HTTP 404 — P96330 / P96332
+Root cause Complete sudah dibuktikan dari exact tenant source.
 
-Shipment sudah mencapai HTTP transport dan route menjawab `404 page not found`. Verifikasi configured `EndpointUrl` terhadap endpoint POS yang benar sebelum retry.
+Pre-fix source:
 
-Jangan melakukan probe dengan Shipment retry. Cocokkan nilai tenant dengan URL POS yang memang pernah terbukti mencapai business response, atau evidence resmi POS team.
+```sql
+DECLARE @ShipmentId BIGINT;
 
-### 2. Complete Shipment masih punya BIGINT conversion
-
-`SMK069CompleteShipmentSendSp` masih gagal pada line 36 dengan:
-
-```text
-Error converting data type nvarchar to bigint
+SELECT
+    @ShipmentId = ShipmentId
+FROM dbo.ue_SMK069_shipment_api_log_mst
 ```
 
-Exact tenant source untuk Complete belum tersimpan di Git. Jangan menebak atau menulis ulang full procedure. Capture tenant source/metadata dengan pure SELECT dan patch minimal berdasarkan exact crossing yang ditemukan.
+Karena `ShipmentId` pada log sekarang berisi `P96330`/`P96332`, SQL Server melakukan implicit conversion `nvarchar -> bigint` dan gagal.
 
-### 3. P96331 sebelumnya berhenti karena DOC_NO kosong — FIXED AT BUILD LAYER
-
-Patch 14 Revision 2 sudah terverifikasi:
+Patch:
 
 ```text
-DOC_NO kosong
--> Build tetap lanjut
--> JSON DOC_NO=""
--> local DOC_NO hard stop hilang
+database/patches/shipment/2026-09-09-smk069-15-fix-complete-shipment-dn-string.sql
 ```
 
-Dengan demikian CSV→CO **tidak perlu dicampur** hanya agar sender lewat local validation. CSV→CO baru dibuka jika bisnis memang perlu memperbaiki Customer Order upstream, bukan sebagai dependency teknis sender.
+Source:
 
-Jika POS kemudian menolak `DOC_NO=""`, response tersebut menjadi evidence contract POS. Jangan mengarang substitute document number tanpa business approval.
+```text
+database/procedures/shipment/SMK069CompleteShipmentSendSp.tenant-2026-09-09.sql  # pre-fix tenant capture
+database/procedures/shipment/SMK069CompleteShipmentSendSp.sql                    # fixed canonical source
+```
 
-## Retry
+Documentation:
 
-Shipment yang berada di `WAITING_BACKOFF` dapat diproses ulang **setelah root cause bersama diperbaiki**:
+```text
+docs/shipment/34-complete-shipment-prefixed-dn-fix.md
+```
 
-- tunggu `NextAttemptDate`, atau
-- gunakan controlled `SMK069ResetShipmentRetrySp` / Reset Retry.
+Patch 15 memisahkan:
 
-Reset retry tidak menyelesaikan root cause; jangan reset berulang hanya untuk mencoba endpoint yang sama.
+```text
+@ShipmentDn NVARCHAR(40) -> P96330
+@ShipmentId BIGINT       -> 30
+```
 
-Untuk UAT berikutnya:
+Numeric `shipment_id` di-resolve menggunakan contract current View:
+
+```text
+PLG     -> P963 + shipment_id
+non-PLG -> R975 + shipment_id
+```
+
+Historical numeric-only log tetap didukung melalui `TRY_CONVERT(BIGINT, @ShipmentDn)` fallback.
+
+Patch 15 tidak mengubah endpoint, tidak Reset Retry, dan tidak melakukan HTTP call.
+
+### Verification Patch 15 — Query Select
+
+Tenant Query Select membungkus supplied SQL. Gunakan pure SELECT, tanpa `ORDER BY`, tanpa trailing `;`:
+
+```sql
+SELECT
+    CASE
+        WHEN CHARINDEX(
+            N'SMK069-COMPLETE-DN-STRING-R1',
+            ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')), N'')
+        ) > 0
+        THEN N'PASS'
+        ELSE N'FAIL'
+    END AS Patch15Marker,
+    CASE
+        WHEN CHARINDEX(
+            N'@ShipmentId = ShipmentId',
+            ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')), N'')
+        ) = 0
+        THEN N'PASS'
+        ELSE N'FAIL'
+    END AS OldBigintAssignmentRemoved,
+    CASE
+        WHEN CHARINDEX(
+            N'@ShipmentDn',
+            ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069CompleteShipmentSendSp', N'P')), N'')
+        ) > 0
+        THEN N'PASS'
+        ELSE N'FAIL'
+    END AS StringDnPresent
+```
+
+Expected:
+
+```text
+PASS | PASS | PASS
+```
+
+## Current blocker matrix
+
+```text
+P96331 missing DOC_NO local Build gate    FIXED by Patch 14 Rev.2
+Complete nvarchar -> bigint               PATCH 15 ready to apply/verify
+HTTP 404 page not found                   STILL OPEN
+```
+
+Jadi walaupun Patch 15 sudah PASS, **belum boleh retry** sampai HTTP 404 route dikonfirmasi/diperbaiki.
+
+## Retry policy
+
+Setelah endpoint dan Complete path bersih:
 
 ```text
 Max/Run = 1
-Reset satu DN saja
+Reset ONE DN only
+Controlled UAT
 ```
 
-P96331 adalah kandidat bagus karena local DOC_NO blocker sudah dihilangkan, **tetapi hanya setelah endpoint dan Complete path bersih**.
+P96331 boleh menjadi kandidat pertama karena local DOC_NO blocker sudah dihilangkan.
 
-Selama incident ini, pastikan scheduler tidak otomatis menghabiskan attempt berikutnya.
+Verify seluruh flow:
+
+```text
+Prepare
+→ HTTP
+→ Complete
+→ API log
+→ retry state
+→ shipment_mst.SMK069_Uf_api_post
+```
+
+Jangan reset semua DN sekaligus.
 
 ## Scheduler
 
 Scheduler mempunyai:
 
-- master enable;
-- schedule enable;
-- max batch size / Max per Run;
+- master/schedule enable;
+- max batch / Max per Run;
 - retry/backoff;
 - Run Now via Background Task;
-- dashboard + queue;
-- helper wait/auto-refresh dari Patch 12.
+- dashboard/queue;
+- Patch 12 wait/auto-refresh helper.
 
 TaskMan/HTTP extension method harus NON-TRANSACTIONAL.
 
-## Source utama setelah pemisahan repo
+## Tenant Query Select limitations confirmed
+
+`SMK Query Select Execution` tenant ini:
+
+```text
+pure SELECT only
+no DECLARE
+no SET
+no EXEC
+no BEGIN/END
+no GO
+no plain ORDER BY
+no trailing semicolon
+short output values only
+```
+
+Untuk source capture panjang, gunakan `SUBSTRING` chunk kecil dan explicit chunk number.
+
+## Source utama
 
 ```text
 database/patches/shipment/
@@ -246,25 +283,12 @@ implementation/shipment/
 
 Patch 05 dan Patch 06 berada di `database/patches/shipment/withdrawn/` dan **jangan dijalankan**.
 
-## Aturan tenant SyteLine
+## Next steps
 
-- Apply Database: satu executable batch, tanpa `GO`.
-- `SMK Query Select Execution` pada tenant ini harus diperlakukan sebagai **pure SELECT only** untuk diagnostics; hindari `DECLARE`, `SET`, `EXEC`, `BEGIN/END`, dan `GO`.
-- Verification SELECT dilakukan terpisah di Query Select.
-- Jangan pakai `System.Data` di extension class; tenant sebelumnya tidak menyediakan reference itu. Gunakan `Context.Commands.Invoke` untuk IDO/SP calls.
-- Credentials POS tetap runtime/TaskMan concern, bukan static token config.
-- Exact tenant definition harus dicapture ke Git setelah runtime object berubah; source lama tidak boleh dianggap authoritative hanya karena nama object sama.
-- Patch terhadap stale standalone source harus tenant-preserving/guarded seperti Patch 11 dan Patch 14 sampai exact runtime source dicapture ulang.
-
-## Next investigation
-
-**Belum boleh retry saat HTTP 404 + Complete error masih aktif.**
-
-1. Patch 14 Rev.2 verification sudah **PASS/PASS** — tidak perlu apply ulang;
-2. capture exact `SMK069CompleteShipmentSendSp` source/metadata menggunakan pure SELECT Query Select;
-3. patch `SMK069CompleteShipmentSendSp` string-DN handling minimal berdasarkan exact tenant code around line 36;
-4. verify/fix `EndpointUrl` berdasarkan known-good POS evidence;
-5. capture exact fixed View / Build / Prepare / Complete source ke Git;
-6. set Max/Run = 1;
-7. reset **satu** DN saja — P96331 boleh menjadi kandidat pertama;
-8. verify Prepare → HTTP → Complete → API log → retry state → `Api_post` sebelum memperluas batch.
+1. Apply Patch 15.
+2. Query Select Patch 15 -> target PASS/PASS/PASS.
+3. Capture current active Shipment `EndpointUrl` dari tenant.
+4. Cocokkan route dengan known-good POS evidence; fix HTTP 404 tanpa membakar retry.
+5. Set Max/Run = 1.
+6. Reset satu DN saja.
+7. Controlled UAT dan verify full lifecycle.
