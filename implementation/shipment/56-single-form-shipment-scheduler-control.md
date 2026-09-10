@@ -1,21 +1,46 @@
 # 56 — Single-Form Shipment Scheduler Control
 
 Date: 2026-09-10
+Status: Revision 2 after tenant UI test
 
 ## Source evidence
 
 Tenant form export reviewed: `FS_20260910_040209.XML`.
 
-The export contains two forms:
+The original export contains two forms:
 
 - `ue_SMK069_BackgroundQueue`
 - `ue_SMK069ShipmentScheduler`
 
-The operator-facing `ue_SMK069ShipmentScheduler` currently opens `BackgroundQueue(...)` from `ActivateSchedule`. That child form is therefore the reason activation becomes a two-form workflow.
+The operator-facing scheduler originally opened `BackgroundQueue(...)` from Activate. The one-form conversion removes that child-form workflow.
 
-The same main form already has all business controls needed for the single-schedule model: ScheduleCode, ScheduleName, IntervalMinutes, MaxShipments, Activate, Deactivate, Run Now, status, and retry queue.
+## Tenant test result — 10 Sep 2026
 
-## New operator decision
+After importing the first one-form revision, the operator screenshot showed:
+
+```text
+API Active       = 1
+Master Engine    = 0
+Schedule Enabled = 1
+Run State        = I
+ScheduleCode     = HOURLY
+IntervalMinutes  = 10
+MaxShipments     = 1
+```
+
+This means the effective scheduler is **STOPPED**. A schedule row can be enabled while the master engine is disabled; `RunState=I` means idle, not running.
+
+Effective run condition:
+
+```text
+ApiActive = 1
+AND MasterEnabled = 1
+AND IsEnabled = 1
+```
+
+The supplied Active Background Tasks screenshot also did not show a recurring `SMK069ShipmentScheduler` instance. Background Task Definition existence alone is not enough: TaskMan needs one active recurring heartbeat instance.
+
+## Final operator model
 
 Use only one operator-facing form:
 
@@ -23,107 +48,139 @@ Use only one operator-facing form:
 ue_SMK069ShipmentScheduler
 ```
 
-The Background Task Definition remains:
+Background Task Definition remains:
 
 ```text
 SMK069ShipmentScheduler
 ```
 
-TaskMan is treated as a persistent heartbeat. The form-defined business schedule owns the actual send cadence through `ue_SMK069_shipment_schedule_mst` / `IntervalMinutes` / `NextRunDate`.
+TaskMan is a **persistent infrastructure heartbeat**. Provision it once, for example every 5 minutes. It does not own the business interval.
 
-Do not create another recurring TaskMan row every time the operator presses Activate.
+The business interval is owned by:
 
-## Activate behavior
+```text
+ue_SMK069_shipment_schedule_mst.IntervalMinutes
+ue_SMK069_shipment_schedule_mst.NextRunDate
+```
 
-`Activate Scheduler` should execute in this order:
+A 10-minute business interval with a 5-minute TaskMan heartbeat runs at the first heartbeat after `NextRunDate` becomes due.
 
-1. `SMK069SaveShipmentScheduleSp(... IsEnabled=1 ...)`
-2. `SMK069SetShipmentSchedulerEnabledSp(1, ...)`
-3. refresh Schedule, Dashboard, Queue
+Do not create another recurring TaskMan row every time START is pressed; that can create duplicate sender instances.
 
-The previous `BackgroundQueue(...)` child-form call is removed.
+## Revision 2 UI
 
-Saving the schedule before switching the master ON reduces the window where TaskMan could see an enabled master with stale schedule settings.
+Internal numeric/coded status must be explained in the form:
 
-## Deactivate behavior
+```text
+API SERVICE
+MASTER SCHEDULER
+BUSINESS SCHEDULE
+RUNNER STATE
 
-`Deactivate Scheduler` should execute in this order:
+RUN CONDITION: API=1 + MASTER=1 + SCHEDULE=1
+I=IDLE/READY, R=RUNNING
+```
 
-1. `SMK069SetShipmentSchedulerEnabledSp(0, ...)`
+Operator buttons:
+
+```text
+SAVE SCHEDULE
+START SCHEDULER
+STOP SCHEDULER
+RUN ONCE
+REFRESH
+```
+
+`ScheduleName`, `IntervalMinutes`, and `MaxShipments` are maintainable; `ScheduleCode` remains read-only.
+
+## START behavior
+
+Revision 2 restores master-first startup:
+
+1. `SMK069SetShipmentSchedulerEnabledSp(1)`
+2. `SMK069SaveShipmentScheduleSp(... IsEnabled=1 ...)`
+3. refresh Schedule / Dashboard / Queue
+
+No Background Queue child form is opened, and no additional recurring TaskMan heartbeat is created.
+
+Expected result:
+
+```text
+ApiActive     = 1
+MasterEnabled = 1
+IsEnabled     = 1
+RunState      = I until a due run is claimed
+```
+
+## STOP behavior
+
+1. `SMK069SetShipmentSchedulerEnabledSp(0)`
 2. `SMK069SaveShipmentScheduleSp(... IsEnabled=0 ...)`
-3. refresh Schedule, Dashboard, Queue
+3. refresh Schedule / Dashboard / Queue
 
-Master OFF is intentionally first so no new schedule claim can start while the schedule row is being disabled.
+Master OFF is first so no new schedule claim can start.
 
-A persistent recurring TaskMan heartbeat may remain registered. With Master/Schedule OFF, the runner is a no-op and sends no new Shipment.
+A persistent TaskMan heartbeat may remain visible in Active Background Tasks; while Master/Schedule are OFF, it should complete as a no-op and must not send a Shipment.
 
-### Important limitation
+STOP prevents new claims. It is not a hard kill of an already executing HTTP request. A true mid-request abort requires cooperative cancellation in the current tenant extension.
 
-Deactivate prevents **new claims/runs**. It is not a hard kill for an HTTP request that has already been claimed and is executing. A true mid-run abort requires separate cooperative-cancellation logic in the current tenant extension and must not be implemented from stale repo source without tenant evidence.
+## Active Background Tasks versus History
 
-## Modify existing schedule
+These are different concepts:
 
-The existing `Save Settings` event remains the maintenance path for:
+```text
+Background Task Definition
+    = definition named SMK069ShipmentScheduler
 
-- `ScheduleName`
-- `IntervalMinutes`
-- `MaxShipments`
+Active Background Tasks
+    = currently scheduled/queued recurring or waiting instances
 
-`ScheduleCode` remains read-only.
+Background Task History
+    = instances that already executed/completed
+```
 
-For the one-form XML template, `ScheduleName` is made editable so the existing schedule can be maintained without a second form.
+The 10 Sep screenshot did not show `SMK069ShipmentScheduler` in Active Background Tasks. History did show truncated task names beginning `SMK069Sh...` for task numbers 4634 and 4631; those should be opened to confirm whether they were prior one-shot Shipment scheduler runs.
 
-## Run Now
+## RUN ONCE
 
-Current tenant form uses native Mongoose `ResponseType 19` after `SMK069RequestShipmentRunNowSp`, submitting Background Task Definition `SMK069ShipmentScheduler` immediately.
+`RUN ONCE` retains native Mongoose `ResponseType 19` after `SMK069RequestShipmentRunNowSp`. It submits the Background Task Definition immediately and therefore produces a TaskMan instance/history entry.
 
-That mechanism may remain for an explicit one-time run. It does not create the recurring schedule dialog.
+For UAT keep:
+
+```text
+MaxShipments = 1
+```
 
 ## Credentials
 
-Current export exposes POS User and POS Password controls and stores blank form variables. The one-form template hides both labels and editors and makes the editors read-only.
-
-The generated template intentionally contains placeholders only:
+POS User and Password controls are hidden in the one-form template. Local XML uses placeholders:
 
 ```text
 __POS_USERNAME__
 __POS_PASSWORD__
 ```
 
-Real credentials must **not** be committed to GitHub. If the UAT operator insists on hardcoding them in the form, replace the placeholders only in the local XML before import.
+Real credentials must not be committed to GitHub. `Hidden=True` hides controls from operators but does not encrypt metadata or TaskMan parameters.
 
-Important: `Hidden=True` is UI hiding, not secret storage. Values can still be recovered from form metadata/export and may also appear in TaskMan parameters/history. Long-term production hardening should resolve credentials server-side instead of putting them in form XML or TaskMan parameters.
+## Artifact generator
 
-## Generated conversation artifact
-
-Generated from the tenant export:
+Repository tool:
 
 ```text
-SMK069ShipmentScheduler_ONE_FORM_TEMPLATE.xml
+tools/shipment/convert_scheduler_one_form.py
 ```
 
-Changes applied:
-
-- only `ue_SMK069ShipmentScheduler` remains in the export;
-- `ue_SMK069_BackgroundQueue` removed;
-- `ActivateSchedule` no longer opens BackgroundQueue;
-- Activate order changed to Schedule ON -> Master ON;
-- Deactivate order changed to Master OFF -> Schedule OFF;
-- ScheduleName made editable;
-- POS username/password labels and editors hidden;
-- hidden credential variables use non-secret placeholders;
-- `SubmitSchedulerScheduled` event removed because the child recurring-dialog path is no longer used;
-- existing `RunNowOnce` native TaskMan submission retained for explicit one-time execution.
+Revision 2 output adds human-readable status guidance and uses START/STOP captions while preserving the one-form layout.
 
 ## Acceptance test
 
-1. Import the one-form XML in a UAT scope.
-2. Verify only `ue_SMK069ShipmentScheduler` is included by the import artifact.
-3. If using form-hardcoded UAT credentials, replace placeholders locally before import.
-4. Open the form; POS credential controls must not be visible.
-5. Change IntervalMinutes / MaxShipments and press Save Settings; verify values persist.
-6. Press Activate Scheduler; no Background Queue child form should open.
-7. Verify MasterEnabled=1 and IsEnabled=1, and NextRunDate is calculated.
-8. Press Deactivate Scheduler; verify MasterEnabled=0 and IsEnabled=0.
-9. Confirm the existing persistent TaskMan heartbeat may still appear, but it must not send while Master/Schedule are OFF.
-10. For Run Once, use MaxShipments=1 during UAT and verify Background Task History plus Shipment API log/retry state.
+1. Ensure exactly one recurring TaskMan heartbeat `SMK069ShipmentScheduler` has been provisioned.
+2. Import the Revision 2 one-form XML.
+3. Verify POS credential controls are not visible.
+4. Verify status legend is visible.
+5. Set `MaxShipments=1` during UAT.
+6. Press START SCHEDULER.
+7. Refresh and verify `API=1`, `MASTER=1`, `SCHEDULE=1`.
+8. Wait for the heartbeat or use RUN ONCE for a controlled test.
+9. Press STOP SCHEDULER and verify Master/Schedule become 0.
+10. Confirm no duplicate recurring TaskMan row is created by repeated START/STOP operations.
