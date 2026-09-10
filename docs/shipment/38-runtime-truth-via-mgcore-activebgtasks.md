@@ -1,26 +1,56 @@
-# Shipment Scheduler Runtime Truth via `MGCore.ActiveBGTasks`
+# Shipment Scheduler Runtime Truth via `ActiveBGTasks`
 
 Date: 2026-09-10
 
-## Why Patch 18 SQL was withdrawn
+## Tenant evidence
 
-Tenant Apply Database proved that `dbo.ActiveBGTasks` is not visible from the current Cloud application database. The guarded Patch 18 stopped before creating any view.
+Two runtime checks are now confirmed.
 
-Do not infer that TaskMan is unavailable. In Mongoose, the actual Active Background Tasks queue is exposed through the standard IDO:
+### SQL path is not available
+
+Apply Database proved that `dbo.ActiveBGTasks` is not visible from this Cloud application database. The guarded Patch 18 stopped before creating any view and has been converted to a withdrawn/no-op file.
+
+### Mongoose IDO path is available
+
+IDO Runtime / Load Collection successfully loaded the standard Mongoose IDO:
 
 ```text
-MGCore.ActiveBGTasks
+ActiveBGTasks
 ```
 
-That IDO is the correct Cloud-safe source for runtime TaskMan status.
+with properties:
+
+```text
+TaskNumber
+TaskName
+TaskStatusCode
+```
+
+and filter:
+
+```text
+TaskName = 'SMK069ShipmentScheduler'
+```
+
+Tenant result on 10 Sep 2026:
+
+```text
+0 actual rows
+```
+
+The blank `*` row in the Load Collection form is only the insert/placeholder row. Therefore, at the time of verification, **no actual `SMK069ShipmentScheduler` task was registered in Active Background Tasks**.
+
+Evidence:
+
+```text
+tests/evidence/2026-09-10-smk069-activebgtasks-zero-row.md
+```
 
 ## Runtime truth model
 
-The Shipment Scheduler form must show two separate layers:
+The Shipment Scheduler form must combine two different sources.
 
-### Business/config state
-
-From the existing Shipment scheduler collections:
+Business/config state:
 
 ```text
 ApiActive
@@ -30,113 +60,170 @@ RunState
 NextRunDate
 ```
 
-These answer whether the custom Shipment scheduler is configured to run.
-
-### Actual TaskMan state
-
-From `MGCore.ActiveBGTasks`, filtered by:
+Actual TaskMan state:
 
 ```text
-TaskName = 'SMK069ShipmentScheduler'
+ActiveBGTasks
+  permanent filter: TaskName = 'SMK069ShipmentScheduler'
 ```
 
-Minimum properties to expose/read:
+The form must never infer actual TaskMan registration only from the custom Shipment tables.
+
+## Final status panel
+
+Primary operator status must be human-readable:
 
 ```text
-TaskNumber
-TaskName
-TaskStatusCode
+OVERALL STATUS
+API SERVICE
+MASTER CONTROL
+BUSINESS SCHEDULE
+TASKMAN HEARTBEAT
+TASK STATUS
+TASK NUMBER
+BUSINESS RUNNER
 ```
 
-Useful additional properties may be added only after confirming their exact names in the tenant metadata/form designer.
-
-Task status interpretation:
+Expected examples:
 
 ```text
-WAITING  = recurring/scheduled TaskMan row exists and is waiting
-READY    = queued and ready for TaskMan
-RUNNING  = TaskMan is processing now
-no row   = no active TaskMan registration exists
+no ActiveBGTasks row
+  -> TASKMAN HEARTBEAT = NOT REGISTERED
+  -> TASK STATUS = -
+  -> TASK NUMBER = -
+  -> OVERALL = STOPPED - TASKMAN NOT REGISTERED
+
+one WAITING row
+  -> TASKMAN HEARTBEAT = REGISTERED
+  -> TASK STATUS = WAITING
+  -> OVERALL = ACTIVE - WAITING      (when API/Master/Schedule are ON)
+
+one READY row
+  -> TASK STATUS = READY
+  -> OVERALL = ACTIVE - READY        (when API/Master/Schedule are ON)
+
+one RUNNING row
+  -> TASK STATUS = RUNNING
+  -> OVERALL = RUNNING NOW           (when API/Master/Schedule are ON)
+
+more than one matching ActiveBGTasks row
+  -> TASKMAN HEARTBEAT = DUPLICATE (n)
+  -> OVERALL = WARNING - DUPLICATE SCHEDULER
 ```
 
-## Recommended form status
+Business `RunState` remains visible as a translated `IDLE` / `RUNNING` value, but it is not accepted as proof that TaskMan itself is running.
 
-Do not show raw `1 / 0 / I` as the primary operator status.
-
-Show human-readable values:
+## Final one-form collection architecture
 
 ```text
-API SERVICE        ACTIVE / INACTIVE
-MASTER CONTROL     ON / OFF
-BUSINESS SCHEDULE  ENABLED / DISABLED
-ACTUAL TASKMAN     NOT REGISTERED / WAITING / READY / RUNNING
+ue_SMK069ShipmentScheduler
+│
+├── object  : ue_SMK069ShipmentSchedules
+├── object2 : ue_SMK069ShipmentSchedulerDashboard
+├── object3 : ue_SMK069ShipmentSchedulerQueue
+└── object4 : ActiveBGTasks
+              FILTERPERM(TaskName = 'SMK069ShipmentScheduler')
 ```
 
-Overall interpretation:
+The uploaded tenant form `FS_20260910_065349.XML` already contains `V(fds_SC4)` and the filtered `ActiveBGTasks` secondary collection, but its visible status fields were still bound to custom table values and its START/STOP handlers still changed only business/master flags. The final artifact rewires both parts.
+
+## START SCHEDULER behavior
+
+`START SCHEDULER` must perform an actual TaskMan acceptance check.
+
+Flow:
 
 ```text
-ApiActive = 0
-  -> STOPPED - API INACTIVE
-
-MasterEnabled = 0
-  -> STOPPED - MASTER OFF
-
-IsEnabled = 0
-  -> STOPPED - SCHEDULE OFF
-
-ApiActive=1 + MasterEnabled=1 + IsEnabled=1 + no MGCore.ActiveBGTasks row
-  -> MISCONFIGURED - TASKMAN NOT REGISTERED
-
-same flags + TaskStatusCode=WAITING
-  -> ACTIVE - WAITING
-
-same flags + TaskStatusCode=READY
-  -> ACTIVE - READY
-
-same flags + TaskStatusCode=RUNNING
-  -> RUNNING NOW
+refresh ActiveBGTasks
+      ↓
+0 matching rows?
+      ├─ yes -> submit SMK069ShipmentScheduler as WAITING
+      │         configure it as recurring heartbeat through standard
+      │         SLJobQueues.BackGroundQueue2Sp
+      │
+      └─ no  -> reuse the existing single task
+      ↓
+more than 1 matching row?
+      ├─ yes -> STOP, show duplicate warning
+      └─ no
+      ↓
+confirm exactly 1 actual TaskMan row exists
+      ↓
+enable business schedule
+      ↓
+enable master scheduler
+      ↓
+refresh all collections and recompute runtime status
 ```
 
-If more than one active row exists for `SMK069ShipmentScheduler`, show:
+The recurring heartbeat is configured every 5 minutes. This is intentionally **not** the Shipment business interval. The business interval remains owned by `IntervalMinutes` / `NextRunDate`; the heartbeat merely polls for due schedules.
+
+The recurring setup reproduces the standard Mongoose Background Queue pattern already captured from the tenant export:
 
 ```text
-WARNING - DUPLICATE TASKMAN
+1. submit the background task with status WAITING
+2. receive TaskNumber
+3. call SLJobQueues.BackGroundQueue2Sp for recurrence
 ```
 
-## Tenant verification before editing the final form
+No second operator-facing Background Queue form is required.
 
-Use IDO Runtime / Load Collection with:
+## STOP SCHEDULER behavior
+
+STOP is deliberately safety-first:
 
 ```text
-IDO        : MGCore.ActiveBGTasks
-Properties : TaskNumber,TaskName,TaskStatusCode
-Filter     : TaskName = 'SMK069ShipmentScheduler'
+1. Master Scheduler OFF
+2. Business Schedule OFF
+3. refresh ActiveBGTasks
+4. delete matching WAITING heartbeat row(s)
+5. save ActiveBGTasks
+6. refresh and recompute runtime truth
 ```
 
-Expected outcomes:
+Mongoose/TaskMan does not allow a normal Active Background Tasks delete of a task that is already `READY` or `RUNNING`. In that case the form leaves the in-flight invocation alone, but the master/business switches are already OFF so no new Shipment schedule claim should begin. When the recurring task returns to `WAITING`, STOP can be pressed again to remove it.
 
-- one row: actual TaskMan heartbeat/instance exists;
-- zero rows: no active TaskMan registration exists;
-- more than one row: duplicate TaskMan registrations must be investigated.
+A future cooperative-cancel patch may stop a multi-DN sender between individual DN sends, but that is separate from deleting the TaskMan row and must only be implemented against the current tenant extension source.
 
-Do not proceed to create a custom SQL view for this purpose.
+## Final artifact
 
-## Form wiring
-
-Add `MGCore.ActiveBGTasks` as a read-only secondary collection on `ue_SMK069ShipmentScheduler` and apply a fixed filter for `SMK069ShipmentScheduler`.
-
-Refresh this collection on:
+Conversation artifact generated from the user's current tenant export:
 
 ```text
-StdFormInitCompleted
-Refresh
-Activate Scheduler
-Deactivate Scheduler
-Run Once
+SMK069ShipmentScheduler_ONE_FORM_FINAL_RUNTIME_TRUTH.xml
 ```
 
-The final form should display actual TaskMan state next to the existing business/config state so operators can distinguish configuration from runtime reality.
+It contains:
+
+- direct `ActiveBGTasks` runtime status;
+- human-readable status variables;
+- duplicate detection;
+- actual TaskNumber / TaskStatus display;
+- START that creates/checks a recurring TaskMan heartbeat before turning business/master ON;
+- STOP that turns business/master OFF then deletes WAITING heartbeat rows;
+- existing Run Once behavior;
+- hidden POS credential placeholders only.
 
 ## Security
 
-Do not expose POS credentials in this runtime collection or status panel.
+Real POS credentials must not be committed to Git. The form artifact uses:
+
+```text
+__POS_USERNAME__
+__POS_PASSWORD__
+```
+
+If UAT requires hardcoded form credentials, replace those placeholders only in the local XML before import. `Hidden=True` is UI hiding, not encryption; values can still be recovered from form metadata/export and may be visible in TaskMan parameters/history.
+
+## Acceptance test
+
+1. Keep a backup/export of the current form.
+2. Replace local credential placeholders if required for UAT.
+3. Import the final one-form XML.
+4. Open the form while `ActiveBGTasks` has zero matching rows; verify `TASKMAN HEARTBEAT = NOT REGISTERED`.
+5. Set `Max / Run = 1` for the controlled UAT.
+6. Press `START SCHEDULER` once.
+7. Verify exactly one `SMK069ShipmentScheduler` row appears in Active Background Tasks.
+8. Verify form status becomes `REGISTERED` and normally `WAITING` after setup.
+9. Press `STOP SCHEDULER`; verify master/business are OFF and the WAITING ActiveBGTasks row disappears.
+10. Do not process P96330/P96332 until the controlled P96331 lifecycle is reviewed.
