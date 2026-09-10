@@ -2,18 +2,29 @@
 
 Date: 2026-09-10
 
-This extends the single Shipment Scheduler Control Center with a second operator view in the existing lower grid area.
+## Current tenant-safe design
+
+The first history artifact used extra VB form-script methods to switch between two grids. Tenant validation failed with:
 
 ```text
-[ SHIPMENT QUEUE ] [ API HIT HISTORY ]
+Error compiling script ue_SMK069ShipmentScheduler
 ```
 
-The API history view uses secondary collection `object5`:
+That artifact is withdrawn.
+
+The current design keeps the existing scheduler form script unchanged and adds API history as a second section below the Shipment Queue.
+
+Artifact:
 
 ```text
-ue_SMK069ShipmentApiLogs
-FILTERPERM(SiteRef = FP(SiteRef))
-ORDERBY(ResponseDate DESC)
+SMK069ShipmentScheduler_API_HISTORY_COMPILE_SAFE.xml
+```
+
+## Secondary collection
+
+```text
+object5 : ue_SMK069ShipmentApiLogs
+          ORDERBY(ResponseDate DESC)
 ```
 
 Required properties:
@@ -30,35 +41,35 @@ ResponseJson
 RowPointer
 ```
 
-Grid columns:
+## Layout
 
 ```text
-Date / Time
-DN No
-Result (S/E/N)
-HTTP
-Retry
-Error Message
-Response
+SHIPMENT QUEUE
+...
+
+API HIT HISTORY / TROUBLESHOOTING
+Response Date | DN No | Result | HTTP | Retry | Error Message | Response
+
+SELECTED ERROR
+<selected object5.ErrorMessage>
+
+SELECTED RESPONSE
+<selected object5.ResponseJson>
 ```
 
-Operator legend:
+Legend:
 
 ```text
 S = SUCCESS
 E = ERROR
 N = PENDING / NEW
 HTTP 0 = local validation or no HTTP response reached
+HTTP 2xx = HTTP request succeeded
+HTTP 4xx/5xx = API / gateway / service failure
 ```
 
-Buttons `VIEW ERROR` and `VIEW RESPONSE` display the selected row's complete ErrorMessage or ResponseJson together with DN, result, and HTTP code.
+`object5` refreshes on form initialization, REFRESH STATUS, RUN ONCE, SAVE SCHEDULE and RefreshAllSchedulerCollections using standard form event responses only.
 
-The artifact generated from the 10 Sep tenant export is:
+The existing Scheduler Status / START / STOP / RUN ONCE VB code is not modified by this revision.
 
-```text
-SMK069ShipmentScheduler_WITH_API_HIT_HISTORY.xml
-```
-
-The form defaults to SHIPMENT QUEUE. Opening API HIT HISTORY reloads `object5`, and Refresh/Run Once/Save also refresh the API log collection.
-
-See `docs/shipment/41-api-hit-history-on-control-center.md` for acceptance and IDO setup notes.
+See `docs/shipment/41-api-hit-history-on-control-center.md` for setup and acceptance notes.
