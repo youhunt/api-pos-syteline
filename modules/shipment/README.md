@@ -39,8 +39,8 @@ Known blockers/status sekarang:
 P96331 missing DOC_NO local Build gate    FIXED + VERIFIED (Patch 14 Rev.2)
 Complete nvarchar -> bigint               FIXED + VERIFIED (Patch 15)
 Old /inventory/v1/infor_dn route          REPLACED + VERIFIED (Patch 16)
-Scheduler automatic sending               HELD OFF (master SchedulerEnabled=0)
 Controlled P96331 arm state               VERIFIED (Patch 17)
+TaskMan runtime truth status              PATCH 18 READY; tenant verification pending
 ```
 
 ## Endpoint — Patch 16 verified
@@ -63,13 +63,6 @@ Patch:
 
 ```text
 database/patches/shipment/2026-09-09-smk069-16-fix-shipment-endpoint-and-hold-scheduler.sql
-```
-
-Evidence:
-
-```text
-tests/evidence/2026-09-09-smk069-active-shipment-config-before-patch16.md
-tests/evidence/2026-09-09-smk069-patch16-endpoint-hold-pass.md
 ```
 
 ## DN contract — current tenant evidence
@@ -105,14 +98,6 @@ nvarchar          PASS               PASS
 
 Missing DOC_NO no longer hard-stops Build; JSON becomes `"DOC_NO":""` when still blank. Multiple distinct nonblank DOC_NO protection remains active.
 
-Patch/evidence:
-
-```text
-database/patches/shipment/2026-09-09-smk069-14-allow-missing-doc-no.sql
-docs/shipment/32-shipment-missing-doc-no-nonblocking.md
-tests/evidence/2026-09-09-smk069-patch14-docno-nonblocking-pass.md
-```
-
 ## Patch 15 — Complete Shipment string DN fix
 
 Patch 15 separates external DN text from internal numeric shipment key:
@@ -127,16 +112,6 @@ Tenant verification:
 ```text
 Patch15Marker               OldBigintAssignmentRemoved   StringDnPresent
 PASS                        PASS                         PASS
-```
-
-Patch/source/evidence:
-
-```text
-database/patches/shipment/2026-09-09-smk069-15-fix-complete-shipment-dn-string.sql
-database/procedures/shipment/SMK069CompleteShipmentSendSp.tenant-2026-09-09.sql
-database/procedures/shipment/SMK069CompleteShipmentSendSp.sql
-docs/shipment/34-complete-shipment-prefixed-dn-fix.md
-tests/evidence/2026-09-09-smk069-patch15-complete-dn-pass.md
 ```
 
 ## Patch 17 — controlled P96331 UAT arm verified
@@ -165,35 +140,66 @@ NextAttemptDate   NULL
 LastHttpCode      0
 ```
 
-Interpretation:
+## Patch 18 — actual TaskMan runtime truth
 
-- master remains OFF;
-- endpoint Patch 16 remains active;
-- one-run cap is 1;
-- HOURLY is not requested/running;
-- NextRunDate is parked in the future;
-- P96331 has been reset to pending attempt 0;
-- no HTTP was sent by Patch 17.
+Problem found on 10 Sep 2026: the form can show custom DB flags (`SchedulerEnabled`, `IsEnabled`, `RunState`) that do not prove a real TaskMan task exists. Tenant screenshot showed `Schedule Enabled=1` while `SMK069ShipmentScheduler` was not visible in **Active Background Tasks**.
 
-Documentation/evidence:
+Patch 18 creates a read-only view that cross-checks the custom state against the actual Mongoose TaskMan queue table `dbo.ActiveBGTasks`:
 
 ```text
-docs/shipment/36-controlled-uat-p96331-arm.md
-tests/evidence/2026-09-09-smk069-pre-uat-p96331-state.md
-tests/evidence/2026-09-09-smk069-patch17-arm-state-pass.md
+database/patches/shipment/2026-09-10-smk069-18-taskman-runtime-status.sql
+docs/shipment/37-taskman-runtime-truth-status.md
 ```
+
+New view:
+
+```text
+dbo.SMK069_ShipmentSchedulerRuntime_vw
+```
+
+Recommended read-only IDO after apply:
+
+```text
+ue_SMK069ShipmentSchedulerRuntime
+```
+
+The final form should show text, not raw 1/0/I/R:
+
+```text
+OVERALL STATUS
+API SERVICE
+MASTER CONTROL
+BUSINESS SCHEDULE
+ACTUAL TASKMAN
+STATE SYNC
+```
+
+TaskMan truth rules:
+
+```text
+no ActiveBGTasks row              -> NOT REGISTERED
+TaskStatusCode = WAITING          -> WAITING
+TaskStatusCode = READY            -> READY
+TaskStatusCode = RUNNING          -> RUNNING
+more than one matching task       -> DUPLICATE TASKS
+```
+
+Overall examples:
+
+```text
+STOPPED - MASTER OFF
+MISCONFIGURED - TASKMAN NOT REGISTERED
+WARNING - DUPLICATE TASKMAN
+ACTIVE - WAITING
+ACTIVE - READY
+RUNNING NOW
+```
+
+This prevents the form from silently trusting business/config rows when TaskMan reality is different.
 
 ## Controlled one-DN UAT policy
 
-Before any HTTP run, one final gate remains: verify the actual first candidate under `SMK069GetPendingShipmentsSp` ordering:
-
-```text
-AttemptCount ASC
-NextAttemptDate ASC
-ShipmentId ASC
-```
-
-With `MaxShipments=1`, the first row is the only DN that will be attempted. Do not enable master / Run Now until P96331 is proven to be candidate #1.
+P96331 is already verified as candidate #1 with `MaxShipments=1`. Do not consume P96330/P96332 until the TaskMan heartbeat/runtime state is made explicit and the single controlled run is reviewed.
 
 Decision gate after one-DN send:
 
@@ -210,21 +216,9 @@ Business success
 
 ## Scheduler / form
 
-Control Center exposes:
+The one-form operator model controls business schedule state, but actual TaskMan runtime must be displayed separately.
 
-```text
-Master Scheduler ON/OFF
-Default Max / Run
-Max Attempts
-Schedule Max Shipments / Run
-Schedule Active
-Run Now
-Retry Queue / Reset Retry
-```
-
-`Run Now` only marks the selected schedule due; secure background TaskMan owns POS credentials.
-
-TaskMan/HTTP extension method must remain NON-TRANSACTIONAL.
+`Run Now` / TaskMan HTTP method must remain NON-TRANSACTIONAL.
 
 ## Tenant Query Select limitations confirmed
 
@@ -239,8 +233,6 @@ no plain ORDER BY
 no trailing semicolon
 short output values only
 ```
-
-`ORDER BY` is only safe in this form when SQL Server permits it inside the wrapper, e.g. together with `TOP`.
 
 ## Source utama
 
@@ -260,8 +252,9 @@ Patch 05 and Patch 06 under `database/patches/shipment/withdrawn/` must not be r
 
 ## Next steps
 
-1. Query Select candidate ranking and confirm P96331 is candidate #1.
-2. Only then enable master and request exactly one HOURLY run.
-3. Execute one controlled run and immediately review HTTP/body + Complete/API log/retry state/Api_post.
-4. Keep/restore master OFF after the one-DN run until results are reviewed.
-5. Only after clean evidence decide whether to process P96330/P96332 and re-enable normal schedule.
+1. Apply Patch 18; if `dbo.ActiveBGTasks` is not visible, stop and capture tenant evidence instead of guessing.
+2. Create/read-only IDO `ue_SMK069ShipmentSchedulerRuntime` from the new runtime view.
+3. Import/use the REV3 one-form template that binds text status fields to this runtime IDO.
+4. Verify the form reports `NOT REGISTERED` when no actual `SMK069ShipmentScheduler` row exists in Active Background Tasks.
+5. Establish exactly one persistent `SMK069ShipmentScheduler` heartbeat task; avoid duplicates.
+6. Only after runtime status is truthful, execute the controlled P96331 run with Max/Run=1 and review the full lifecycle.
