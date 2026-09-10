@@ -1,11 +1,23 @@
 #!/usr/bin/env python3
-"""Convert a tenant Shipment Scheduler form export to the one-form operator model.
+"""Convert a tenant Shipment Scheduler export to the one-form operator model.
 
 Usage:
     python convert_scheduler_one_form.py input.xml output.xml
 
-The generated XML intentionally uses credential placeholders. Never commit real
-POS credentials to the repository.
+Design:
+- keep only ue_SMK069ShipmentScheduler in the exported artifact;
+- remove the interactive BackgroundQueue child-form path;
+- expose human-readable status guidance;
+- START turns Master ON then enables/saves the business schedule;
+- STOP turns Master OFF first then disables the business schedule;
+- keep explicit RUN ONCE behavior;
+- hide credential controls and keep only local placeholders.
+
+IMPORTANT:
+The recurring TaskMan heartbeat named SMK069ShipmentScheduler is infrastructure
+and must be provisioned once. START/STOP control the shipment scheduler state;
+they intentionally do not create another recurring TaskMan row on every click.
+Never commit real POS credentials to this repository.
 """
 
 from pathlib import Path
@@ -45,16 +57,29 @@ def convert(src: Path, dst: Path):
                 return item
         return None
 
-    for name, caption in {
-        "ActivateButton": "Activate Scheduler",
-        "DeactivateButton": "Deactivate Scheduler",
-    }.items():
+    def set_caption(name, caption):
         item = component(name)
-        if item is not None:
-            set_text(item, "Caption", caption)
-            effective = item.find("EffectiveCaption")
-            if effective is not None:
-                effective.text = caption
+        if item is None:
+            return
+        set_text(item, "Caption", caption)
+        effective = item.find("EffectiveCaption")
+        if effective is not None:
+            effective.text = caption
+
+    captions = {
+        "ApiStatusLabel": "API SERVICE",
+        "EngineStatusLabel": "MASTER SCHEDULER",
+        "ScheduleStatusLabel": "BUSINESS SCHEDULE",
+        "RunStateLabel": "RUNNER STATE",
+        "ActivateButton": "START SCHEDULER",
+        "DeactivateButton": "STOP SCHEDULER",
+        "RunNowButton": "RUN ONCE",
+        "SaveSettingsButton": "SAVE SCHEDULE",
+        "LastStatusDisplayStatic": "LAST STATUS (N/S/W/E)",
+        "SectionSystemStatus": "SYSTEM STATUS  -  1=ON / 0=OFF,  I=IDLE / R=RUNNING",
+    }
+    for name, caption in captions.items():
+        set_caption(name, caption)
 
     schedule_name = component("ScheduleNameEdit")
     if schedule_name is not None:
@@ -79,6 +104,33 @@ def convert(src: Path, dst: Path):
             set_text(var, "Value", "~LIT~(__POS_PASSWORD__)")
             set_text(var, "Description", "Hidden TaskMan credential; replace locally before import")
 
+    guide = component("OperationalStatusGuide")
+    if guide is None:
+        guide = ET.SubElement(components, "Component", {"Name": "OperationalStatusGuide"})
+        fields = {
+            "DeviceID": "-1",
+            "Type": "0",
+            "TabOrder": "0",
+            "TopPos": "6",
+            "LeftPos": "2",
+            "Height": "1",
+            "ListHeight": "0",
+            "Width": "108",
+            "Caption": "RUN CONDITION: API=1 + MASTER=1 + SCHEDULE=1.  I=IDLE/READY, R=RUNNING.",
+            "MaxCharacters": "0",
+            "ContainerName": "",
+            "ContainerSequence": "0",
+            "Binding": "0",
+            "Flags": "0",
+            "ReadOnly": "False",
+            "Hidden": "False",
+            "HelpContextID": "0",
+            "Post301Format": "JUSTIFY(L)",
+            "EffectiveCaption": "RUN CONDITION: API=1 + MASTER=1 + SCHEDULE=1.  I=IDLE/READY, R=RUNNING.",
+        }
+        for tag, value in fields.items():
+            ET.SubElement(guide, tag).text = value
+
     for event in list(handlers.findall("EventHandler")):
         if event.attrib.get("Name") in (
             "ActivateSchedule", "DeactivateSchedule", "SubmitSchedulerScheduled"
@@ -91,23 +143,25 @@ def convert(src: Path, dst: Path):
         ET.SubElement(event, "Response").text = response
         handlers.append(event)
 
+    # START: master first, then enable/save business schedule.
     add_handler(
         "ActivateSchedule", 0, 0,
+        "ue_SMK069ShipmentTransport.SMK069SetShipmentSchedulerEnabledSp( "
+        "PARMS(VAR V(FlagOn), RVAR V(Success), MESSAGE) "
+        "ERRORMESSAGE(mBackEndMessage) SUCCESSMESSAGE(mBackEndMessage) )"
+    )
+    add_handler(
+        "ActivateSchedule", 1, 0,
         "ue_SMK069ShipmentTransport.SMK069SaveShipmentScheduleSp( "
         "PARMS(VAR P(ScheduleCode), VAR P(ScheduleName), VAR P(IntervalMinutes), "
         "VAR P(MaxShipments), VAR V(FlagOn), VAR V(BlankStartAt), "
         "RVAR V(Success), MESSAGE) ERRORMESSAGE(mBackEndMessage) "
         "SUCCESSMESSAGE(mBackEndMessage) )"
     )
-    add_handler(
-        "ActivateSchedule", 1, 0,
-        "ue_SMK069ShipmentTransport.SMK069SetShipmentSchedulerEnabledSp( "
-        "PARMS(VAR V(FlagOn), RVAR V(Success), MESSAGE) "
-        "ERRORMESSAGE(mBackEndMessage) SUCCESSMESSAGE(mBackEndMessage) )"
-    )
     for seq, obj in enumerate(("object", "object2", "object3"), start=2):
         add_handler("ActivateSchedule", seq, 28, obj)
 
+    # STOP: kill switch first, then disable business schedule.
     add_handler(
         "DeactivateSchedule", 0, 0,
         "ue_SMK069ShipmentTransport.SMK069SetShipmentSchedulerEnabledSp( "
