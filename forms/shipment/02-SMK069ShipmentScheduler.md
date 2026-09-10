@@ -1,181 +1,175 @@
-# SMK069ShipmentScheduler — Shipment Scheduler Control Center
+# ue_SMK069ShipmentScheduler — Shipment Scheduler Control Center
 
-## Final Tenant UI Decision — 8 Sep 2026
+Date: 2026-09-10
 
-Form Name: `SMK069ShipmentScheduler`
+## Final operator model
 
-The current tenant uses one operator-facing schedule only:
+One operator-facing form only:
+
+```text
+ue_SMK069ShipmentScheduler
+```
+
+One business schedule currently used:
 
 ```text
 ScheduleCode = HOURLY
 ```
 
-The database may remain capable of more schedules, but this form does NOT expose New / Copy / Delete schedule actions.
-
-The form is an operational dashboard, not a raw-table maintenance screen.
+The form is an operational control center, not a raw-table editor.
 
 ## Collections
 
 ```text
-Primary Collection      : ue_SMK069ShipmentSchedules
-Secondary Collection 2  : ue_SMK069ShipmentSchedulerDashboard
-Secondary Collection 3  : ue_SMK069ShipmentSchedulerQueue
-Service IDO             : ue_SMK069ShipmentTransport
+object  : ue_SMK069ShipmentSchedules
+object2 : ue_SMK069ShipmentSchedulerDashboard
+object3 : ue_SMK069ShipmentSchedulerQueue
+object4 : ActiveBGTasks
+          permanent filter:
+          TaskName = 'SMK069ShipmentScheduler'
 ```
 
-Current tenant baseline confirmed on 8 Sep 2026:
+`object4` is critical. It is the Cloud-safe runtime truth source for TaskMan. Do not infer actual TaskMan registration from `SchedulerEnabled`, `IsEnabled`, or `RunState` alone.
+
+Tenant verification on 10 Sep 2026 using IDO Runtime / Load Collection returned zero actual `ActiveBGTasks` rows for `SMK069ShipmentScheduler`, proving that custom schedule flags can differ from real TaskMan state.
+
+## Status panel
+
+Do not expose raw `1 / 0 / I / R` as the main operator status.
+
+Display:
 
 ```text
-ScheduleCode     = HOURLY
-ApiActive        = 1
-MasterEnabled    = 0
-IsEnabled        = 0
-ReadyCount       = 1
-Ready Shipment   = P96329
-DefaultMaxBatch  = 50
+OVERALL STATUS
+API SERVICE
+MASTER CONTROL
+BUSINESS SCHEDULE
+TASKMAN HEARTBEAT
+TASK STATUS
+TASK NUMBER
+BUSINESS RUNNER
 ```
 
-## Final Layout
-
-Do not add another splitter. Use the current form body and arrange four clear blocks.
+Mappings:
 
 ```text
-+--------------------------------------------------------------------------------+
-| SHIPMENT SCHEDULER CONTROL CENTER                                              |
-+--------------------------------------------------------------------------------+
-| SYSTEM STATUS                                                                  |
-| API [ACTIVE]   Scheduler [STOPPED]   Next Run [--]   Last Run [Never]          |
-| System: Master ON/OFF (admin status only)                                      |
-+--------------------------------------------------------------------------------+
-| SCHEDULE CONTROL                         | LAST RUN                             |
-| Code             HOURLY                  | Status      Never                    |
-| Name             Every 60 Minutes        | Candidates  0                        |
-| Interval Minutes [60]                    | Succeeded   0                        |
-| Max Shipments    [1] / Default 50        | Failed      0                        |
-|                                           | Exhausted   0                        |
-| [Save Settings] [Activate] [Deactivate]  | Message     --                       |
-| [Run Now] [Refresh]                      |                                        |
-+--------------------------------------------------------------------------------+
-| QUEUE SUMMARY                                                                   |
-| Ready [1]   Waiting Retry [0]   Exhausted [0]   Success Today [0] Failed [0]    |
-+--------------------------------------------------------------------------------+
-| SHIPMENT QUEUE                                                                  |
-| DN | Status | Attempts | Max | Next Retry | HTTP | Last Error                   |
-| P96329 | READY | 0 | 5 | -- | -- | --                                           |
-+--------------------------------------------------------------------------------+
+ApiActive=1                  -> API SERVICE = ACTIVE
+ApiActive<>1                 -> API SERVICE = INACTIVE
+MasterEnabled=1              -> MASTER CONTROL = ON
+MasterEnabled<>1             -> MASTER CONTROL = OFF
+IsEnabled=1                  -> BUSINESS SCHEDULE = ENABLED
+IsEnabled<>1                 -> BUSINESS SCHEDULE = DISABLED
+RunState=R                   -> BUSINESS RUNNER = RUNNING
+otherwise                    -> BUSINESS RUNNER = IDLE
 ```
 
-## 1. System Status
-
-Show these as read-only status fields / badges:
+Actual TaskMan mappings from `ActiveBGTasks`:
 
 ```text
-ApiActive
-MasterEnabled
-NextRunDate
-LastRunDate
+0 rows                       -> HEARTBEAT = NOT REGISTERED
+1 row                        -> HEARTBEAT = REGISTERED
+>1 rows                      -> HEARTBEAT = DUPLICATE (n)
+TaskStatusCode=WAITING       -> TASK STATUS = WAITING
+TaskStatusCode=READY         -> TASK STATUS = READY
+TaskStatusCode=RUNNING       -> TASK STATUS = RUNNING
 ```
 
-Derived scheduler display state:
+Overall examples:
 
 ```text
-MasterEnabled = 0                  -> SYSTEM DISABLED
-MasterEnabled = 1, IsEnabled = 0   -> SCHEDULE STOPPED
-RunState = R                       -> RUNNING
-otherwise                          -> ACTIVE
+STOPPED - API INACTIVE
+STOPPED - TASKMAN NOT REGISTERED
+WARNING - DUPLICATE SCHEDULER
+STOPPED - MASTER OFF
+STOPPED - SCHEDULE OFF
+ACTIVE - WAITING
+ACTIVE - READY
+RUNNING NOW
 ```
 
-`MasterEnabled` is an ADMIN kill switch. Do not make it the normal operator ON/OFF control.
+## START SCHEDULER
 
-If MasterEnabled = 0, show a clear warning such as:
+START is not allowed to merely flip custom DB flags.
+
+Required flow:
 
 ```text
-Scheduler system is disabled by administrator.
+refresh ActiveBGTasks
+      ↓
+more than 1 matching task?
+      ├─ yes -> abort / duplicate warning
+      └─ no
+      ↓
+0 matching task?
+      ├─ yes -> submit SMK069ShipmentScheduler as WAITING
+      │         receive TaskNumber
+      │         configure recurrence with SLJobQueues.BackGroundQueue2Sp
+      │         refresh ActiveBGTasks
+      └─ no -> reuse existing task
+      ↓
+exactly 1 actual task exists?
+      ├─ no -> do NOT enable business/master
+      └─ yes
+      ↓
+SMK069SaveShipmentScheduleSp(... IsEnabled=1 ...)
+      ↓
+SMK069SetShipmentSchedulerEnabledSp(1)
+      ↓
+refresh all collections / recompute status
 ```
 
-and disable Run Now.
-
-## 2. Schedule Control
-
-Visible properties:
+The recurring TaskMan heartbeat is set to 5 minutes. This is infrastructure polling only. Actual Shipment cadence remains controlled by:
 
 ```text
-ScheduleCode       read-only
-ScheduleName       read-only or editable by admin
-IntervalMinutes    editable
-MaxShipments       editable; blank = DefaultMaxBatchSize
-IsEnabled          do not expose as a raw numeric textbox in the final UI
-RunState           read-only
-```
-
-Use operator buttons instead of typing `0` / `1`:
-
-```text
-[Activate]
-[Deactivate]
-```
-
-Recommended visibility:
-
-```text
-Activate   visible/enabled when IsEnabled = 0
-Deactivate visible/enabled when IsEnabled = 1
-```
-
-Use `SMK069SaveShipmentScheduleSp` for saving settings and changing IsEnabled so NextRunDate is calculated server-side.
-
-Parameters:
-
-```text
-ScheduleCode
-ScheduleName
 IntervalMinutes
-MaxShipments
-IsEnabled
-StartAt = NULL
-Success OUT
-Infobar OUT
+NextRunDate
 ```
 
-For first UAT keep:
+## STOP SCHEDULER
+
+STOP is safety-first:
+
+```text
+SMK069SetShipmentSchedulerEnabledSp(0)
+      ↓
+SMK069SaveShipmentScheduleSp(... IsEnabled=0 ...)
+      ↓
+refresh ActiveBGTasks
+      ↓
+delete matching WAITING heartbeat row(s)
+      ↓
+save / refresh ActiveBGTasks
+```
+
+A task already in READY or RUNNING cannot be deleted through the normal Active Background Tasks delete flow. In that state, master/business switches are still turned OFF first so no new Shipment schedule claim should begin. The current invocation is allowed to finish; once the recurring row becomes WAITING again, STOP can remove it.
+
+## RUN ONCE
+
+`RUN ONCE` remains a one-time READY submit for controlled testing.
+
+For current UAT keep:
 
 ```text
 MaxShipments = 1
 ```
 
-## 3. Run Now
+P96331 is the verified first queue candidate. Do not consume P96330/P96332 until the P96331 lifecycle is reviewed.
 
-Final production-safe button:
+## Save Schedule
+
+Editable operator fields:
 
 ```text
-[Run Now]
+ScheduleName
+IntervalMinutes
+MaxShipments
 ```
 
-invokes:
+Read-only/system fields include:
 
 ```text
-SMK069RequestShipmentRunNowSp(ScheduleCode)
-```
-
-It only makes HOURLY due immediately. It does not perform HTTP and it does not ask for POS credentials.
-
-Enable only when:
-
-```text
-MasterEnabled = 1
-AND IsEnabled = 1
-AND RunState <> 'R'
-```
-
-The TaskMan heartbeat then picks up the due schedule.
-
-Do not make the production Run Now button carry POS username/password in visible form parameters.
-
-## 4. Last Run
-
-Show these primary schedule properties as a dedicated result card:
-
-```text
+ScheduleCode
+NextRunDate
 LastRunDate
 LastRunStatus
 LastCandidates
@@ -185,48 +179,15 @@ LastExhausted
 LastMessage
 ```
 
-Status mapping:
+## Shipment queue
+
+Collection:
 
 ```text
-N = Never Run
-S = Success
-W = Completed With Failure
-E = System Error
+ue_SMK069ShipmentSchedulerQueue
 ```
 
-A TaskMan `Task Succeeded` result alone is NOT proof that a Shipment was processed. `LastCandidates`, `LastRunDate`, and queue/retry changes are the business proof.
-
-## 5. Queue Summary KPIs
-
-Use dashboard collection properties:
-
-```text
-ReadyCount
-WaitingBackoffCount
-ExhaustedCount
-SucceededToday
-FailedToday
-DefaultMaxBatchSize
-MaxAttempts
-```
-
-Main KPI row should display:
-
-```text
-Ready
-Waiting Retry
-Exhausted
-Success Today
-Failed Today
-```
-
-`DefaultMaxBatchSize` and `MaxAttempts` are supporting policy values and can appear as smaller text under Schedule Control rather than as headline KPIs.
-
-## 6. Shipment Queue Grid
-
-Collection: `ue_SMK069ShipmentSchedulerQueue`
-
-Columns, in this order:
+Columns:
 
 ```text
 ShipmentId       -> DN No
@@ -238,81 +199,50 @@ LastHttpCode     -> HTTP
 LastError        -> Last Error
 ```
 
-Current expected row:
+## Credentials
+
+POS username/password controls stay hidden.
+
+Conversation artifact uses placeholders:
 
 ```text
-P96329 | READY | 0 | 5 | -- | -- | --
+__POS_USERNAME__
+__POS_PASSWORD__
 ```
 
-Queue is global for the Site. It is not owned by the HOURLY schedule before processing.
+Replace only in the local UAT XML if hardcoded credentials are required. Never commit real values to Git. Hidden form variables are not encrypted secrets.
 
-## 7. Dashboard / Queue Loading
+## Current final artifact
 
-Keep Dashboard and Queue as Form Secondary Collections.
-
-They must be explicitly refreshed on form load / refresh.
-
-Recommended events:
+Generated from tenant export `FS_20260910_065349.XML`:
 
 ```text
-StdFormInitCompleted
-  sequence 10 -> refresh ue_SMK069ShipmentSchedulerDashboard
-  sequence 20 -> refresh ue_SMK069ShipmentSchedulerQueue
-
-StdFormRefreshCompleted
-  refresh the same two secondary collections if needed
+SMK069ShipmentScheduler_ONE_FORM_FINAL_RUNTIME_TRUTH.xml
 ```
 
-Do not redesign them as business parent/child collections merely to make them load.
+Key behavior:
 
-## 8. Buttons
+- directly reads actual `ActiveBGTasks`;
+- computes human-readable runtime status in a form script;
+- detects duplicate matching tasks;
+- shows actual TaskNumber and TaskStatusCode;
+- creates/checks recurring heartbeat on START without opening a second Background Queue form;
+- disables master/business first on STOP and removes WAITING heartbeat rows;
+- preserves explicit RUN ONCE behavior.
 
-Final operator-facing buttons:
+## Acceptance
 
-```text
-Save Settings
-Activate
-Deactivate
-Run Now
-Refresh
-```
-
-Optional admin-only button for UAT / emergency configuration:
-
-```text
-Enable System / Disable System
-```
-
-which invokes `SMK069SetShipmentSchedulerEnabledSp`.
-
-In normal operation MasterEnabled should normally stay ON and operator control is IsEnabled.
-
-## 9. Refresh Behavior After Actions
-
-After Save / Activate / Deactivate / Run Now:
-
-```text
-1. refresh primary Schedule
-2. refresh Dashboard secondary collection
-3. refresh Queue secondary collection
-4. display returned Infobar / Success message
-```
-
-## 10. Final Acceptance
-
-The form is ready when an operator can answer, without SQL:
+The form is accepted only when an operator can answer without opening SQL or Active Background Tasks separately:
 
 ```text
 Is the API active?
-Is the scheduler system enabled?
-Is HOURLY active?
-When will it run next?
-How many Shipments are ready / waiting retry / exhausted?
-Which DN is currently waiting?
-What happened on the last scheduler run?
-How many succeeded / failed?
-Can I activate / deactivate it?
-Can I request Run Now?
+Is the master switch ON?
+Is the business schedule enabled?
+Is the actual TaskMan heartbeat registered?
+What is its actual TaskStatusCode?
+What is its TaskNumber?
+Is the business runner idle or running?
+Is there a duplicate scheduler?
+Can START create exactly one actual heartbeat?
+Can STOP remove the WAITING heartbeat?
 ```
-
-No credential or token is displayed anywhere on the dashboard.
