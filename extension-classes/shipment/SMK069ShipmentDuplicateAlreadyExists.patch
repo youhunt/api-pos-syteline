@@ -1,0 +1,89 @@
+*** SMK069ShipmentSenderExtension.rev3.cs
+--- SMK069ShipmentSenderExtension.rev3.cs
+***************
+*** WebException branch in SMK069PostShipmentPayload
+---
+@@
+                 catch (WebException ex)
+                 {
+                     HttpWebResponse errorResponse = ex.Response as HttpWebResponse;
+                     if (errorResponse != null)
+                     {
+                         using (errorResponse)
+                         {
+                             TransportSuccess = 1;
+                             HttpCode = (int)errorResponse.StatusCode;
+                             string body = ReadResponseBody(errorResponse);
+                             ResponseJson = LimitBody(body);
+-                            BusinessSuccess = 0;
+-                            ErrorMessage = BuildHttpError(HttpCode, body);
++
++                            /*
++                             * POS uses HTTP 400 + code 1010 + message "data is exist"
++                             * when the DN was already accepted previously. For an
++                             * outbound Shipment POST this is an idempotent success:
++                             * retrying forever cannot improve the result and may create
++                             * unnecessary traffic. EvaluateBusinessResult owns the
++                             * business classification so login/auth 1010 responses are
++                             * NOT affected by this rule.
++                             */
++                            EvaluateBusinessResult(
++                                HttpCode,
++                                body,
++                                successMode,
++                                SuccessMarker,
++                                ref BusinessSuccess,
++                                ref ErrorMessage);
+                         }
+                     }
+                     else
+                     {
+                         TransportSuccess = 0;
+                         BusinessSuccess = 0;
+                         ErrorMessage = "HTTP transport gagal: " + ex.Message;
+@@
+         private static void EvaluateBusinessResult(
+             int httpCode,
+             string responseBody,
+             string successMode,
+             string successMarker,
+             ref int businessSuccess,
+             ref string errorMessage)
+         {
++            /*
++             * Idempotent duplicate contract observed on POS Shipment endpoint:
++             *   HTTP 400
++             *   {"code":1010,"message":"data is exist","data":null}
++             *
++             * IMPORTANT: scope this ONLY to Shipment business evaluation
++             * (SuccessMode=KACS_V1). The login endpoint can also use code 1010
++             * for invalid credentials and must remain a login failure.
++             */
++            bool alreadyExists =
++                successMode == "KACS_V1" &&
++                httpCode == 400 &&
++                !string.IsNullOrEmpty(responseBody) &&
++                Regex.IsMatch(
++                    responseBody,
++                    "\\\"code\\\"\\s*:\\s*1010(?:\\D|$)",
++                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
++                Regex.IsMatch(
++                    responseBody,
++                    "\\\"message\\\"\\s*:\\s*\\\"data\\s+is\\s+exist\\\"",
++                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
++
++            if (alreadyExists)
++            {
++                businessSuccess = 1;
++                errorMessage = null;
++                return;
++            }
++
+             bool http2xx = httpCode >= 200 && httpCode <= 299;
+
+             if (!http2xx)
+             {
+                 businessSuccess = 0;
+                 errorMessage = BuildHttpError(httpCode, responseBody);
+                 return;
+             }
