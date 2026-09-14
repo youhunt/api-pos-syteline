@@ -13,6 +13,14 @@ coitem_mst.consolidate  tinyint
 
 Jadi requirement tenant menggunakan `consolidate`, bukan `consolidated`.
 
+Query Select `OBJECT_DEFINITION` juga mengonfirmasi header procedure tenant yang sebenarnya:
+
+```sql
+CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp
+```
+
+Perhatikan ada **tiga spasi** antara `CREATE` dan `PROCEDURE`.
+
 ## Requirement
 
 Untuk setiap Blanket Customer Order yang dibuat melalui alur POS/CSV:
@@ -36,7 +44,7 @@ Gunakan file terbaru:
 database/patches/csv-to-co/2026-09-14-smk069-17-consolidate-header-and-line.sql
 ```
 
-File lama dengan nama `...consolidated-header-and-line.sql` sudah ditarik dari `main` agar tidak salah dipakai lagi.
+File lama dengan nama `...consolidated-header-and-line.sql` sudah ditarik dari `main`.
 
 ## Revision history
 
@@ -48,58 +56,43 @@ Memperbaiki error Apply Database:
 The data types bit and bit are incompatible in the add operator.
 ```
 
-Guard partial-state sekarang mengubah BIT ke INT sebelum penjumlahan.
+Guard partial-state mengubah BIT ke INT sebelum penjumlahan.
 
 ### Rev.3
 
-Mengganti field yang salah `consolidated` menjadi tenant-confirmed field `consolidate`.
+Mengganti field salah `consolidated` menjadi tenant-confirmed field `consolidate`.
 
 ### Rev.4
 
-Apply Database berhenti pada:
-
-```text
-[PATCH-17] Header procedure tidak dapat dinormalisasi menjadi ALTER PROCEDURE.::211
-```
-
-Rev.4 menghapus ketergantungan pada object name persis dan mencoba mengenali variasi CREATE/ALTER + PROC/PROCEDURE.
-
-Namun tenant berikutnya menghasilkan:
-
-```text
-[PATCH-17] Keyword header CREATE/ALTER PROC/PROCEDURE tidak ditemukan pada module definition.::240
-```
-
-Ini menunjukkan `OBJECT_DEFINITION` tenant memiliki whitespace/tab/line-break di antara keyword sehingga pencarian phrase persis masih terlalu ketat.
+Header normalization masih terlalu bergantung pada phrase `CREATE/ALTER PROC/PROCEDURE`.
 
 ### Rev.5
 
-Rev.5 tidak lagi mencari phrase persis seperti `CREATE PROCEDURE` atau `ALTER PROC`.
+Mencoba parsing struktural header berdasarkan `@SiteRef`, `PROC/PROCEDURE`, dan `CREATE/ALTER`.
 
-Normalisasi dilakukan secara struktural:
+### Rev.6
 
-1. menemukan parameter pertama `@SiteRef`;
-2. mencari token `PROCEDURE`/`PROC` terdekat sebelum parameter tersebut;
-3. mencari `CREATE`/`ALTER` dalam window header sebelum token procedure;
-4. jika bentuknya `CREATE OR ALTER`, seluruh sequence dinormalisasi;
-5. mengganti hanya bagian declaration keyword menjadi `ALTER PROCEDURE`.
+Setelah header aktual tenant diambil langsung dari `OBJECT_DEFINITION`, tidak ada lagi alasan untuk menebak format header.
 
-Dengan pendekatan ini variasi berikut tetap didukung:
+Rev.6 memakai exact tenant-confirmed header:
 
-```text
-CREATE OR ALTER PROCEDURE dbo.X
-CREATE OR ALTER\nPROCEDURE [dbo].[X]
-CREATE\tPROC [dbo].[X]
-ALTER\nPROCEDURE dbo.X
-ALTER PROC [dbo].[X]
+```sql
+CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp
 ```
 
-Patch Rev.5 tetap:
+Patch mensyaratkan header tersebut muncul tepat satu kali, kemudian menggantinya menjadi:
 
-- memakai field `consolidate`;
+```sql
+ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp
+```
+
+Setelah itu definition yang sudah ditambah `consolidate = 1` dijalankan.
+
+Rev.6 tetap:
+
+- memeriksa `co_mst.consolidate` dan `coitem_mst.consolidate`;
 - membawa fix BIT + BIT;
-- memeriksa `co_mst.consolidate` dan `coitem_mst.consolidate` sebelum ALTER procedure;
-- tidak mengubah procedure jika state source ambiguous/partial;
+- menolak source match yang ambiguous/partial;
 - satu executable batch;
 - tanpa `GO`;
 - tidak melakukan mass update transaksi lama.
