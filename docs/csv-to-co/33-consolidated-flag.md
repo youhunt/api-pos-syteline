@@ -1,75 +1,65 @@
-# Patch 17 — consolidated = 1 pada Customer Order header dan line
+# Patch 17 — consolidate = 1 pada Customer Order header dan line
 
 Tanggal: 14 September 2026
 
-## Requirement
+## Tenant finding
 
-Untuk setiap Blanket Customer Order yang dibuat melalui alur POS/CSV, field berikut wajib bernilai `1`:
+Apply Database membuktikan bahwa field `dbo.co_mst.consolidated` tidak ada. Requirement tenant menggunakan nama field:
 
 ```text
-co_mst.consolidated     = 1
-coitem_mst.consolidated = 1
+co_mst.consolidate
+coitem_mst.consolidate
 ```
 
-Source processor yang membuat header dan line adalah:
+Karena itu Patch 17 Rev.3 menggunakan `consolidate`, bukan `consolidated`.
+
+## Requirement
+
+Untuk setiap Blanket Customer Order yang dibuat melalui alur POS/CSV:
+
+```text
+co_mst.consolidate     = 1
+coitem_mst.consolidate = 1
+```
+
+Source processor:
 
 ```text
 dbo.SMK069ProcessCustomerOrderSp
 ```
 
-Sebelum Patch 17, INSERT ke `co_mst` dan `coitem_mst` belum menulis `consolidated` secara eksplisit sehingga nilai mengikuti default tenant.
-
 ## Deployment
 
-Apply Database:
+Gunakan file Rev.3:
 
 ```text
-database/patches/csv-to-co/2026-09-14-smk069-17-consolidated-header-and-line.sql
+database/patches/csv-to-co/2026-09-14-smk069-17-consolidate-header-and-line.sql
 ```
 
-Patch sengaja memeriksa keberadaan kolom `consolidated` di kedua tabel sebelum mengubah procedure. Jika salah satu kolom tidak ada, deployment berhenti tanpa memaksakan asumsi schema.
+File lama dengan nama `...consolidated-header-and-line.sql` sudah ditarik dari `main` agar tidak salah dipakai lagi.
 
-Patch adalah satu executable batch dan tidak menggunakan `GO`.
+Patch Rev.3:
 
-### Rev.2 — 14 Sep 2026
-
-Apply Database pertama gagal dengan:
-
-```text
-The data types bit and bit are incompatible in the add operator.
-```
-
-Penyebabnya adalah guard partial-state menjumlahkan empat variable bertipe `BIT` secara langsung. SQL Server tidak mendukung operasi `BIT + BIT`.
-
-Rev.2 mengubah guard tersebut menjadi penjumlahan setelah `CONVERT(INT, ...)`:
-
-```sql
-IF CONVERT(INT, @HasHdrColumn)
- + CONVERT(INT, @HasHdrValue)
- + CONVERT(INT, @HasLineColumn)
- + CONVERT(INT, @HasLineValue) > 0
-```
-
-Error terjadi sebelum procedure diubah, sehingga patch Rev.2 aman dijalankan ulang pada tenant yang gagal di Rev.1.
+- memakai field `consolidate`;
+- tetap membawa perbaikan Rev.2 untuk operasi BIT + BIT dengan `CONVERT(INT, ...)`;
+- memeriksa `co_mst.consolidate` dan `coitem_mst.consolidate` sebelum ALTER procedure;
+- satu executable batch;
+- tanpa `GO`;
+- tidak melakukan mass update transaksi lama.
 
 ## Expected mapping
 
-### co_mst
-
 ```text
-consolidated = 1
-```
+co_mst.type            = B
+co_mst.consolidate     = 1
 
-### coitem_mst
-
-```text
-stat         = O
-consolidated = 1
+coitem_mst.stat        = O
+coitem_mst.consolidate = 1
 ```
 
 ## Verification — Query Select
 
-Gunakan CO baru yang dibuat setelah Patch 17:
+Header:
 
 ```sql
 SELECT
@@ -78,17 +68,10 @@ SELECT
     type,
     cust_num,
     cust_po,
-    consolidated
+    consolidate
 FROM dbo.co_mst
 WHERE site_ref = RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
   AND co_num = N'<CREATED_CO_NUM>';
-```
-
-Expected:
-
-```text
-type         = B
-consolidated = 1
 ```
 
 Line:
@@ -101,20 +84,20 @@ SELECT
     item,
     qty_ordered,
     stat,
-    consolidated
+    consolidate
 FROM dbo.coitem_mst
 WHERE site_ref = RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
   AND co_num = N'<CREATED_CO_NUM>'
 ORDER BY co_line;
 ```
 
-Expected setiap line:
+Expected:
 
 ```text
-stat         = O
-consolidated = 1
+co_mst.type        = B
+co_mst.consolidate = 1
+coitem_mst.stat    = O
+coitem_mst.consolidate = 1
 ```
 
-## Existing Customer Orders
-
-Patch 17 tidak melakukan mass update terhadap CO lama. Requirement ini berlaku untuk CO baru setelah patch di-apply. Existing transaction hanya diubah jika memang diputuskan secara terpisah untuk koreksi data UAT.
+Jika Apply Database berhenti pada `[PATCH-17] Kolom dbo.coitem_mst.consolidate tidak ditemukan`, jangan memaksa ALTER. Itu berarti nama field line berbeda dan harus diverifikasi dari schema tenant terlebih dahulu.
