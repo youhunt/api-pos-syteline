@@ -1,6 +1,6 @@
 /* =============================================================================
    SMK069 - CSV/POS Inbound -> Blanket Customer Order
-   Patch 17 - Force consolidated = 1 on co_mst and coitem_mst
+   Patch 17 Rev.2 - Force consolidated = 1 on co_mst and coitem_mst
    Date     : 2026-09-14
 
    Requirement
@@ -9,6 +9,14 @@
    set:
        dbo.co_mst.consolidated     = 1
        dbo.coitem_mst.consolidated = 1
+
+   REV.2
+   -----
+   Fix Apply Database error:
+       The data types bit and bit are incompatible in the add operator.
+
+   SQL Server does not allow BIT + BIT. The partial-state guard now converts
+   each BIT flag to INT before summing. No business logic is changed.
 
    Safety
    ------
@@ -89,8 +97,12 @@ BEGIN
     RETURN;
 END;
 
-/* A partially-patched definition is unsafe to mutate automatically. */
-IF @HasHdrColumn + @HasHdrValue + @HasLineColumn + @HasLineValue > 0
+/* A partially-patched definition is unsafe to mutate automatically.
+   Rev.2: BIT values must be converted before arithmetic in SQL Server. */
+IF CONVERT(INT, @HasHdrColumn)
+ + CONVERT(INT, @HasHdrValue)
+ + CONVERT(INT, @HasLineColumn)
+ + CONVERT(INT, @HasLineValue) > 0
     THROW 510174, N'[PATCH-17] Ditemukan state consolidated yang hanya terpasang sebagian. Patch dihentikan untuk inspeksi manual.', 1;
 
 /* Header: add co_mst.consolidated after include_tax_in_price. */
