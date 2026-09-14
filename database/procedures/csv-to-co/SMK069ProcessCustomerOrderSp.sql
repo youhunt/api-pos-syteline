@@ -8,6 +8,7 @@
     - no unavailable portal Uf_* columns
     - generated Customer Order pattern = COYYMM####
     - source/POS co_num remains in staging and is stored in co_mst.cust_po
+    - new coitem_mst rows are created with stat = 'O' (Open)
 */
 
 CREATE OR ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp
@@ -536,7 +537,8 @@ BEGIN
             price_conv,
             matl_cost,
             cost_conv,
-            matl_cost_conv
+            matl_cost_conv,
+            stat
         )
         SELECT
             @CreatedCoNum,
@@ -559,7 +561,8 @@ BEGIN
             s.unit_price,
             ISNULL(i.matl_cost, 0),
             ISNULL(i.unit_cost, 0),
-            ISNULL(i.matl_cost, 0)
+            ISNULL(i.matl_cost, 0),
+            N'O'
         FROM dbo.ue_SMK069_temp_sales_mst AS s
         INNER JOIN dbo.item_mst AS i
           ON i.site_ref = s.SiteRef
