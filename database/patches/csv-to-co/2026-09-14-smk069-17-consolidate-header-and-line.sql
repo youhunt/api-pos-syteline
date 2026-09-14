@@ -1,12 +1,16 @@
 /* =============================================================================
    SMK069 - CSV/POS Inbound -> Blanket Customer Order
-   Patch 17 Rev.5 - Force consolidate = 1 on co_mst and coitem_mst
+   Patch 17 Rev.6 - Force consolidate = 1 on co_mst and coitem_mst
    Date     : 2026-09-14
 
    Tenant-confirmed fields
    -----------------------
        dbo.co_mst.consolidate     tinyint
        dbo.coitem_mst.consolidate tinyint
+
+   Tenant-confirmed installed procedure header
+   -------------------------------------------
+       CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp
 
    Requirement
    -----------
@@ -15,20 +19,19 @@
        dbo.co_mst.consolidate     = 1
        dbo.coitem_mst.consolidate = 1
 
-   REV.5
+   REV.6
    -----
-   - Keeps Rev.2 BIT-to-INT fix for the partial-state guard.
-   - Keeps Rev.3 tenant-confirmed field name: consolidate.
-   - Replaces Rev.4 exact header phrase detection with structural parsing:
-       * find the first @SiteRef parameter,
-       * find the nearest PROC/PROCEDURE keyword before that parameter,
-       * find CREATE/ALTER within the preceding header window,
-       * collapse CREATE OR ALTER / CREATE / ALTER into ALTER PROCEDURE.
-     This tolerates tabs, line breaks, bracketed object names, and variable
-     whitespace in OBJECT_DEFINITION.
-   - Verifies BOTH tenant columns exist before altering the procedure.
+   Previous revisions attempted generic CREATE/ALTER header parsing. Query Select
+   from the tenant now proves the exact installed header, including THREE spaces
+   between CREATE and PROCEDURE. Rev.6 deliberately uses that tenant-confirmed
+   header instead of guessing whitespace/header variants.
+
+   Safety
+   ------
+   - Verifies both consolidate columns exist.
    - Refuses partial/ambiguous source matches.
-   - Idempotent when both mappings are already installed.
+   - Requires the tenant-confirmed CREATE header exactly once before ALTER.
+   - Idempotent when both consolidate mappings are already installed.
    - One executable batch; no GO.
    ============================================================================= */
 
@@ -36,38 +39,29 @@ SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
 DECLARE
-    @ProcName             SYSNAME = N'dbo.SMK069ProcessCustomerOrderSp',
-    @ProcId               INT,
-    @Definition           NVARCHAR(MAX),
-    @DefinitionUpper      NVARCHAR(MAX),
-    @Lf                   NCHAR(1) = NCHAR(10),
-    @HdrColOld            NVARCHAR(MAX),
-    @HdrColNew            NVARCHAR(MAX),
-    @HdrValOld            NVARCHAR(MAX),
-    @HdrValNew            NVARCHAR(MAX),
-    @LineColOld           NVARCHAR(MAX),
-    @LineColNew           NVARCHAR(MAX),
-    @LineValOld           NVARCHAR(MAX),
-    @LineValNew           NVARCHAR(MAX),
-    @HdrColCount          INT,
-    @HdrValCount          INT,
-    @LineColCount         INT,
-    @LineValCount         INT,
-    @HasHdrColumn         BIT,
-    @HasHdrValue          BIT,
-    @HasLineColumn        BIT,
-    @HasLineValue         BIT,
-    @FirstParamPos        INT,
-    @ProcKeywordPos       INT,
-    @ProcKeywordLen       INT,
-    @HeaderPos            INT,
-    @HeaderLen            INT,
-    @ReversePos           INT,
-    @CreatePos            INT,
-    @AlterPos             INT,
-    @PrefixUpper          NVARCHAR(MAX),
-    @BeforeProcUpper      NVARCHAR(MAX),
-    @BetweenCreateAlter   NVARCHAR(400);
+    @ProcName        SYSNAME = N'dbo.SMK069ProcessCustomerOrderSp',
+    @ProcId          INT,
+    @Definition      NVARCHAR(MAX),
+    @Lf              NCHAR(1) = NCHAR(10),
+    @HdrColOld       NVARCHAR(MAX),
+    @HdrColNew       NVARCHAR(MAX),
+    @HdrValOld       NVARCHAR(MAX),
+    @HdrValNew       NVARCHAR(MAX),
+    @LineColOld      NVARCHAR(MAX),
+    @LineColNew      NVARCHAR(MAX),
+    @LineValOld      NVARCHAR(MAX),
+    @LineValNew      NVARCHAR(MAX),
+    @HdrColCount     INT,
+    @HdrValCount     INT,
+    @LineColCount    INT,
+    @LineValCount    INT,
+    @HasHdrColumn    BIT,
+    @HasHdrValue     BIT,
+    @HasLineColumn   BIT,
+    @HasLineValue    BIT,
+    @HeaderOld       NVARCHAR(300),
+    @HeaderNew       NVARCHAR(300),
+    @HeaderCount     INT;
 
 IF COL_LENGTH(N'dbo.co_mst', N'consolidate') IS NULL
     THROW 510170, N'[PATCH-17] Kolom dbo.co_mst.consolidate tidak ditemukan. Patch dihentikan.', 1;
@@ -87,6 +81,7 @@ IF NULLIF(@Definition, N'') IS NULL
 SET @Definition = REPLACE(@Definition, NCHAR(13) + NCHAR(10), NCHAR(10));
 SET @Definition = REPLACE(@Definition, NCHAR(13), NCHAR(10));
 
+/* Detect already-installed mapping. */
 SET @HasHdrColumn = CASE WHEN CHARINDEX(
       N'            include_tax_in_price,' + @Lf
     + N'            consolidate,' + @Lf
@@ -115,7 +110,6 @@ BEGIN
     RETURN;
 END;
 
-/* A partially-patched definition is unsafe to mutate automatically. */
 IF CONVERT(INT, @HasHdrColumn)
  + CONVERT(INT, @HasHdrValue)
  + CONVERT(INT, @HasLineColumn)
@@ -210,97 +204,22 @@ SET @Definition = REPLACE(@Definition, @LineColOld, @LineColNew);
 SET @Definition = REPLACE(@Definition, @LineValOld, @LineValNew);
 
 /*
-   Rev.5: structural header normalization.
-   Do not search for an exact phrase such as "CREATE PROCEDURE" because tenant
-   module text may contain tabs/newlines or CREATE OR ALTER split over lines.
+   Rev.6: Query Select has now proven the exact installed tenant header.
+   Do not parse it generically. Require exactly this header once, then ALTER it.
 */
-SET @DefinitionUpper = UPPER(@Definition);
-SET @FirstParamPos = CHARINDEX(N'@SITEREF', @DefinitionUpper);
+SET @HeaderOld = N'CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp';
+SET @HeaderNew = N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp';
 
-IF ISNULL(@FirstParamPos, 0) = 0
-    THROW 510179, N'[PATCH-17] Parameter @SiteRef tidak ditemukan pada module definition; header tidak dapat dinormalisasi aman.', 1;
+SET @HeaderCount =
+    (LEN(@Definition) - LEN(REPLACE(@Definition, @HeaderOld, N''))) / NULLIF(LEN(@HeaderOld), 0);
 
-SET @PrefixUpper = LEFT(@DefinitionUpper, @FirstParamPos - 1);
+IF ISNULL(@HeaderCount, 0) <> 1
+    THROW 510179, N'[PATCH-17] Header tenant CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp tidak ditemukan tepat satu kali.', 1;
 
-/* Find the nearest PROCEDURE/PROC token before the first parameter. */
-SET @ReversePos = CHARINDEX(REVERSE(N'PROCEDURE'), REVERSE(@PrefixUpper));
-IF @ReversePos > 0
-BEGIN
-    SET @ProcKeywordLen = LEN(N'PROCEDURE');
-    SET @ProcKeywordPos = LEN(@PrefixUpper) - @ReversePos - @ProcKeywordLen + 2;
-END
-ELSE
-BEGIN
-    SET @ReversePos = CHARINDEX(REVERSE(N'PROC'), REVERSE(@PrefixUpper));
-    IF @ReversePos > 0
-    BEGIN
-        SET @ProcKeywordLen = LEN(N'PROC');
-        SET @ProcKeywordPos = LEN(@PrefixUpper) - @ReversePos - @ProcKeywordLen + 2;
-    END;
-END;
+SET @Definition = REPLACE(@Definition, @HeaderOld, @HeaderNew);
 
-IF ISNULL(@ProcKeywordPos, 0) = 0 OR ISNULL(@ProcKeywordLen, 0) = 0
-    THROW 510182, N'[PATCH-17] PROC/PROCEDURE terdekat sebelum @SiteRef tidak ditemukan.', 1;
-
-SET @BeforeProcUpper = LEFT(@DefinitionUpper, @ProcKeywordPos - 1);
-SET @CreatePos = 0;
-SET @AlterPos = 0;
-
-/* Find nearest CREATE and ALTER tokens before PROC/PROCEDURE. */
-SET @ReversePos = CHARINDEX(REVERSE(N'CREATE'), REVERSE(@BeforeProcUpper));
-IF @ReversePos > 0
-    SET @CreatePos = LEN(@BeforeProcUpper) - @ReversePos - LEN(N'CREATE') + 2;
-
-SET @ReversePos = CHARINDEX(REVERSE(N'ALTER'), REVERSE(@BeforeProcUpper));
-IF @ReversePos > 0
-    SET @AlterPos = LEN(@BeforeProcUpper) - @ReversePos - LEN(N'ALTER') + 2;
-
-/* Ignore unrelated words/comments too far from the actual declaration. */
-IF @CreatePos > 0 AND @ProcKeywordPos - @CreatePos > 200
-    SET @CreatePos = 0;
-IF @AlterPos > 0 AND @ProcKeywordPos - @AlterPos > 200
-    SET @AlterPos = 0;
-
-SET @HeaderPos = 0;
-
-IF @CreatePos > 0 AND @AlterPos > @CreatePos
-BEGIN
-    SET @BetweenCreateAlter = SUBSTRING
-    (
-        @DefinitionUpper,
-        @CreatePos + LEN(N'CREATE'),
-        @AlterPos - (@CreatePos + LEN(N'CREATE'))
-    );
-
-    SET @BetweenCreateAlter = REPLACE(@BetweenCreateAlter, N' ', N'');
-    SET @BetweenCreateAlter = REPLACE(@BetweenCreateAlter, NCHAR(9), N'');
-    SET @BetweenCreateAlter = REPLACE(@BetweenCreateAlter, NCHAR(10), N'');
-
-    /* CREATE OR ALTER ... : replace the whole declaration keyword sequence. */
-    IF @BetweenCreateAlter = N'OR'
-        SET @HeaderPos = @CreatePos;
-    ELSE
-        SET @HeaderPos = @AlterPos;
-END
-ELSE IF @AlterPos > 0
-    SET @HeaderPos = @AlterPos;
-ELSE IF @CreatePos > 0
-    SET @HeaderPos = @CreatePos;
-
-IF ISNULL(@HeaderPos, 0) = 0
-    THROW 510183, N'[PATCH-17] CREATE/ALTER terdekat sebelum PROC/PROCEDURE tidak ditemukan.', 1;
-
-SET @HeaderLen = (@ProcKeywordPos + @ProcKeywordLen) - @HeaderPos;
-
-IF @HeaderLen <= 0 OR @HeaderLen > 250
-    THROW 510184, N'[PATCH-17] Panjang header procedure tidak masuk batas aman.', 1;
-
-SET @Definition = STUFF(@Definition, @HeaderPos, @HeaderLen, N'ALTER PROCEDURE');
-SET @DefinitionUpper = UPPER(@Definition);
-
-IF CHARINDEX(N'ALTER PROCEDURE', @DefinitionUpper) = 0
-   OR CHARINDEX(N'SMK069PROCESSCUSTOMERORDERSP', @DefinitionUpper) = 0
-    THROW 510185, N'[PATCH-17] Header procedure gagal dinormalisasi secara aman.', 1;
+IF CHARINDEX(@HeaderNew, @Definition) = 0
+    THROW 510182, N'[PATCH-17] Header tenant gagal dinormalisasi menjadi ALTER PROCEDURE.', 1;
 
 EXEC sys.sp_executesql @Definition;
 
