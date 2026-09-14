@@ -1,14 +1,12 @@
 /* =============================================================================
    SMK069 - CSV/POS Inbound -> Blanket Customer Order
-   Patch 17 Rev.3 - Force consolidate = 1 on co_mst and coitem_mst
+   Patch 17 Rev.4 - Force consolidate = 1 on co_mst and coitem_mst
    Date     : 2026-09-14
 
-   Tenant finding
-   --------------
-   Apply Database proved that dbo.co_mst.consolidated does not exist.
-   Tenant field name is expected to be:
-       dbo.co_mst.consolidate
-       dbo.coitem_mst.consolidate
+   Tenant-confirmed fields
+   -----------------------
+       dbo.co_mst.consolidate     tinyint
+       dbo.coitem_mst.consolidate tinyint
 
    Requirement
    -----------
@@ -17,10 +15,13 @@
        dbo.co_mst.consolidate     = 1
        dbo.coitem_mst.consolidate = 1
 
-   REV.3
+   REV.4
    -----
-   - Replaces incorrect field name consolidated with consolidate.
    - Keeps Rev.2 BIT-to-INT fix for the partial-state guard.
+   - Keeps Rev.3 tenant-confirmed field name: consolidate.
+   - Fixes Apply Database header normalization so it no longer depends on the
+     exact schema/object text format. It accepts CREATE/ALTER, PROC/PROCEDURE,
+     and bracketed object names such as [dbo].[SMK069ProcessCustomerOrderSp].
    - Verifies BOTH tenant columns exist before altering the procedure.
    - Refuses partial/ambiguous source matches.
    - Idempotent when both mappings are already installed.
@@ -34,6 +35,7 @@ DECLARE
     @ProcName          SYSNAME = N'dbo.SMK069ProcessCustomerOrderSp',
     @ProcId            INT,
     @Definition        NVARCHAR(MAX),
+    @DefinitionUpper   NVARCHAR(MAX),
     @Lf                NCHAR(1) = NCHAR(10),
     @HdrColOld         NVARCHAR(MAX),
     @HdrColNew         NVARCHAR(MAX),
@@ -50,7 +52,9 @@ DECLARE
     @HasHdrColumn      BIT,
     @HasHdrValue       BIT,
     @HasLineColumn     BIT,
-    @HasLineValue      BIT;
+    @HasLineValue      BIT,
+    @HeaderPos         INT,
+    @HeaderLen         INT;
 
 IF COL_LENGTH(N'dbo.co_mst', N'consolidate') IS NULL
     THROW 510170, N'[PATCH-17] Kolom dbo.co_mst.consolidate tidak ditemukan. Patch dihentikan.', 1;
@@ -66,7 +70,7 @@ SET @Definition = OBJECT_DEFINITION(@ProcId);
 IF NULLIF(@Definition, N'') IS NULL
     THROW 510173, N'[PATCH-17] Definition SMK069ProcessCustomerOrderSp tidak dapat dibaca.', 1;
 
-/* Normalize CR/LF so exact replacements are deterministic. */
+/* Normalize CR/LF so exact INSERT-list replacements are deterministic. */
 SET @Definition = REPLACE(@Definition, NCHAR(13) + NCHAR(10), NCHAR(10));
 SET @Definition = REPLACE(@Definition, NCHAR(13), NCHAR(10));
 
@@ -192,22 +196,54 @@ SET @Definition = REPLACE(@Definition, @HdrValOld, @HdrValNew);
 SET @Definition = REPLACE(@Definition, @LineColOld, @LineColNew);
 SET @Definition = REPLACE(@Definition, @LineValOld, @LineValNew);
 
-/* Existing procedure must be ALTERed regardless of stored module header style. */
-SET @Definition = REPLACE(@Definition,
-    N'CREATE OR ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp',
-    N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp');
-SET @Definition = REPLACE(@Definition,
-    N'CREATE OR ALTER PROC dbo.SMK069ProcessCustomerOrderSp',
-    N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp');
-SET @Definition = REPLACE(@Definition,
-    N'CREATE PROCEDURE dbo.SMK069ProcessCustomerOrderSp',
-    N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp');
-SET @Definition = REPLACE(@Definition,
-    N'CREATE PROC dbo.SMK069ProcessCustomerOrderSp',
-    N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp');
+/*
+   Rev.4: normalize only the CREATE/ALTER keyword portion of the installed
+   module header. Do not depend on whether the object name is bracketed.
+*/
+SET @DefinitionUpper = UPPER(@Definition);
+SET @HeaderPos = 0;
+SET @HeaderLen = 0;
 
-IF CHARINDEX(N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp', @Definition) = 0
-    THROW 510179, N'[PATCH-17] Header procedure tidak dapat dinormalisasi menjadi ALTER PROCEDURE.', 1;
+IF CHARINDEX(N'CREATE OR ALTER PROCEDURE', @DefinitionUpper) > 0
+BEGIN
+    SET @HeaderPos = CHARINDEX(N'CREATE OR ALTER PROCEDURE', @DefinitionUpper);
+    SET @HeaderLen = LEN(N'CREATE OR ALTER PROCEDURE');
+END
+ELSE IF CHARINDEX(N'CREATE OR ALTER PROC', @DefinitionUpper) > 0
+BEGIN
+    SET @HeaderPos = CHARINDEX(N'CREATE OR ALTER PROC', @DefinitionUpper);
+    SET @HeaderLen = LEN(N'CREATE OR ALTER PROC');
+END
+ELSE IF CHARINDEX(N'CREATE PROCEDURE', @DefinitionUpper) > 0
+BEGIN
+    SET @HeaderPos = CHARINDEX(N'CREATE PROCEDURE', @DefinitionUpper);
+    SET @HeaderLen = LEN(N'CREATE PROCEDURE');
+END
+ELSE IF CHARINDEX(N'CREATE PROC', @DefinitionUpper) > 0
+BEGIN
+    SET @HeaderPos = CHARINDEX(N'CREATE PROC', @DefinitionUpper);
+    SET @HeaderLen = LEN(N'CREATE PROC');
+END
+ELSE IF CHARINDEX(N'ALTER PROCEDURE', @DefinitionUpper) > 0
+BEGIN
+    SET @HeaderPos = CHARINDEX(N'ALTER PROCEDURE', @DefinitionUpper);
+    SET @HeaderLen = LEN(N'ALTER PROCEDURE');
+END
+ELSE IF CHARINDEX(N'ALTER PROC', @DefinitionUpper) > 0
+BEGIN
+    SET @HeaderPos = CHARINDEX(N'ALTER PROC', @DefinitionUpper);
+    SET @HeaderLen = LEN(N'ALTER PROC');
+END;
+
+IF ISNULL(@HeaderPos, 0) = 0 OR ISNULL(@HeaderLen, 0) = 0
+    THROW 510179, N'[PATCH-17] Keyword header CREATE/ALTER PROC/PROCEDURE tidak ditemukan pada module definition.', 1;
+
+SET @Definition = STUFF(@Definition, @HeaderPos, @HeaderLen, N'ALTER PROCEDURE');
+SET @DefinitionUpper = UPPER(@Definition);
+
+IF CHARINDEX(N'ALTER PROCEDURE', @DefinitionUpper) = 0
+   OR CHARINDEX(N'SMK069PROCESSCUSTOMERORDERSP', @DefinitionUpper) = 0
+    THROW 510182, N'[PATCH-17] Header procedure gagal dinormalisasi secara aman.', 1;
 
 EXEC sys.sp_executesql @Definition;
 
