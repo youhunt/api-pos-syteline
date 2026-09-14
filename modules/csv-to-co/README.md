@@ -42,7 +42,7 @@ SMK069ReceivePosSalesJsonSp
 
 Procedure ini sekarang tidak berhenti di Receive/Validate. Bila ada valid rows, procedure melanjutkan proses sampai Customer Order.
 
-Parameter 1–10 tetap sama untuk backward compatibility. Patch 15 hanya append parameter defaulted:
+Parameter 1–10 tetap sama untuk backward compatibility. Patch 15 append parameter defaulted:
 
 ```text
 11 ProcessedOrders OUT
@@ -61,9 +61,9 @@ CSV tetap masuk melalui:
 SMK069RunCsvTestBatchSp
 ```
 
-Tetapi mulai Patch 16 procedure ini **tidak lagi** memanggil Receive Core dan Process Batch secara langsung.
+Mulai Patch 16 procedure ini tidak lagi memanggil Receive Core dan Process Batch secara langsung.
 
-Tanggung jawab CSV wrapper sekarang hanya:
+Tanggung jawab CSV wrapper:
 
 ```text
 parsed CSV detail
@@ -72,8 +72,6 @@ parsed CSV detail
 → SMK069ReceivePosSalesJsonSp (@ThrowOnBusinessError = 0)
 → persist CSV batch/detail result
 ```
-
-Jadi Receive/Validate/Process-to-CO hanya memiliki satu business engine.
 
 ## Deployment terbaru
 
@@ -88,19 +86,25 @@ Apply Database dengan urutan:
 3. database/patches/csv-to-co/2026-09-14-smk069-16-route-csv-through-public-receive.sql
 
 4. database/patches/csv-to-co/2026-09-14-smk069-17-consolidate-header-and-line.sql
-   (gunakan Rev.5 terbaru)
+   (gunakan Rev.6 terbaru)
 ```
 
 Patch deployment dibuat satu executable batch dan **tanpa `GO`** untuk tenant Apply Database.
 
-Patch 17 Rev.5 memakai field tenant yang sudah dikonfirmasi:
+Patch 17 memakai field tenant yang sudah dikonfirmasi:
 
 ```text
 co_mst.consolidate      tinyint
 coitem_mst.consolidate  tinyint
 ```
 
-Rev.5 juga memperbaiki normalisasi header `SMK069ProcessCustomerOrderSp` agar tahan terhadap whitespace/tab/line-break pada `OBJECT_DEFINITION` tenant. Error Rev.4 yang berbunyi `Keyword header CREATE/ALTER PROC/PROCEDURE tidak ditemukan` tidak boleh lagi ditangani dengan exact phrase matching.
+Header `SMK069ProcessCustomerOrderSp` yang dikonfirmasi langsung dari tenant adalah:
+
+```sql
+CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp
+```
+
+Rev.6 tidak lagi menebak variasi whitespace/header. Ia mensyaratkan header tersebut muncul tepat satu kali, lalu menormalisasinya menjadi `ALTER PROCEDURE` sebelum menjalankan definition yang sudah ditambah `consolidate = 1`.
 
 ## Canonical source
 
@@ -139,19 +143,12 @@ co_bln_mst.stat = O
 co_bln_mst.allow_on_pick_list = 0
 ```
 
-Patch 14 memastikan `coitem_mst.stat` ditulis eksplisit `O`; jangan mengandalkan default tenant.
-
+Patch 14 memastikan `coitem_mst.stat` ditulis eksplisit `O`.
 Patch 17 memastikan `consolidate` ditulis eksplisit `1` pada header dan line baru.
 
 ## Partial success
 
-`SMK069ReceivePosSalesJsonSp` memproses valid rows selama:
-
-```text
-TransferredRows > 0
-```
-
-Sehingga satu invalid order tidak lagi membuat valid order yang sudah masuk temp tertahan di `V`.
+`SMK069ReceivePosSalesJsonSp` memproses valid rows selama `TransferredRows > 0`.
 
 Public/API default tetap dapat mengembalikan business failure setelah valid rows selesai diproses agar contract integrator tidak berubah.
 
@@ -190,7 +187,7 @@ Procedure berikut belum dihapus agar caller lama tidak putus:
 SMK069ReceiveAndProcessPosSalesJsonSp
 ```
 
-Namun **jangan gunakan sebagai entry point baru**. Development baru harus menuju:
+Namun jangan gunakan sebagai entry point baru. Development baru harus menuju:
 
 ```text
 SMK069ReceivePosSalesJsonSp
@@ -200,7 +197,7 @@ SMK069ReceivePosSalesJsonSp
 
 Form tenant tetap dapat memakai `SMK069RunCsvTestBatchSp` untuk tombol `Process to Blanket CO` / alur CSV-to-CO.
 
-Percobaan export form one-hit yang nested file picker sebelumnya sudah ditarik dari repository karena Web Client menghasilkan error `primaryaction ... choices`. Jangan gunakan export one-hit lama dari repo sebagai source aktif.
+Percobaan export form one-hit yang nested file picker sebelumnya sudah ditarik dari repository karena Web Client menghasilkan error `primaryaction ... choices`.
 
 ## Dokumentasi operasional
 
@@ -211,15 +208,15 @@ docs/csv-to-co/32-canonical-receive-pos-sales-json-to-co.md
 docs/csv-to-co/33-consolidated-flag.md
 ```
 
-Dokumen `32-...` adalah handoff utama untuk Patch 15–16. Dokumen `33-...` mencatat requirement `consolidate = 1` dan histori Patch 17 sampai Rev.5.
+Dokumen `32-...` adalah handoff utama Patch 15–16. Dokumen `33-...` mencatat requirement `consolidate = 1` dan histori Patch 17 sampai Rev.6.
 
 ## Next UAT
 
 1. Apply Patch 14 bila belum.
 2. Apply Patch 15.
 3. Apply Patch 16.
-4. Apply Patch 17 Rev.5.
-5. Test direct JSON/Postman menggunakan **`SMK069ReceivePosSalesJsonSp`** dengan BatchId baru; pastikan CO langsung terbentuk.
-6. Test CSV baru melalui `SMK069RunCsvTestBatchSp`; pastikan result menunjukkan `ProcessedOrders`, `ProcessErrors`, dan `CreatedCoNums`.
+4. Apply Patch 17 Rev.6.
+5. Test direct JSON/Postman menggunakan `SMK069ReceivePosSalesJsonSp` dengan BatchId baru.
+6. Test CSV baru melalui `SMK069RunCsvTestBatchSp`.
 7. Verifikasi `co_mst`, `coitem_mst`, dan `co_bln_mst`.
 8. Pastikan `co_mst.type = B`, `co_mst.consolidate = 1`, `coitem_mst.stat = O`, `coitem_mst.consolidate = 1`, dan `co_bln_mst.stat = O`.
