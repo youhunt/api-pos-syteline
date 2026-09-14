@@ -56,28 +56,50 @@ Mengganti field yang salah `consolidated` menjadi tenant-confirmed field `consol
 
 ### Rev.4
 
-Apply Database berikutnya berhenti pada:
+Apply Database berhenti pada:
 
 ```text
 [PATCH-17] Header procedure tidak dapat dinormalisasi menjadi ALTER PROCEDURE.::211
 ```
 
-Penyebabnya adalah normalisasi header procedure terlalu bergantung pada string object persis `dbo.SMK069ProcessCustomerOrderSp`. Definisi module tenant dapat menggunakan bracket atau variasi keyword, misalnya:
+Rev.4 menghapus ketergantungan pada object name persis dan mencoba mengenali variasi CREATE/ALTER + PROC/PROCEDURE.
+
+Namun tenant berikutnya menghasilkan:
 
 ```text
-ALTER PROCEDURE [dbo].[SMK069ProcessCustomerOrderSp]
-ALTER PROC [dbo].[SMK069ProcessCustomerOrderSp]
-CREATE PROCEDURE [dbo].[SMK069ProcessCustomerOrderSp]
+[PATCH-17] Keyword header CREATE/ALTER PROC/PROCEDURE tidak ditemukan pada module definition.::240
 ```
 
-Rev.4 hanya menormalisasi bagian keyword `CREATE/ALTER PROC/PROCEDURE` menjadi `ALTER PROCEDURE` dan tidak lagi bergantung pada format schema/object name. Patch tetap memverifikasi bahwa module definition mengandung `SMK069ProcessCustomerOrderSp` sebelum dieksekusi.
+Ini menunjukkan `OBJECT_DEFINITION` tenant memiliki whitespace/tab/line-break di antara keyword sehingga pencarian phrase persis masih terlalu ketat.
 
-Patch Rev.4:
+### Rev.5
+
+Rev.5 tidak lagi mencari phrase persis seperti `CREATE PROCEDURE` atau `ALTER PROC`.
+
+Normalisasi dilakukan secara struktural:
+
+1. menemukan parameter pertama `@SiteRef`;
+2. mencari token `PROCEDURE`/`PROC` terdekat sebelum parameter tersebut;
+3. mencari `CREATE`/`ALTER` dalam window header sebelum token procedure;
+4. jika bentuknya `CREATE OR ALTER`, seluruh sequence dinormalisasi;
+5. mengganti hanya bagian declaration keyword menjadi `ALTER PROCEDURE`.
+
+Dengan pendekatan ini variasi berikut tetap didukung:
+
+```text
+CREATE OR ALTER PROCEDURE dbo.X
+CREATE OR ALTER\nPROCEDURE [dbo].[X]
+CREATE\tPROC [dbo].[X]
+ALTER\nPROCEDURE dbo.X
+ALTER PROC [dbo].[X]
+```
+
+Patch Rev.5 tetap:
 
 - memakai field `consolidate`;
-- tetap membawa fix BIT + BIT;
-- menerima CREATE/ALTER, PROC/PROCEDURE, dan bracketed object name;
+- membawa fix BIT + BIT;
 - memeriksa `co_mst.consolidate` dan `coitem_mst.consolidate` sebelum ALTER procedure;
+- tidak mengubah procedure jika state source ambiguous/partial;
 - satu executable batch;
 - tanpa `GO`;
 - tidak melakukan mass update transaksi lama.
