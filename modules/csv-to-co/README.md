@@ -93,9 +93,52 @@ coitem_mst
 co_bln_mst
 ```
 
-## Status UAT terakhir — 10 Sep 2026
+Untuk line Customer Order hasil integrasi, status harus langsung Open:
 
-Batch yang sedang dipakai:
+```text
+coitem_mst.stat = O
+```
+
+Jangan mengandalkan default schema/tenant untuk `coitem_mst.stat`. `SMK069ProcessCustomerOrderSp` harus menulis `O` secara eksplisit pada saat INSERT.
+
+## Patch 14 — coitem_mst status Open
+
+Tanggal: 14 Sep 2026.
+
+Temuan dari UAT form Blanket Customer Order: line hasil integrasi tampil **Planned** karena procedure `SMK069ProcessCustomerOrderSp` belum menyertakan kolom `coitem_mst.stat` pada INSERT.
+
+Patch deployment:
+
+```text
+database/patches/csv-to-co/2026-09-14-smk069-14-coitem-status-open.sql
+```
+
+Canonical source:
+
+```text
+database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
+```
+
+Perubahan inti:
+
+```sql
+INSERT INTO dbo.coitem_mst
+(
+    ...,
+    matl_cost_conv,
+    stat
+)
+SELECT
+    ...,
+    ISNULL(i.matl_cost, 0),
+    N'O'
+```
+
+Patch 14 hanya mengubah default untuk **CO line baru** yang dibuat setelah patch di-apply. Existing line yang sebelumnya sudah tersimpan sebagai Planned tidak diubah massal oleh deployment patch.
+
+## Status UAT terakhir — 14 Sep 2026
+
+Batch sebelumnya yang dipakai:
 
 ```text
 CSV-20260909-072038-835E3D
@@ -114,23 +157,7 @@ Parser sudah menghasilkan:
 Rows=2, FormatErrors=0
 ```
 
-Sebelumnya one-hit mengembalikan:
-
-```text
-[POS-402] Batch CSV belum memiliki detail transaksi.
-```
-
-Akar masalahnya adalah standard Mongoose `SiteRef` pada detail, bukan business field CSV `siteref`. `siteref` boleh kosong jika CSV tidak mengirim field site.
-
-Patch terakhir:
-
-```text
-database/patches/csv-to-co/2026-09-09-smk069-13-fix-csv-detail-siteref-before-one-hit.sql
-```
-
-Patch 13 Rev.3 sudah berhasil di-apply di tenant. Batch yang sama **boleh langsung dijalankan ulang**. Tidak perlu New Batch atau Re-Parse selama file CSV tidak berubah.
-
-Untuk batch existing ini, gunakan tombol `Process to Blanket CO`, bukan tombol `CSV to Blanket CO (One Hit)` yang memang membuat batch baru untuk file CSV baru.
+Patch 13 Rev.3 sebelumnya sudah memperbaiki standard Mongoose `SiteRef` pada detail CSV sebelum one-hit. Patch terbaru untuk workstream ini sekarang adalah Patch 14 yang memaksa `coitem_mst.stat = O` saat Customer Order line dibuat.
 
 ## Source utama setelah pemisahan repo
 
@@ -164,6 +191,7 @@ docs/csv-to-co/31-patch13-rerun-uat.md
 
 ## Next test
 
-1. Import/replace form `ue_SMK069PosCsvBatchConsole` menggunakan export `forms/csv-to-co/ue_SMK069PosCsvBatchConsole_CSV_TO_CO_ONE_HIT.XML`.
-2. Untuk batch existing `CSV-20260909-072038-835E3D`, pilih batch tersebut lalu klik `Process to Blanket CO`; periksa `Result Message`, counts, dan tiga tabel Blanket CO.
-3. Setelah retry existing lulus, uji tombol `CSV to Blanket CO (One Hit)` dengan file CSV baru. Pastikan satu tindakan menghasilkan batch baru, detail parse, proses success, dan Blanket CO type `B`.
+1. Apply `database/patches/csv-to-co/2026-09-14-smk069-14-coitem-status-open.sql` melalui **Apply Database**.
+2. Jalankan CSV baru sampai membentuk Customer Order baru.
+3. Query `coitem_mst` untuk Customer Order yang baru dibuat dan pastikan seluruh line memiliki `stat = 'O'`.
+4. Buka Customer Order/Blanket Line form dan pastikan Status sudah tampil **Ordered/Open**, bukan Planned.
