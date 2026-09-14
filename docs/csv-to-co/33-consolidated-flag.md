@@ -31,6 +31,27 @@ Patch sengaja memeriksa keberadaan kolom `consolidated` di kedua tabel sebelum m
 
 Patch adalah satu executable batch dan tidak menggunakan `GO`.
 
+### Rev.2 — 14 Sep 2026
+
+Apply Database pertama gagal dengan:
+
+```text
+The data types bit and bit are incompatible in the add operator.
+```
+
+Penyebabnya adalah guard partial-state menjumlahkan empat variable bertipe `BIT` secara langsung. SQL Server tidak mendukung operasi `BIT + BIT`.
+
+Rev.2 mengubah guard tersebut menjadi penjumlahan setelah `CONVERT(INT, ...)`:
+
+```sql
+IF CONVERT(INT, @HasHdrColumn)
+ + CONVERT(INT, @HasHdrValue)
+ + CONVERT(INT, @HasLineColumn)
+ + CONVERT(INT, @HasLineValue) > 0
+```
+
+Error terjadi sebelum procedure diubah, sehingga patch Rev.2 aman dijalankan ulang pada tenant yang gagal di Rev.1.
+
 ## Expected mapping
 
 ### co_mst
