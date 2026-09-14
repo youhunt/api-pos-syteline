@@ -86,9 +86,21 @@ Apply Database dengan urutan:
 2. database/patches/csv-to-co/2026-09-14-smk069-15-canonical-receive-to-co.sql
 
 3. database/patches/csv-to-co/2026-09-14-smk069-16-route-csv-through-public-receive.sql
+
+4. database/patches/csv-to-co/2026-09-14-smk069-17-consolidate-header-and-line.sql
+   (gunakan Rev.5 terbaru)
 ```
 
 Patch deployment dibuat satu executable batch dan **tanpa `GO`** untuk tenant Apply Database.
+
+Patch 17 Rev.5 memakai field tenant yang sudah dikonfirmasi:
+
+```text
+co_mst.consolidate      tinyint
+coitem_mst.consolidate  tinyint
+```
+
+Rev.5 juga memperbaiki normalisasi header `SMK069ProcessCustomerOrderSp` agar tahan terhadap whitespace/tab/line-break pada `OBJECT_DEFINITION` tenant. Error Rev.4 yang berbunyi `Keyword header CREATE/ALTER PROC/PROCEDURE tidak ditemukan` tidak boleh lagi ditangani dengan exact phrase matching.
 
 ## Canonical source
 
@@ -109,13 +121,15 @@ database/patches/csv-to-co/2026-09-04-smk069-01-create-process-batch-customer-or
 Header:
 
 ```text
-co_mst.type = B
+co_mst.type        = B
+co_mst.consolidate = 1
 ```
 
 CO line:
 
 ```text
-coitem_mst.stat = O
+coitem_mst.stat        = O
+coitem_mst.consolidate = 1
 ```
 
 Blanket line:
@@ -126,6 +140,8 @@ co_bln_mst.allow_on_pick_list = 0
 ```
 
 Patch 14 memastikan `coitem_mst.stat` ditulis eksplisit `O`; jangan mengandalkan default tenant.
+
+Patch 17 memastikan `consolidate` ditulis eksplisit `1` pada header dan line baru.
 
 ## Partial success
 
@@ -192,16 +208,18 @@ Percobaan export form one-hit yang nested file picker sebelumnya sudah ditarik d
 docs/csv-to-co/30-csv-to-customer-order-one-hit.md
 docs/csv-to-co/31-patch13-rerun-uat.md
 docs/csv-to-co/32-canonical-receive-pos-sales-json-to-co.md
+docs/csv-to-co/33-consolidated-flag.md
 ```
 
-Dokumen `32-...` adalah handoff utama untuk Patch 15–16.
+Dokumen `32-...` adalah handoff utama untuk Patch 15–16. Dokumen `33-...` mencatat requirement `consolidate = 1` dan histori Patch 17 sampai Rev.5.
 
 ## Next UAT
 
 1. Apply Patch 14 bila belum.
 2. Apply Patch 15.
 3. Apply Patch 16.
-4. Test direct JSON/Postman menggunakan **`SMK069ReceivePosSalesJsonSp`** dengan BatchId baru; pastikan CO langsung terbentuk.
-5. Test CSV baru melalui `SMK069RunCsvTestBatchSp`; pastikan result menunjukkan `ProcessedOrders`, `ProcessErrors`, dan `CreatedCoNums`.
-6. Verifikasi `co_mst`, `coitem_mst`, dan `co_bln_mst`.
-7. Pastikan `co_mst.type = B`, `coitem_mst.stat = O`, dan `co_bln_mst.stat = O`.
+4. Apply Patch 17 Rev.5.
+5. Test direct JSON/Postman menggunakan **`SMK069ReceivePosSalesJsonSp`** dengan BatchId baru; pastikan CO langsung terbentuk.
+6. Test CSV baru melalui `SMK069RunCsvTestBatchSp`; pastikan result menunjukkan `ProcessedOrders`, `ProcessErrors`, dan `CreatedCoNums`.
+7. Verifikasi `co_mst`, `coitem_mst`, dan `co_bln_mst`.
+8. Pastikan `co_mst.type = B`, `co_mst.consolidate = 1`, `coitem_mst.stat = O`, `coitem_mst.consolidate = 1`, dan `co_bln_mst.stat = O`.
