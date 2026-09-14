@@ -4,14 +4,14 @@ Tanggal: 14 September 2026
 
 ## Tenant finding
 
-Apply Database membuktikan bahwa field `dbo.co_mst.consolidated` tidak ada. Requirement tenant menggunakan nama field:
+Query Select tenant mengonfirmasi field yang benar adalah:
 
 ```text
-co_mst.consolidate
-coitem_mst.consolidate
+co_mst.consolidate      tinyint
+coitem_mst.consolidate  tinyint
 ```
 
-Karena itu Patch 17 Rev.3 menggunakan `consolidate`, bukan `consolidated`.
+Jadi requirement tenant menggunakan `consolidate`, bukan `consolidated`.
 
 ## Requirement
 
@@ -30,7 +30,7 @@ dbo.SMK069ProcessCustomerOrderSp
 
 ## Deployment
 
-Gunakan file Rev.3:
+Gunakan file terbaru:
 
 ```text
 database/patches/csv-to-co/2026-09-14-smk069-17-consolidate-header-and-line.sql
@@ -38,10 +38,45 @@ database/patches/csv-to-co/2026-09-14-smk069-17-consolidate-header-and-line.sql
 
 File lama dengan nama `...consolidated-header-and-line.sql` sudah ditarik dari `main` agar tidak salah dipakai lagi.
 
-Patch Rev.3:
+## Revision history
+
+### Rev.2
+
+Memperbaiki error Apply Database:
+
+```text
+The data types bit and bit are incompatible in the add operator.
+```
+
+Guard partial-state sekarang mengubah BIT ke INT sebelum penjumlahan.
+
+### Rev.3
+
+Mengganti field yang salah `consolidated` menjadi tenant-confirmed field `consolidate`.
+
+### Rev.4
+
+Apply Database berikutnya berhenti pada:
+
+```text
+[PATCH-17] Header procedure tidak dapat dinormalisasi menjadi ALTER PROCEDURE.::211
+```
+
+Penyebabnya adalah normalisasi header procedure terlalu bergantung pada string object persis `dbo.SMK069ProcessCustomerOrderSp`. Definisi module tenant dapat menggunakan bracket atau variasi keyword, misalnya:
+
+```text
+ALTER PROCEDURE [dbo].[SMK069ProcessCustomerOrderSp]
+ALTER PROC [dbo].[SMK069ProcessCustomerOrderSp]
+CREATE PROCEDURE [dbo].[SMK069ProcessCustomerOrderSp]
+```
+
+Rev.4 hanya menormalisasi bagian keyword `CREATE/ALTER PROC/PROCEDURE` menjadi `ALTER PROCEDURE` dan tidak lagi bergantung pada format schema/object name. Patch tetap memverifikasi bahwa module definition mengandung `SMK069ProcessCustomerOrderSp` sebelum dieksekusi.
+
+Patch Rev.4:
 
 - memakai field `consolidate`;
-- tetap membawa perbaikan Rev.2 untuk operasi BIT + BIT dengan `CONVERT(INT, ...)`;
+- tetap membawa fix BIT + BIT;
+- menerima CREATE/ALTER, PROC/PROCEDURE, dan bracketed object name;
 - memeriksa `co_mst.consolidate` dan `coitem_mst.consolidate` sebelum ALTER procedure;
 - satu executable batch;
 - tanpa `GO`;
@@ -94,10 +129,8 @@ ORDER BY co_line;
 Expected:
 
 ```text
-co_mst.type        = B
-co_mst.consolidate = 1
-coitem_mst.stat    = O
-coitem_mst.consolidate = 1
+co_mst.type             = B
+co_mst.consolidate      = 1
+coitem_mst.stat         = O
+coitem_mst.consolidate  = 1
 ```
-
-Jika Apply Database berhenti pada `[PATCH-17] Kolom dbo.coitem_mst.consolidate tidak ditemukan`, jangan memaksa ALTER. Itu berarti nama field line berbeda dan harus diverifikasi dari schema tenant terlebih dahulu.
