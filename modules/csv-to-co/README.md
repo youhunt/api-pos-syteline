@@ -2,196 +2,206 @@
 
 ## Scope
 
-Modul ini hanya menangani data inbound POS/CSV sampai menjadi **Blanket Customer Order type `B`** di SyteLine.
+Modul ini hanya menangani inbound POS/CSV sampai menjadi **Blanket Customer Order type `B`** di SyteLine.
+
+Shipment outbound, DN retry, TaskMan Shipment, dan endpoint Shipment berada di workstream `shipment` dan tidak boleh dicampur ke sini kecuali ada dependency nyata yang sedang didiagnosis.
+
+## Arsitektur aktif — 14 Sep 2026
+
+Keputusan terbaru: **single canonical business entry point** adalah:
 
 ```text
-CSV / POS JSON
-→ Receive / Validate
-→ ue_SMK069_temp_sales_mst
-→ SMK069ProcessBatchCustomerOrdersSp
-→ SMK069ProcessCustomerOrderSp
-→ co_mst + coitem_mst + co_bln_mst
+dbo.SMK069ReceivePosSalesJsonSp
 ```
 
-Shipment outbound, endpoint POS Shipment, DN retry queue, dan TaskMan Shipment berada di modul `shipment` dan tidak boleh dibawa ke sini kecuali ada dependency nyata yang sedang didiagnosis.
-
-## Entry point aktif
-
-### JSON / Postman one-hit
+Flow final:
 
 ```text
-SMK069ReceiveAndProcessPosSalesJsonSp
+POS JSON ------------------------------┐
+                                       │
+CSV -> parsed detail -> build JSON ----┼-> SMK069ReceivePosSalesJsonSp
+                                       │          ↓
+                                       │   SMK069ReceivePosSalesJsonCoreSp
+                                       │          ↓
+                                       │   ue_SMK069_temp_sales_mst
+                                       │          ↓
+                                       │   SMK069ProcessBatchCustomerOrdersSp
+                                       │          ↓
+                                       └------> SMK069ProcessCustomerOrderSp
+                                                  ↓
+                                      co_mst + coitem_mst + co_bln_mst
 ```
 
-Digunakan ketika satu request JSON harus lanjut dari Receive/Validate sampai Customer Order processing.
+### Public JSON/Postman
 
-### CSV one-hit
+Gunakan:
+
+```text
+SMK069ReceivePosSalesJsonSp
+```
+
+Procedure ini sekarang tidak berhenti di Receive/Validate. Bila ada valid rows, procedure melanjutkan proses sampai Customer Order.
+
+Parameter 1–10 tetap sama untuk backward compatibility. Patch 15 hanya append parameter defaulted:
+
+```text
+11 ProcessedOrders OUT
+12 ProcessErrors OUT
+13 CreatedCoNums OUT
+14 ThrowOnBusinessError = 1
+```
+
+Default `ThrowOnBusinessError = 1` menjaga behavior public API lama: business failure tetap `THROW 51069` / `Success=false`.
+
+### CSV
+
+CSV tetap masuk melalui:
 
 ```text
 SMK069RunCsvTestBatchSp
 ```
 
-CSV harus sudah di-upload/parsing ke tabel batch/detail. Procedure ini melanjutkan detail yang sudah ada ke Receive Core lalu proses Customer Order.
+Tetapi mulai Patch 16 procedure ini **tidak lagi** memanggil Receive Core dan Process Batch secara langsung.
 
-### Form one-hit — pilih CSV sampai Blanket CO
-
-Form aktif:
+Tanggung jawab CSV wrapper sekarang hanya:
 
 ```text
-ue_SMK069PosCsvBatchConsole
+parsed CSV detail
+→ normalize SiteRef
+→ build POS PayloadJson
+→ SMK069ReceivePosSalesJsonSp (@ThrowOnBusinessError = 0)
+→ persist CSV batch/detail result
 ```
 
-Export form yang sudah ditambah fungsi satu-jalan:
+Jadi Receive/Validate/Process-to-CO hanya memiliki satu business engine.
+
+## Deployment terbaru
+
+Apply Database dengan urutan:
 
 ```text
-forms/csv-to-co/ue_SMK069PosCsvBatchConsole_CSV_TO_CO_ONE_HIT.XML
+1. database/patches/csv-to-co/2026-09-14-smk069-14-coitem-status-open.sql
+   (jika belum terpasang)
+
+2. database/patches/csv-to-co/2026-09-14-smk069-15-canonical-receive-to-co.sql
+
+3. database/patches/csv-to-co/2026-09-14-smk069-16-route-csv-through-public-receive.sql
 ```
 
-Tombol baru:
+Patch deployment dibuat satu executable batch dan **tanpa `GO`** untuk tenant Apply Database.
+
+## Canonical source
 
 ```text
-CSV to Blanket CO (One Hit)
+database/procedures/csv-to-co/SMK069ReceivePosSalesJsonSp.sql
+database/procedures/csv-to-co/SMK069RunCsvTestBatchSp.sql
+database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
 ```
 
-Orkestrasi event form:
+Shared process loop:
 
 ```text
-SMK069CsvToCoOneHit
-→ SMK069NewCsvBatch
-→ SMK069UploadCsv
-→ SMK069ParseCsv
-→ SMK069RunCsvFullProcess
-→ SMK069RunCsvTestBatchSp
-→ Blanket Customer Order
+database/patches/csv-to-co/2026-09-04-smk069-01-create-process-batch-customer-orders.sql
 ```
 
-Tombol ini ditujukan untuk **file CSV baru**: satu klik membuat batch baru, membuka pemilihan/upload CSV, parse, lalu menjalankan proses sampai Customer Order.
+## Target result
 
-Tombol manual lama tetap dipertahankan untuk diagnosis/retry. Caption tombol `Import && Validate` diubah menjadi:
-
-```text
-Process to Blanket CO
-```
-
-karena event tersebut sekarang memang memanggil `SMK069RunCsvTestBatchSp` dan melanjutkan proses sampai CO.
-
-**Penting untuk retry/idempotency:** batch lama yang aman untuk diproses ulang tidak boleh dipaksa melalui tombol one-hit baru karena tombol tersebut membuat BatchId baru. Pilih batch existing dan gunakan `Process to Blanket CO`.
-
-## Hasil akhir
-
-Customer Order yang dibuat adalah:
+Header:
 
 ```text
 co_mst.type = B
 ```
 
-Verifikasi pada tiga tabel:
-
-```text
-co_mst
-coitem_mst
-co_bln_mst
-```
-
-Untuk line Customer Order hasil integrasi, status harus langsung Open:
+CO line:
 
 ```text
 coitem_mst.stat = O
 ```
 
-Jangan mengandalkan default schema/tenant untuk `coitem_mst.stat`. `SMK069ProcessCustomerOrderSp` harus menulis `O` secara eksplisit pada saat INSERT.
-
-## Patch 14 — coitem_mst status Open
-
-Tanggal: 14 Sep 2026.
-
-Temuan dari UAT form Blanket Customer Order: line hasil integrasi tampil **Planned** karena procedure `SMK069ProcessCustomerOrderSp` belum menyertakan kolom `coitem_mst.stat` pada INSERT.
-
-Patch deployment:
+Blanket line:
 
 ```text
-database/patches/csv-to-co/2026-09-14-smk069-14-coitem-status-open.sql
+co_bln_mst.stat = O
+co_bln_mst.allow_on_pick_list = 0
 ```
 
-Canonical source:
+Patch 14 memastikan `coitem_mst.stat` ditulis eksplisit `O`; jangan mengandalkan default tenant.
+
+## Partial success
+
+`SMK069ReceivePosSalesJsonSp` memproses valid rows selama:
 
 ```text
-database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
+TransferredRows > 0
 ```
 
-Perubahan inti:
+Sehingga satu invalid order tidak lagi membuat valid order yang sudah masuk temp tertahan di `V`.
 
-```sql
-INSERT INTO dbo.coitem_mst
-(
-    ...,
-    matl_cost_conv,
-    stat
-)
-SELECT
-    ...,
-    ISNULL(i.matl_cost, 0),
-    N'O'
-```
+Public/API default tetap dapat mengembalikan business failure setelah valid rows selesai diproses agar contract integrator tidak berubah.
 
-Patch 14 hanya mengubah default untuk **CO line baru** yang dibuat setelah patch di-apply. Existing line yang sebelumnya sudah tersimpan sebagai Planned tidak diubah massal oleh deployment patch.
-
-## Status UAT terakhir — 14 Sep 2026
-
-Batch sebelumnya yang dipakai:
+CSV memakai `ThrowOnBusinessError = 0` supaya counts tetap bisa diterima dan batch dapat disimpan sebagai:
 
 ```text
-CSV-20260909-072038-835E3D
+C = complete
+P = partial
+E = failed/nothing landed
+R = running
 ```
 
-Detail hasil parse:
+## Transaction rule
+
+IDO method yang menjalankan proses ini harus:
 
 ```text
-Row 1: DEV4 | cust_po DEV4-216 | PLG | AC20002B | 375 PCS
-Row 2: DEV4 | cust_po DEV4-216 | PLG | AC20003B | 120 PCS
+Transactional = False
 ```
 
-Parser sudah menghasilkan:
+`SMK069ProcessCustomerOrderSp` memiliki transaction per order sendiri.
+
+## Retry/idempotency
+
+- Retry aman memakai **BatchId yang sama** bila sumber batch tidak berubah.
+- Jangan membuat batch baru hanya untuk mengulang error yang sudah diperbaiki.
+- `SMK069ProcessBatchCustomerOrdersSp` hanya memproses temp order `V/E`.
+- Temp order yang sudah `P` di-skip.
+- `SMK069ProcessCustomerOrderSp` tetap idempotent melalui existing Customer Order lookup.
+
+## Legacy compatibility
+
+Procedure berikut belum dihapus agar caller lama tidak putus:
 
 ```text
-Rows=2, FormatErrors=0
+SMK069ReceiveAndProcessPosSalesJsonSp
 ```
 
-Patch 13 Rev.3 sebelumnya sudah memperbaiki standard Mongoose `SiteRef` pada detail CSV sebelum one-hit. Patch terbaru untuk workstream ini sekarang adalah Patch 14 yang memaksa `coitem_mst.stat = O` saat Customer Order line dibuat.
-
-## Source utama setelah pemisahan repo
+Namun **jangan gunakan sebagai entry point baru**. Development baru harus menuju:
 
 ```text
-database/patches/csv-to-co/
-database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
-database/stored-procedures/csv-to-co/
-database/tables/csv-to-co/
-extension-classes/csv-to-co/SMKRSCPosIntegrationExtension.cs
-forms/csv-to-co/01-SMKRSCPosImportCenter.md
-forms/csv-to-co/ue_SMK069PosCsvBatchConsole_CSV_TO_CO_ONE_HIT.XML
-ido/csv-to-co/
-docs/csv-to-co/
-implementation/csv-to-co/
-templates/csv-to-co/
+SMK069ReceivePosSalesJsonSp
 ```
 
-Dokumen operasional utama:
+## Form CSV
+
+Form tenant tetap dapat memakai `SMK069RunCsvTestBatchSp` untuk tombol `Process to Blanket CO` / alur CSV-to-CO.
+
+Percobaan export form one-hit yang nested file picker sebelumnya sudah ditarik dari repository karena Web Client menghasilkan error `primaryaction ... choices`. Jangan gunakan export one-hit lama dari repo sebagai source aktif.
+
+## Dokumentasi operasional
 
 ```text
 docs/csv-to-co/30-csv-to-customer-order-one-hit.md
 docs/csv-to-co/31-patch13-rerun-uat.md
+docs/csv-to-co/32-canonical-receive-pos-sales-json-to-co.md
 ```
 
-## Aturan tenant SyteLine
+Dokumen `32-...` adalah handoff utama untuk Patch 15–16.
 
-- `Apply Database` bukan SSMS. Tulis patch agar dapat dijalankan sebagai satu executable batch dan jangan gunakan `GO`.
-- Verification `SELECT` dijalankan terpisah melalui Query Select.
-- Jangan menggabungkan beberapa verification query dengan deployment patch bila UI tenant tidak mendukungnya.
-- Untuk retry, pertahankan idempotency; jangan membuat BatchId baru hanya untuk mengulang error yang sudah diperbaiki.
+## Next UAT
 
-## Next test
-
-1. Apply `database/patches/csv-to-co/2026-09-14-smk069-14-coitem-status-open.sql` melalui **Apply Database**.
-2. Jalankan CSV baru sampai membentuk Customer Order baru.
-3. Query `coitem_mst` untuk Customer Order yang baru dibuat dan pastikan seluruh line memiliki `stat = 'O'`.
-4. Buka Customer Order/Blanket Line form dan pastikan Status sudah tampil **Ordered/Open**, bukan Planned.
+1. Apply Patch 14 bila belum.
+2. Apply Patch 15.
+3. Apply Patch 16.
+4. Test direct JSON/Postman menggunakan **`SMK069ReceivePosSalesJsonSp`** dengan BatchId baru; pastikan CO langsung terbentuk.
+5. Test CSV baru melalui `SMK069RunCsvTestBatchSp`; pastikan result menunjukkan `ProcessedOrders`, `ProcessErrors`, dan `CreatedCoNums`.
+6. Verifikasi `co_mst`, `coitem_mst`, dan `co_bln_mst`.
+7. Pastikan `co_mst.type = B`, `coitem_mst.stat = O`, dan `co_bln_mst.stat = O`.
