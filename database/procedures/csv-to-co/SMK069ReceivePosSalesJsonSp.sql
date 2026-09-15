@@ -1,22 +1,28 @@
 /* =============================================================================
    Canonical source: dbo.SMK069ReceivePosSalesJsonSp
-   Receive -> Validate -> Blanket Customer Order entry point
+   Receive -> Validate -> Quantity Multiple Check -> Blanket Customer Order
    -----------------------------------------------------------------------------
-   Date    : 2026-09-14
+   Date    : 2026-09-15
    Object  : dbo.SMK069ReceivePosSalesJsonSp
    Depends : dbo.SMK069ReceivePosSalesJsonCoreSp
              dbo.SMK069ProcessBatchCustomerOrdersSp
              dbo.SMK069ProcessCustomerOrderSp
+             dbo.SMK030_UomConvQty2
+             dbo.Getumcf
 
    DESIGN
    ------
    - Parameters 1-10 stay unchanged for backward-compatible IDO/Postman callers.
    - Parameters 11-14 are appended with defaults.
    - Valid rows are processed to Customer Order before a business error is
-     surfaced, so partial validation no longer strands valid rows in temp.
+     surfaced, so partial validation does not strand valid rows in temp.
+   - Quantity-multiple validation runs after Core receive/validate but BEFORE CO
+     processing. A fractional converted base quantity rejects the whole cust_po.
+   - Root quantity error code: POS-108.
+   - Sibling lines of the same cust_po: POS-203 atomic-order rejection.
    - Existing POS/API behavior is preserved by default:
          @ThrowOnBusinessError = 1
-     Business failure still raises THROW 51069 / Success=false.
+     Business failure raises THROW 51069 / Success=false.
    - CSV/internal callers may set:
          @ThrowOnBusinessError = 0
      so they receive counts/Infobar and can persist C/P/E batch status.
@@ -71,19 +77,20 @@ BEGIN
     SET @Infobar         = NULL;
 
     DECLARE
-        @ReturnCode       INT            = 0,
-        @ReceiveInfo      InfobarType    = NULL,
-        @SkippedOrders    INT            = 0,
-        @ProcessErrorCode NVARCHAR(20)   = NULL,
-        @ProcessDetail    NVARCHAR(2800) = NULL,
-        @ErrorCode        NVARCHAR(20)   = NULL,
-        @ErrorList        NVARCHAR(MAX)  = NULL,
-        @ErrorRowCount    INT            = 0,
-        @HasRealError     BIT            = 0,
-        @BusinessError    BIT            = 0,
-        @HardFailed       BIT            = 0,
-        @HttpError        NVARCHAR(2048) = NULL,
-        @CodePos          INT            = 0;
+        @ReturnCode        INT            = 0,
+        @ReceiveInfo       InfobarType    = NULL,
+        @SkippedOrders     INT            = 0,
+        @ProcessErrorCode  NVARCHAR(20)   = NULL,
+        @ProcessDetail     NVARCHAR(2800) = NULL,
+        @ErrorCode         NVARCHAR(20)   = NULL,
+        @ErrorList         NVARCHAR(MAX)  = NULL,
+        @ErrorRowCount     INT            = 0,
+        @HasRealError      BIT            = 0,
+        @BusinessError     BIT            = 0,
+        @HardFailed        BIT            = 0,
+        @HttpError         NVARCHAR(2048) = NULL,
+        @CodePos           INT            = 0,
+        @QtyRejectedOrders INT            = 0;
 
     /* =========================================================================
        1. Canonical Receive/Validate
@@ -99,6 +106,162 @@ BEGIN
         @ErrorOrders     = @ErrorOrders     OUTPUT,
         @TransferredRows = @TransferredRows OUTPUT,
         @Infobar         = @ReceiveInfo     OUTPUT;
+
+    /* =========================================================================
+       1B. Quantity multiple validation (POS-108)
+
+       Business-supplied rule:
+         converted base qty = SMK030_UomConvQty2
+         (
+             qty_ordered,
+             Getumcf(u_m, mapped item, '', ''),
+             'To Base'
+         )
+
+       Fractional base qty means the ordered quantity is not on an allowed
+       multiple. The ENTIRE cust_po is rejected before Customer Order creation.
+       ========================================================================= */
+    IF ISNULL(@TransferredRows, 0) > 0
+    BEGIN
+        DECLARE @QtyInvalid TABLE
+        (
+            row_no   INT           NOT NULL,
+            cust_po  NVARCHAR(100) NOT NULL,
+            qty_base DECIMAL(23,5) NOT NULL,
+            PRIMARY KEY (row_no, cust_po)
+        );
+
+        INSERT INTO @QtyInvalid (row_no, cust_po, qty_base)
+        SELECT
+            i.row_no,
+            LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po,
+            MAX(q.qty_base) AS qty_base
+        FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+        INNER JOIN dbo.custaddr AS c
+            ON i.cust_num = LEFT(c.name, 4)
+           AND c.cust_num LIKE N'PH%'
+           AND c.cust_seq <> 0
+        INNER JOIN dbo.itemcust AS ic
+            ON ic.cust_item = i.item
+           AND ic.cust_num = c.cust_num
+        CROSS APPLY
+        (
+            SELECT CAST
+            (
+                ISNULL
+                (
+                    dbo.SMK030_UomConvQty2
+                    (
+                        i.qty_ordered,
+                        ISNULL(dbo.Getumcf(i.u_m, ic.item, '', ''), 1),
+                        'To Base'
+                    ),
+                    0
+                )
+                AS DECIMAL(23,5)
+            ) AS qty_base
+        ) AS q
+        WHERE i.SiteRef        = @Site
+          AND i.source_system  = @SourceSystem
+          AND i.batch_id       = @BatchId
+          AND i.inbound_status = N'T'
+          AND q.qty_base <> FLOOR(q.qty_base)
+        GROUP BY
+            i.row_no,
+            LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)));
+
+        IF EXISTS (SELECT 1 FROM @QtyInvalid)
+        BEGIN
+            SELECT @QtyRejectedOrders = COUNT(DISTINCT cust_po)
+            FROM @QtyInvalid;
+
+            /* Root error line: keep the actual quantity reason. */
+            UPDATE i
+            SET
+                i.inbound_status = N'E',
+                i.validation_msg = LEFT
+                (
+                    N'[POS-108] Quantity tidak sesuai kelipatan U/M. qty_ordered='
+                    + COALESCE(CONVERT(NVARCHAR(60), i.qty_ordered), N'<kosong>')
+                    + N'; qty_base='
+                    + COALESCE(CONVERT(NVARCHAR(60), q.qty_base), N'<kosong>'),
+                    1000
+                )
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            INNER JOIN @QtyInvalid AS q
+                ON q.row_no = i.row_no
+               AND q.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+            WHERE i.SiteRef        = @Site
+              AND i.source_system  = @SourceSystem
+              AND i.batch_id       = @BatchId
+              AND i.inbound_status = N'T';
+
+            /* Atomic order rule: every sibling line in that cust_po is rejected. */
+            UPDATE i
+            SET
+                i.inbound_status = N'E',
+                i.validation_msg = N'[POS-203] Order ditolak karena terdapat line lain yang tidak valid.'
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef        = @Site
+              AND i.source_system  = @SourceSystem
+              AND i.batch_id       = @BatchId
+              AND i.inbound_status = N'T'
+              AND EXISTS
+                  (
+                      SELECT 1
+                      FROM @QtyInvalid AS q
+                      WHERE q.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+                  );
+
+            /*
+               Core has already published valid rows into temp. Remove only V rows
+               belonging to rejected PO(s) so ProcessBatch cannot create a CO.
+            */
+            DELETE t
+            FROM dbo.ue_SMK069_temp_sales_mst AS t
+            WHERE t.SiteRef = @Site
+              AND t.process_status = N'V'
+              AND EXISTS
+                  (
+                      SELECT 1
+                      FROM @QtyInvalid AS q
+                      WHERE q.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po)))
+                  );
+
+            /* Recompute public counters after the extra business validation. */
+            SELECT @TransferredRows = COUNT(*)
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef        = @Site
+              AND i.source_system  = @SourceSystem
+              AND i.batch_id       = @BatchId
+              AND i.inbound_status = N'T';
+
+            SELECT @ValidOrders = COUNT(*)
+            FROM
+            (
+                SELECT DISTINCT LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po
+                FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+                WHERE i.SiteRef        = @Site
+                  AND i.source_system  = @SourceSystem
+                  AND i.batch_id       = @BatchId
+                  AND i.inbound_status = N'T'
+            ) AS v;
+
+            SELECT @ErrorOrders = COUNT(*)
+            FROM
+            (
+                SELECT DISTINCT LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po
+                FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+                WHERE i.SiteRef        = @Site
+                  AND i.source_system  = @SourceSystem
+                  AND i.batch_id       = @BatchId
+                  AND i.inbound_status = N'E'
+            ) AS e;
+
+            IF ISNULL(@ErrorOrders, 0) > 0
+                SET @ReturnCode = 16;
+        END;
+    END;
 
     /* =========================================================================
        2. Canonical Process
@@ -117,6 +280,15 @@ BEGIN
             @FirstErrorCode  = @ProcessErrorCode OUTPUT,
             @ProcessDetail   = @ProcessDetail    OUTPUT,
             @CreatedCoNums   = @CreatedCoNums    OUTPUT;
+
+        /* Rejected quantity POs are not "already processed" skips. */
+        IF @QtyRejectedOrders > 0 AND @SkippedOrders > 0
+            SET @SkippedOrders =
+                CASE
+                    WHEN @SkippedOrders >= @QtyRejectedOrders
+                    THEN @SkippedOrders - @QtyRejectedOrders
+                    ELSE 0
+                END;
     END
     ELSE
         SET @HardFailed = 1;
@@ -226,6 +398,14 @@ BEGIN
                                     N'Warehouse tidak valid di Infor'
                                     + N' [coline=' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N'<kosong>')
                                     + N', whse=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(80), e.whse))), N''), N'<kosong>')
+                                    + N']'
+                                WHEN e.validation_msg LIKE N'%Quantity tidak sesuai kelipatan%'
+                                THEN
+                                    N'Quantity tidak sesuai kelipatan U/M'
+                                    + N' [coline=' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N'<kosong>')
+                                    + N', item=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.item))), N''), N'<kosong>')
+                                    + N', qty_ordered=' + COALESCE(CONVERT(NVARCHAR(60), e.qty_ordered), N'<kosong>')
+                                    + N', u_m=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(80), e.u_m))), N''), N'<kosong>')
                                     + N']'
                                 WHEN e.validation_msg LIKE N'%U/M%'
                                 THEN
