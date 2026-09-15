@@ -116,8 +116,6 @@ Pada UAT setelah Patch 18, request PO dengan quantity valid melewati quantity va
 Could not find stored procedure 'dbo.SMK069ProcessBatchCustomerOrdersSp'.
 ```
 
-Root cause: canonical `SMK069ReceivePosSalesJsonSp` memang bergantung pada shared batch processor tersebut, tetapi object belum ada di tenant. Source lama tersedia di Patch 01, namun deployment tenant saat ini membutuhkan Apply Database-compatible single batch tanpa `GO`.
-
 Fix deployment:
 
 ```text
@@ -125,6 +123,47 @@ database/patches/csv-to-co/2026-09-15-smk069-19-ensure-process-batch-customer-or
 ```
 
 Patch 19 menggunakan `CREATE OR ALTER PROCEDURE`, satu executable batch dan tanpa `GO`. Tidak ada perubahan IDO/API signature.
+
+## Auto CO silent no-op hardening — Patch 20
+
+Audit source menemukan gap berikut pada `SMK069ProcessBatchCustomerOrdersSp`:
+
+```text
+Receive/Validate transferred rows > 0
+mapping view tidak menghasilkan order dengan co_num
+→ ProcessedOrders = 0
+→ ProcessErrors   = 0
+→ SkippedOrders   = 0
+→ caller dapat terlihat sukses walaupun CO tidak dibuat
+```
+
+ProcessBatch bergantung pada:
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mapping_view
+```
+
+untuk mendapatkan `SiteRef + source_system + batch_id + co_num + cust_seq`, kemudian mencocokkan `co_num` tersebut dengan staging `ue_SMK069_temp_sales_mst` berstatus `V/E`.
+
+Patch 20 mengubah zero-order mapping menjadi explicit error:
+
+```text
+POS-302 = Auto CO tidak menemukan order mapping untuk batch
+```
+
+Deployment:
+
+```text
+database/patches/csv-to-co/2026-09-15-smk069-20-fail-when-batch-has-no-co-mapping.sql
+```
+
+Diagnostic gate:
+
+```text
+docs/csv-to-co/35-auto-co-not-running-diagnostic.md
+```
+
+Patch 20 **tidak menebak atau memalsukan mapping**. Jika POS-302 muncul, perbaikan selanjutnya harus berdasarkan isi mapping view dan row temp aktual pada batch tersebut.
 
 ## Deployment terbaru
 
@@ -145,6 +184,8 @@ Apply Database dengan urutan:
 
 6. database/patches/csv-to-co/2026-09-15-smk069-19-ensure-process-batch-customer-orders.sql
    (wajib untuk tenant yang belum memiliki SMK069ProcessBatchCustomerOrdersSp)
+
+7. database/patches/csv-to-co/2026-09-15-smk069-20-fail-when-batch-has-no-co-mapping.sql
 ```
 
 Patch deployment aktif dibuat satu executable batch dan **tanpa `GO`** untuk tenant Apply Database.
@@ -171,18 +212,6 @@ database/procedures/csv-to-co/SMK069ReceivePosSalesJsonSp.sql
 database/procedures/csv-to-co/SMK069RunCsvTestBatchSp.sql
 database/procedures/csv-to-co/SMK069ProcessBatchCustomerOrdersSp.sql
 database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
-```
-
-Historical shared process-loop source:
-
-```text
-database/patches/csv-to-co/2026-09-04-smk069-01-create-process-batch-customer-orders.sql
-```
-
-Tenant deployment fix for the same object:
-
-```text
-database/patches/csv-to-co/2026-09-15-smk069-19-ensure-process-batch-customer-orders.sql
 ```
 
 ## Target result
@@ -212,6 +241,7 @@ Patch 14 memastikan `coitem_mst.stat` ditulis eksplisit `O`.
 Patch 17 memastikan `consolidate` ditulis eksplisit `1` pada header dan line baru.
 Patch 18 memastikan PO dengan quantity non-multiple ditolak sebelum CO processing.
 Patch 19 memastikan shared batch CO processor tersedia di tenant.
+Patch 20 memastikan missing batch/order mapping tidak lagi gagal diam-diam.
 
 ## Partial success
 
@@ -275,12 +305,15 @@ docs/csv-to-co/31-patch13-rerun-uat.md
 docs/csv-to-co/32-canonical-receive-pos-sales-json-to-co.md
 docs/csv-to-co/33-consolidated-flag.md
 docs/csv-to-co/34-pos-108-qty-multiple-rejection.md
+docs/csv-to-co/35-auto-co-not-running-diagnostic.md
 ```
 
 ## Next UAT
 
-1. Apply Patch 19 terlebih dahulu pada tenant yang memunculkan missing-procedure error.
-2. Query Select verifikasi `OBJECT_ID(N'dbo.SMK069ProcessBatchCustomerOrdersSp', N'P')` tidak NULL.
-3. Hit ulang PO dengan quantity **valid**; harus lanjut sampai Blanket CO.
-4. Hit PO dengan quantity **invalid/non-multiple**; API harus `Success=false`, message `[POS-108]`, dan tidak ada CO.
-5. Verifikasi normal target: `co_mst.type = B`, `co_mst.consolidate = 1`, `coitem_mst.stat = O`, `coitem_mst.consolidate = 1`, `co_bln_mst.stat = O`.
+1. Pastikan Patch 19 sudah sukses dan `OBJECT_ID(N'dbo.SMK069ProcessBatchCustomerOrdersSp', N'P')` NOT NULL.
+2. Apply Patch 20.
+3. Hit ulang satu PO dengan quantity valid menggunakan BatchId yang aman/retryable.
+4. Jika keluar `[POS-302]`, Query Select mapping view untuk BatchId yang sama; kirim hasil mapping view + temp rows sebelum patch berikutnya.
+5. Jika mapping ada dan temp `V/E`, ProcessCustomerOrderSp harus dipanggil; gunakan `ProcessDetail` sebagai error berikutnya bila gagal.
+6. Test quantity invalid: API harus `Success=false`, `[POS-108]`, tanpa CO.
+7. Verifikasi target normal: `co_mst.type = B`, `co_mst.consolidate = 1`, `coitem_mst.stat = O`, `coitem_mst.consolidate = 1`, `co_bln_mst.stat = O`.
