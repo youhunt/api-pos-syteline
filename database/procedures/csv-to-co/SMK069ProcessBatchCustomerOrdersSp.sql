@@ -5,6 +5,8 @@
    Notes   : - Per-order processing is delegated to SMK069ProcessCustomerOrderSp.
              - Already processed temp orders are skipped.
              - Caller/IDO must NOT be Transactional.
+             - POS-302 is returned when a received batch has no resolvable order
+               mapping, preventing a silent ProcessedOrders=0 success.
    ============================================================================= */
 
 CREATE OR ALTER PROCEDURE dbo.SMK069ProcessBatchCustomerOrdersSp
@@ -85,6 +87,25 @@ BEGIN
         ) AS is_pending
     INTO #SMK069BatchOrders
     FROM BatchOrders AS b;
+
+    IF NOT EXISTS (SELECT 1 FROM #SMK069BatchOrders)
+    BEGIN
+        SET @ProcessErrors  = 1;
+        SET @FirstErrorCode = N'POS-302';
+        SET @ProcessDetail  = LEFT
+        (
+            N'[POS-302] Auto CO tidak menemukan order mapping untuk batch. '
+            + N'Periksa dbo.ue_SMK069_pos_sales_inbound_mapping_view: SiteRef='
+            + COALESCE(CONVERT(NVARCHAR(16), @Site), N'<NULL>')
+            + N'; SourceSystem=' + COALESCE(@SourceSystem, N'<NULL>')
+            + N'; BatchId=' + COALESCE(@BatchId, N'<NULL>')
+            + N'; pastikan co_num terisi dan row staging tersedia.',
+            2800
+        );
+        SET @CreatedCoNums = NULL;
+        DROP TABLE #SMK069BatchOrders;
+        RETURN 0;
+    END;
 
     SELECT @SkippedOrders = COUNT(*)
     FROM #SMK069BatchOrders
