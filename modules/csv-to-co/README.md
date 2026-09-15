@@ -108,6 +108,24 @@ Current POS operational assumption: satu API hit mengirim satu PO. Jadi POS-108 
 
 Jika kelak satu hit berisi beberapa PO, PO valid tetap dapat menjadi CO sedangkan PO invalid ditolak; response public API tetap business failure/partial sesuai contract invocation-level yang sekarang.
 
+## Tenant incident 15 Sep 2026 — missing batch processor
+
+Pada UAT setelah Patch 18, request PO dengan quantity valid melewati quantity validation tetapi gagal saat masuk tahap CO dengan response:
+
+```text
+Could not find stored procedure 'dbo.SMK069ProcessBatchCustomerOrdersSp'.
+```
+
+Root cause: canonical `SMK069ReceivePosSalesJsonSp` memang bergantung pada shared batch processor tersebut, tetapi object belum ada di tenant. Source lama tersedia di Patch 01, namun deployment tenant saat ini membutuhkan Apply Database-compatible single batch tanpa `GO`.
+
+Fix deployment:
+
+```text
+database/patches/csv-to-co/2026-09-15-smk069-19-ensure-process-batch-customer-orders.sql
+```
+
+Patch 19 menggunakan `CREATE OR ALTER PROCEDURE`, satu executable batch dan tanpa `GO`. Tidak ada perubahan IDO/API signature.
+
 ## Deployment terbaru
 
 Apply Database dengan urutan:
@@ -124,9 +142,12 @@ Apply Database dengan urutan:
    (gunakan Rev.6 terbaru)
 
 5. database/patches/csv-to-co/2026-09-15-smk069-18-reject-non-multiple-qty-per-po.sql
+
+6. database/patches/csv-to-co/2026-09-15-smk069-19-ensure-process-batch-customer-orders.sql
+   (wajib untuk tenant yang belum memiliki SMK069ProcessBatchCustomerOrdersSp)
 ```
 
-Patch deployment dibuat satu executable batch dan **tanpa `GO`** untuk tenant Apply Database.
+Patch deployment aktif dibuat satu executable batch dan **tanpa `GO`** untuk tenant Apply Database.
 
 Patch 17 memakai field tenant yang sudah dikonfirmasi:
 
@@ -148,13 +169,20 @@ Rev.6 menormalisasikan header tersebut menjadi `ALTER PROCEDURE` sebelum memasan
 ```text
 database/procedures/csv-to-co/SMK069ReceivePosSalesJsonSp.sql
 database/procedures/csv-to-co/SMK069RunCsvTestBatchSp.sql
+database/procedures/csv-to-co/SMK069ProcessBatchCustomerOrdersSp.sql
 database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
 ```
 
-Shared process loop:
+Historical shared process-loop source:
 
 ```text
 database/patches/csv-to-co/2026-09-04-smk069-01-create-process-batch-customer-orders.sql
+```
+
+Tenant deployment fix for the same object:
+
+```text
+database/patches/csv-to-co/2026-09-15-smk069-19-ensure-process-batch-customer-orders.sql
 ```
 
 ## Target result
@@ -183,6 +211,7 @@ co_bln_mst.allow_on_pick_list = 0
 Patch 14 memastikan `coitem_mst.stat` ditulis eksplisit `O`.
 Patch 17 memastikan `consolidate` ditulis eksplisit `1` pada header dan line baru.
 Patch 18 memastikan PO dengan quantity non-multiple ditolak sebelum CO processing.
+Patch 19 memastikan shared batch CO processor tersedia di tenant.
 
 ## Partial success
 
@@ -250,13 +279,8 @@ docs/csv-to-co/34-pos-108-qty-multiple-rejection.md
 
 ## Next UAT
 
-1. Apply Patch 14 bila belum.
-2. Apply Patch 15.
-3. Apply Patch 16.
-4. Apply Patch 17 Rev.6.
-5. Apply Patch 18.
-6. Test valid quantity via direct JSON/Postman; CO harus tetap terbentuk.
-7. Test invalid quantity/multiple; API harus `Success=false`, message `[POS-108]`, dan **tidak ada CO** untuk cust_po itu.
-8. Test CSV invalid quantity; batch harus `E` untuk single invalid PO dan result message berisi `[POS-108]`.
-9. Verifikasi root invalid line = POS-108, sibling line = POS-203, dan tidak ada temp `V` tersisa untuk rejected PO.
-10. Verifikasi target normal tetap `co_mst.type = B`, `co_mst.consolidate = 1`, `coitem_mst.stat = O`, `coitem_mst.consolidate = 1`, dan `co_bln_mst.stat = O`.
+1. Apply Patch 19 terlebih dahulu pada tenant yang memunculkan missing-procedure error.
+2. Query Select verifikasi `OBJECT_ID(N'dbo.SMK069ProcessBatchCustomerOrdersSp', N'P')` tidak NULL.
+3. Hit ulang PO dengan quantity **valid**; harus lanjut sampai Blanket CO.
+4. Hit PO dengan quantity **invalid/non-multiple**; API harus `Success=false`, message `[POS-108]`, dan tidak ada CO.
+5. Verifikasi normal target: `co_mst.type = B`, `co_mst.consolidate = 1`, `coitem_mst.stat = O`, `coitem_mst.consolidate = 1`, `co_bln_mst.stat = O`.
