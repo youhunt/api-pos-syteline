@@ -165,6 +165,45 @@ docs/csv-to-co/35-auto-co-not-running-diagnostic.md
 
 Patch 20 **tidak menebak atau memalsukan mapping**. Jika POS-302 muncul, perbaikan selanjutnya harus berdasarkan isi mapping view dan row temp aktual pada batch tersebut.
 
+## Blanket type + business Cust PO — Patch 21
+
+UAT tenant membuktikan Auto CO memang terbentuk (`CO26090002`) tetapi header salah:
+
+```text
+Source/POS Order No = R260904065
+Business CustPo     = DEV4-231
+
+co_mst.cust_po      = R260904065   <-- salah
+co_mst.type         = R            <-- salah, Regular
+co_mst.consolidate  = 1            <-- benar
+```
+
+Root cause ada di `SMK069ProcessCustomerOrderSp`:
+
+```text
+co_mst.cust_po <- @SourceCoNum
+co_mst.type    <- tidak ditulis, sehingga default tenant = R
+```
+
+Patch 21 memperbaiki mapping menjadi:
+
+```text
+@SourceCoNum       = technical staging/source key (tetap)
+staging cust_po    -> co_mst.cust_po
+co_mst.type        = B
+co_mst.consolidate = 1
+```
+
+Idempotency lookup juga berpindah dari SourceCoNum ke business `cust_po`.
+
+Deployment:
+
+```text
+database/patches/csv-to-co/2026-09-15-smk069-21-fix-blanket-type-and-cust-po.sql
+```
+
+Patch 21 tidak mass-update CO lama yang sudah dibuat salah. Validasi harus memakai PO/source baru.
+
 ## Deployment terbaru
 
 Apply Database dengan urutan:
@@ -186,6 +225,8 @@ Apply Database dengan urutan:
    (wajib untuk tenant yang belum memiliki SMK069ProcessBatchCustomerOrdersSp)
 
 7. database/patches/csv-to-co/2026-09-15-smk069-20-fail-when-batch-has-no-co-mapping.sql
+
+8. database/patches/csv-to-co/2026-09-15-smk069-21-fix-blanket-type-and-cust-po.sql
 ```
 
 Patch deployment aktif dibuat satu executable batch dan **tanpa `GO`** untuk tenant Apply Database.
@@ -197,14 +238,6 @@ co_mst.consolidate      tinyint
 coitem_mst.consolidate  tinyint
 ```
 
-Header `SMK069ProcessCustomerOrderSp` yang dikonfirmasi langsung dari tenant adalah:
-
-```sql
-CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp
-```
-
-Rev.6 menormalisasikan header tersebut menjadi `ALTER PROCEDURE` sebelum memasang `consolidate = 1`.
-
 ## Canonical source
 
 ```text
@@ -214,14 +247,19 @@ database/procedures/csv-to-co/SMK069ProcessBatchCustomerOrdersSp.sql
 database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
 ```
 
+Patch 21 adalah deployment correction terbaru untuk `SMK069ProcessCustomerOrderSp`; canonical source file perlu tetap disejajarkan dengan mapping Patch 21 pada maintenance source berikutnya.
+
 ## Target result
 
 Header:
 
 ```text
 co_mst.type        = B
+co_mst.cust_po     = business CustPo dari payload/staging
 co_mst.consolidate = 1
 ```
+
+Source/POS order number tetap menjadi key teknis staging dan **tidak boleh menggantikan `co_mst.cust_po`**.
 
 CO line:
 
@@ -230,7 +268,7 @@ coitem_mst.stat        = O
 coitem_mst.consolidate = 1
 ```
 
-Blanket line:
+Blanket line target:
 
 ```text
 co_bln_mst.stat = O
@@ -242,6 +280,9 @@ Patch 17 memastikan `consolidate` ditulis eksplisit `1` pada header dan line bar
 Patch 18 memastikan PO dengan quantity non-multiple ditolak sebelum CO processing.
 Patch 19 memastikan shared batch CO processor tersedia di tenant.
 Patch 20 memastikan missing batch/order mapping tidak lagi gagal diam-diam.
+Patch 21 memastikan header CO baru memakai business Cust PO dan explicit Blanket type `B`.
+
+**Catatan:** source processor yang diaudit belum menunjukkan explicit insert `co_bln_mst`. Setelah Patch 21, UAT wajib mengecek apakah tenant menghasilkan row `co_bln_mst` untuk CO type `B`. Jika tidak, jangan menebak schema; audit kolom tenant lalu buat patch blanket-line terpisah.
 
 ## Partial success
 
@@ -275,7 +316,7 @@ Transactional = False
 - Jangan membuat batch baru hanya untuk mengulang process error yang source-nya tidak berubah.
 - `SMK069ProcessBatchCustomerOrdersSp` hanya memproses temp order `V/E`.
 - Temp order yang sudah `P` di-skip.
-- `SMK069ProcessCustomerOrderSp` tetap idempotent melalui existing Customer Order lookup.
+- Setelah Patch 21, `SMK069ProcessCustomerOrderSp` idempotent berdasarkan `customer + business cust_po`.
 
 ## Legacy compatibility
 
@@ -306,14 +347,15 @@ docs/csv-to-co/32-canonical-receive-pos-sales-json-to-co.md
 docs/csv-to-co/33-consolidated-flag.md
 docs/csv-to-co/34-pos-108-qty-multiple-rejection.md
 docs/csv-to-co/35-auto-co-not-running-diagnostic.md
+docs/csv-to-co/36-auto-co-blanket-type-cust-po.md
 ```
 
 ## Next UAT
 
-1. Pastikan Patch 19 sudah sukses dan `OBJECT_ID(N'dbo.SMK069ProcessBatchCustomerOrdersSp', N'P')` NOT NULL.
-2. Apply Patch 20.
-3. Hit ulang satu PO dengan quantity valid menggunakan BatchId yang aman/retryable.
-4. Jika keluar `[POS-302]`, Query Select mapping view untuk BatchId yang sama; kirim hasil mapping view + temp rows sebelum patch berikutnya.
-5. Jika mapping ada dan temp `V/E`, ProcessCustomerOrderSp harus dipanggil; gunakan `ProcessDetail` sebagai error berikutnya bila gagal.
-6. Test quantity invalid: API harus `Success=false`, `[POS-108]`, tanpa CO.
-7. Verifikasi target normal: `co_mst.type = B`, `co_mst.consolidate = 1`, `coitem_mst.stat = O`, `coitem_mst.consolidate = 1`, `co_bln_mst.stat = O`.
+1. Apply Patch 21 setelah Patch 17/18/19/20 yang relevan sudah terpasang.
+2. Gunakan **PO/source baru**, jangan memakai CO26090002 sebagai bukti Patch 21 karena CO tersebut dibuat sebelum fix.
+3. Hit API quantity valid.
+4. Verifikasi `co_mst.type = B`, `co_mst.cust_po = business CustPo`, `co_mst.consolidate = 1`.
+5. Verifikasi `coitem_mst.stat = O` dan `coitem_mst.consolidate = 1`.
+6. Query `co_bln_mst` untuk generated CO. Jika tidak ada row, audit schema tenant dan patch blanket-line berikutnya berdasarkan bukti tersebut.
+7. Test quantity invalid tetap harus `Success=false`, `[POS-108]`, tanpa CO.
