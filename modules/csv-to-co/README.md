@@ -202,7 +202,35 @@ Deployment:
 database/patches/csv-to-co/2026-09-15-smk069-21-fix-blanket-type-and-cust-po.sql
 ```
 
-Patch 21 tidak mass-update CO lama yang sudah dibuat salah. Validasi harus memakai PO/source baru.
+Patch 21 tidak mass-update CO lama yang sudah dibuat salah.
+
+## Blanket lines — Patch 22
+
+Tenant UAT setelah Patch 21 membuktikan header sudah dapat menjadi Blanket, tetapi COBL masih kosong: item blank dan Blanket Quantity = 0. Audit processor membuktikan belum ada `INSERT dbo.co_bln_mst`.
+
+Tenant schema + known-good Blanket `R260904056` mengonfirmasi mapping yang dipakai Patch 22:
+
+```text
+staging co_line       -> co_bln_mst.co_line
+staging item          -> co_bln_mst.item
+staging qty_ordered   -> blanket_qty + blanket_qty_conv
+staging unit_price    -> cont_price + cont_price_conv
+staging/item U/M      -> u_m
+item description      -> description
+item unit_cost        -> cost_conv
+site                  -> site_ref + ship_site
+warehouse             -> whse
+stat                  = O
+allow_on_pick_list    = 0
+```
+
+Deployment:
+
+```text
+database/patches/csv-to-co/2026-09-15-smk069-22-create-blanket-lines.sql
+```
+
+Patch 22 juga menambah repair path yang aman pada existing matching Blanket CO: bila header/type dan coitem sudah cocok tetapi `co_bln_mst` masih benar-benar kosong, missing Blanket lines dibuat tanpa membuat header CO baru. Partial/mismatched existing blanket detail ditolak dan tidak dioverwrite.
 
 ## Deployment terbaru
 
@@ -227,6 +255,8 @@ Apply Database dengan urutan:
 7. database/patches/csv-to-co/2026-09-15-smk069-20-fail-when-batch-has-no-co-mapping.sql
 
 8. database/patches/csv-to-co/2026-09-15-smk069-21-fix-blanket-type-and-cust-po.sql
+
+9. database/patches/csv-to-co/2026-09-15-smk069-22-create-blanket-lines.sql
 ```
 
 Patch deployment aktif dibuat satu executable batch dan **tanpa `GO`** untuk tenant Apply Database.
@@ -247,7 +277,7 @@ database/procedures/csv-to-co/SMK069ProcessBatchCustomerOrdersSp.sql
 database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
 ```
 
-Patch 21 adalah deployment correction terbaru untuk `SMK069ProcessCustomerOrderSp`; canonical source file perlu tetap disejajarkan dengan mapping Patch 21 pada maintenance source berikutnya.
+Patch 21 dan Patch 22 adalah deployment corrections terbaru untuk `SMK069ProcessCustomerOrderSp`; deployment patch adalah source of truth sampai canonical procedure source disejajarkan penuh.
 
 ## Target result
 
@@ -268,10 +298,15 @@ coitem_mst.stat        = O
 coitem_mst.consolidate = 1
 ```
 
-Blanket line target:
+Blanket line:
 
 ```text
-co_bln_mst.stat = O
+co_bln_mst.item               = staging item
+co_bln_mst.blanket_qty        = staging qty_ordered
+co_bln_mst.cont_price         = staging unit_price
+co_bln_mst.stat               = O
+co_bln_mst.blanket_qty_conv   = staging qty_ordered
+co_bln_mst.cont_price_conv    = staging unit_price
 co_bln_mst.allow_on_pick_list = 0
 ```
 
@@ -281,8 +316,7 @@ Patch 18 memastikan PO dengan quantity non-multiple ditolak sebelum CO processin
 Patch 19 memastikan shared batch CO processor tersedia di tenant.
 Patch 20 memastikan missing batch/order mapping tidak lagi gagal diam-diam.
 Patch 21 memastikan header CO baru memakai business Cust PO dan explicit Blanket type `B`.
-
-**Catatan:** source processor yang diaudit belum menunjukkan explicit insert `co_bln_mst`. Setelah Patch 21, UAT wajib mengecek apakah tenant menghasilkan row `co_bln_mst` untuk CO type `B`. Jika tidak, jangan menebak schema; audit kolom tenant lalu buat patch blanket-line terpisah.
+Patch 22 memastikan Blanket CO baru mempunyai `co_bln_mst` lengkap dan menyediakan repair untuk existing matching Blanket yang blanket lines-nya benar-benar kosong.
 
 ## Partial success
 
@@ -314,9 +348,9 @@ Transactional = False
 - Retry aman memakai **BatchId yang sama** untuk process error/master-data correction yang tidak mengubah source payload.
 - Untuk **POS-108 quantity source salah**, kirim quantity yang sudah diperbaiki sebagai **batch/request baru**.
 - Jangan membuat batch baru hanya untuk mengulang process error yang source-nya tidak berubah.
-- `SMK069ProcessBatchCustomerOrdersSp` hanya memproses temp order `V/E`.
-- Temp order yang sudah `P` di-skip.
+- `SMK069ProcessBatchCustomerOrdersSp` hanya memproses temp order `V/E`; temp `P` tetap di-skip pada batch loop.
 - Setelah Patch 21, `SMK069ProcessCustomerOrderSp` idempotent berdasarkan `customer + business cust_po`.
+- Setelah Patch 22, direct processor replay untuk existing matching Blanket dapat repair `co_bln_mst` bila blanket line count masih 0 dan existing coitem sudah cocok.
 
 ## Legacy compatibility
 
@@ -348,14 +382,15 @@ docs/csv-to-co/33-consolidated-flag.md
 docs/csv-to-co/34-pos-108-qty-multiple-rejection.md
 docs/csv-to-co/35-auto-co-not-running-diagnostic.md
 docs/csv-to-co/36-auto-co-blanket-type-cust-po.md
+docs/csv-to-co/37-auto-co-create-blanket-lines.md
 ```
 
 ## Next UAT
 
-1. Apply Patch 21 setelah Patch 17/18/19/20 yang relevan sudah terpasang.
-2. Gunakan **PO/source baru**, jangan memakai CO26090002 sebagai bukti Patch 21 karena CO tersebut dibuat sebelum fix.
-3. Hit API quantity valid.
-4. Verifikasi `co_mst.type = B`, `co_mst.cust_po = business CustPo`, `co_mst.consolidate = 1`.
-5. Verifikasi `coitem_mst.stat = O` dan `coitem_mst.consolidate = 1`.
-6. Query `co_bln_mst` untuk generated CO. Jika tidak ada row, audit schema tenant dan patch blanket-line berikutnya berdasarkan bukti tersebut.
+1. Apply Patch 22 setelah Patch 21 sukses.
+2. Untuk CO baru: hit satu PO/source baru dengan quantity valid.
+3. Verifikasi header: `type=B`, business `cust_po`, `consolidate=1`.
+4. Verifikasi coitem: `stat=O`, `consolidate=1`.
+5. Verifikasi co_bln: jumlah row = jumlah staging line, item/qty/price benar, `stat=O`, `allow_on_pick_list=0`.
+6. Untuk UAT existing `CO26090003` yang header/coitem sudah benar tetapi co_bln kosong, Patch 22 memungkinkan repair melalui direct `SMK069ProcessCustomerOrderSp` pada source order yang sama tanpa membuat header baru.
 7. Test quantity invalid tetap harus `Success=false`, `[POS-108]`, tanpa CO.
