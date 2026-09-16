@@ -2,13 +2,13 @@
    Canonical source: dbo.SMK069ProcessBatchCustomerOrdersSp
    -----------------------------------------------------------------------------
    Purpose : Process every pending Customer Order of one POS/CSV batch.
-   Notes   : - Per-order processing is delegated to SMK069ProcessCustomerOrderSp.
-             - Business pending linkage uses cust_po.
-             - Legacy co_num may remain as a transient pre-process selector.
+   Notes   : - Business linkage is cust_po.
+             - Source/POS R... co_num is not used as downstream business key.
+             - Per-order processing is delegated to SMK069ProcessCustomerOrderSp.
              - Already processed temp orders are skipped.
              - Caller/IDO must NOT be Transactional.
-             - POS-302 is returned when a received batch has no resolvable order
-               mapping, preventing a silent ProcessedOrders=0 success.
+             - POS-302 is returned when a received batch has no resolvable
+               business Cust PO mapping.
    ============================================================================= */
 
 CREATE OR ALTER PROCEDURE dbo.SMK069ProcessBatchCustomerOrdersSp
@@ -53,23 +53,19 @@ BEGIN
     ;WITH BatchOrders AS
     (
         SELECT DISTINCT
-            v.SiteRef                                             AS SiteRef,
-            LTRIM(RTRIM(CONVERT(NVARCHAR(60), v.co_num)))         AS co_num,
-            LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po)))       AS cust_po,
-            v.cust_seq                                            AS cust_seq
+            v.SiteRef                                       AS SiteRef,
+            LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po))) AS cust_po,
+            v.cust_seq                                      AS cust_seq
         FROM dbo.ue_SMK069_pos_sales_inbound_mapping_view AS v
         WHERE v.SiteRef       = @Site
           AND v.source_system = @SourceSystem
           AND v.batch_id      = @BatchId
-          AND NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(60), v.co_num))), N'') IS NOT NULL
           AND NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po))), N'') IS NOT NULL
     )
     SELECT
         b.SiteRef,
-        b.co_num,
         b.cust_po,
         b.cust_seq,
-        /* PATCH-24: cust_po business pending linkage */
         CONVERT
         (
             BIT,
@@ -100,12 +96,12 @@ BEGIN
         SET @FirstErrorCode = N'POS-302';
         SET @ProcessDetail  = LEFT
         (
-            N'[POS-302] Auto CO tidak menemukan order mapping untuk batch. '
+            N'[POS-302] Auto CO tidak menemukan business Cust PO untuk batch. '
             + N'Periksa dbo.ue_SMK069_pos_sales_inbound_mapping_view: SiteRef='
             + COALESCE(CONVERT(NVARCHAR(16), @Site), N'<NULL>')
             + N'; SourceSystem=' + COALESCE(@SourceSystem, N'<NULL>')
             + N'; BatchId=' + COALESCE(@BatchId, N'<NULL>')
-            + N'; pastikan cust_po/co_num mapping dan row staging tersedia.',
+            + N'; pastikan cust_po terisi dan row staging tersedia.',
             2800
         );
         SET @CreatedCoNums = NULL;
@@ -119,7 +115,6 @@ BEGIN
 
     DECLARE
         @SiteRef       SiteType,
-        @CoNum         CoNumType,
         @CustPo        NVARCHAR(100),
         @CustSeq       CustSeqType,
         @CreatedCoNum  CoNumType,
@@ -129,13 +124,13 @@ BEGIN
         @CodePos       INT;
 
     DECLARE OrderCursor CURSOR LOCAL FAST_FORWARD FOR
-        SELECT SiteRef, co_num, cust_po, cust_seq
+        SELECT SiteRef, cust_po, cust_seq
         FROM #SMK069BatchOrders
         WHERE is_pending = 1
         ORDER BY cust_po;
 
     OPEN OrderCursor;
-    FETCH NEXT FROM OrderCursor INTO @SiteRef, @CoNum, @CustPo, @CustSeq;
+    FETCH NEXT FROM OrderCursor INTO @SiteRef, @CustPo, @CustSeq;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -143,9 +138,13 @@ BEGIN
         SET @Success      = 0;
         SET @Info         = NULL;
 
+        /*
+           @SourceCoNum is retained as the compatibility parameter name of the
+           per-order procedure, but the value passed from now on is cust_po.
+        */
         EXEC dbo.SMK069ProcessCustomerOrderSp
             @SiteRef      = @SiteRef,
-            @SourceCoNum  = @CoNum,
+            @SourceCoNum  = @CustPo,
             @CustSeq      = @CustSeq,
             @ProcessedBy  = @ProcessedBy,
             @CreatedCoNum = @CreatedCoNum OUTPUT,
@@ -194,7 +193,7 @@ BEGIN
             );
         END;
 
-        FETCH NEXT FROM OrderCursor INTO @SiteRef, @CoNum, @CustPo, @CustSeq;
+        FETCH NEXT FROM OrderCursor INTO @SiteRef, @CustPo, @CustSeq;
     END;
 
     CLOSE OrderCursor;
