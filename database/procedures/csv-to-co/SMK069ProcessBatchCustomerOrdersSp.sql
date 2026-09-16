@@ -7,6 +7,8 @@
              - Caller/IDO must NOT be Transactional.
              - POS-302 is returned when a received batch has no resolvable order
                mapping, preventing a silent ProcessedOrders=0 success.
+             - Successful generated CO numbers are persisted to staging field
+               syteline_co_num for Error Processing traceability.
    ============================================================================= */
 
 CREATE OR ALTER PROCEDURE dbo.SMK069ProcessBatchCustomerOrdersSp
@@ -148,6 +150,18 @@ BEGIN
         IF ISNULL(@Success, 0) = 1
         BEGIN
             SET @ProcessedOrders += 1;
+
+            /* PATCH-23: persist generated SyteLine CO number */
+            IF NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(60), @CreatedCoNum))), N'') IS NOT NULL
+            BEGIN
+                UPDATE dbo.ue_SMK069_temp_sales_mst
+                SET
+                    syteline_co_num = CONVERT(NVARCHAR(10), @CreatedCoNum),
+                    RecordDate = GETDATE(),
+                    UpdatedBy = @ProcessedBy
+                WHERE SiteRef = @SiteRef
+                  AND LTRIM(RTRIM(co_num)) = LTRIM(RTRIM(CONVERT(NVARCHAR(60), @CoNum)));
+            END;
 
             IF NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(60), @CreatedCoNum))), N'') IS NOT NULL
                 SET @CreatedCoNums = LEFT
