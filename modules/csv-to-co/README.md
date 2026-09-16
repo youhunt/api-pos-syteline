@@ -37,13 +37,11 @@ karena `SMK069ProcessCustomerOrderSp` memiliki transaction per order.
 
 ## Business identity — keputusan final 16 Sep 2026
 
-Gunakan:
+Business linkage utama:
 
 ```text
 cust_po
 ```
-
-sebagai business linkage utama.
 
 Contoh:
 
@@ -51,7 +49,19 @@ Contoh:
 cust_po = DEV4-233
 ```
 
-Nomor teknis `R...` bukan lagi identifier bisnis yang dibawa ke mana-mana. Legacy Core masih dapat menghasilkan nilai tersebut sebagai transient selector sebelum proses berhasil.
+Nomor teknis legacy `R...` bukan business key downstream.
+
+Final semantics:
+
+```text
+cust_po    = business order identity / linkage
+              contoh DEV4-233
+
+co_num     = actual SyteLine Customer Order setelah processing sukses
+              contoh P260916001
+
+R...       = transient/legacy compatibility value sebelum sukses saja
+```
 
 Setelah Customer Order sukses:
 
@@ -59,14 +69,14 @@ Setelah Customer Order sukses:
 ue_SMK069_temp_sales_mst.co_num = actual SyteLine CO number
 ```
 
-Jadi tidak diperlukan field target CO baru sebagai source of truth.
+Tidak diperlukan field target CO terpisah sebagai source of truth.
 
 ## New CO numbering — Patch 24
 
 Format baru:
 
 ```text
-P + YYMMDD + 3-digit running
+P + YYMMDD + 3-digit daily running
 ```
 
 Example:
@@ -76,11 +86,9 @@ P260916001
 P260916002
 ```
 
-Running number reset per tanggal karena `YYMMDD` menjadi bagian prefix.
+Running reset per tanggal karena `YYMMDD` menjadi bagian prefix. Total panjang = 10 karakter.
 
-Total panjang nomor = 10 karakter.
-
-Existing standard Customer Order **tidak direnumber**. Patch 24 hanya mengubah format untuk CO baru.
+Existing standard Customer Order **tidak direnumber**. Patch 24 hanya mengubah format CO baru dan relink staging historical ke nomor CO existing yang sudah terbentuk.
 
 ## Released Date — Patch 24
 
@@ -90,9 +98,26 @@ Rule final:
 coitem_mst.release_date = co_mst.order_date
 ```
 
-Untuk CO baru nilai ditulis saat insert line.
+Untuk CO baru nilai ditulis saat insert line. Untuk existing matching Blanket CO / historical integration rows, Patch 24 memperbaiki `release_date` yang NULL atau berbeda dari header `order_date`.
 
-Untuk existing matching Blanket CO / historical integration rows, Patch 24 memperbaiki `release_date` yang NULL atau berbeda dari header `order_date`.
+## Canonical Cust PO linkage — Patch 25
+
+Patch 24 sudah memindahkan pending match ke `cust_po`, tetapi tenant processor masih membawa legacy `co_num` pada Batch → per-order call.
+
+Patch 25 menutup gap itu:
+
+```text
+Batch discovery / pending -> cust_po
+Batch cursor              -> cust_po
+Batch -> per-order call   -> cust_po
+Per-order staging reads   -> cust_po
+Per-order staging updates -> cust_po
+Idempotency               -> customer + cust_po
+```
+
+`SMK069ProcessCustomerOrderSp.@SourceCoNum` tetap dipertahankan sebagai **nama parameter kompatibilitas**, tetapi caller baru mengirim `cust_po` pada parameter tersebut.
+
+Legacy direct retry yang masih mengirim `R...` dapat resolve satu kali ke `cust_po`; setelah resolve, business processing memakai `cust_po`.
 
 ## Quantity multiple rule — Patch 18
 
@@ -129,7 +154,7 @@ Memastikan `dbo.SMK069ProcessBatchCustomerOrdersSp` tersedia di tenant.
 
 ### Patch 20
 
-Mencegah silent success saat mapping batch tidak menghasilkan order. Error:
+Mencegah silent success saat mapping batch tidak menghasilkan order.
 
 ```text
 [POS-302] Auto CO tidak menemukan order mapping untuk batch
@@ -160,13 +185,11 @@ allow_on_pick_list = 0
 
 **WITHDRAWN / SUPERSEDED.**
 
-Pendekatan menambah field terpisah `syteline_co_num` tidak dipakai sebagai desain final.
+Pendekatan menambah field `syteline_co_num` tidak dipakai sebagai desain final.
 
 Jika Patch 23 belum pernah diterapkan: jangan apply.
 
-Jika sudah pernah diterapkan: Patch 24 tetap kompatibel; field legacy tersebut hanya disinkronkan dan bukan source of truth.
-
-### Patch 24 — active latest
+### Patch 24
 
 File:
 
@@ -179,13 +202,19 @@ Patch 24 melakukan:
 ```text
 new CO number             = PYYMMDD###
 staging co_num on success = actual SyteLine CO
-business pending linkage  = cust_po
-operator messages         = cust_po, bukan R...
 coitem.release_date       = order_date
 historical Processed rows = safe relink by SiteRef + customer + cust_po
 ```
 
-Historical relink hanya dilakukan bila business Cust PO resolve ke tepat satu Blanket CO. Existing standard CO tidak diubah nomornya.
+### Patch 25 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-09-16-smk069-25-canonical-custpo-linkage.sql
+```
+
+Patch 25 memastikan legacy `R...` tidak lagi dibawa sebagai downstream business key.
 
 ## Deployment sequence
 
@@ -202,6 +231,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 21  2026-09-15-smk069-21-fix-blanket-type-and-cust-po.sql
 22  2026-09-15-smk069-22-create-blanket-lines.sql
 24  2026-09-16-smk069-24-co-number-custpo-release-date.sql
+25  2026-09-16-smk069-25-canonical-custpo-linkage.sql
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -243,13 +273,24 @@ cust_po        = business Customer PO
 process_status = P
 ```
 
+## Error Processing form semantics
+
+Final binding/logical meaning:
+
+```text
+SyteLine CO Number = object.co_num
+Business/Source PO = object.cust_po
+```
+
+`R...` tidak dipakai sebagai user-facing business reference.
+
 ## Retry / idempotency
 
 - Retry process/master-data error tetap gunakan BatchId yang sama bila payload tidak berubah.
 - `cust_po` adalah business idempotency key.
 - Temp row `P` tidak diproses ulang sebagai order baru.
 - Untuk POS-108 karena source quantity salah, submit corrected request/batch baru.
-- Failed/unprocessed row dapat masih memegang transient `R...` sampai proses berhasil.
+- Failed/unprocessed row dapat masih memegang transient legacy `R...` sampai process berhasil, tetapi downstream processor melakukan lookup/update berdasarkan `cust_po`.
 
 ## Canonical source
 
@@ -260,7 +301,7 @@ database/procedures/csv-to-co/SMK069ProcessBatchCustomerOrdersSp.sql
 database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
 ```
 
-Deployment corrections Patch 21/22/24 tetap source of truth untuk tenant processor sampai canonical `SMK069ProcessCustomerOrderSp.sql` direbase penuh.
+`SMK069ProcessBatchCustomerOrdersSp.sql` dan `SMK069ProcessCustomerOrderSp.sql` sudah direbase ke desain final Cust PO + `PYYMMDD###` + Blanket lines + Release Date.
 
 ## Operational docs
 
@@ -279,15 +320,16 @@ docs/csv-to-co/39-final-co-number-custpo-release-date.md
 
 ## Current UAT gate
 
-After Patch 24:
+After Patch 24 **dan Patch 25**:
 
-1. Query current rows by `cust_po` (`DEV4-233`, `DEV4-238`), not by R-number.
-2. Verify staging `co_num` now equals the actual existing SyteLine CO number.
-3. Verify `coitem_mst.release_date = co_mst.order_date`.
-4. Hit one new valid PO.
+1. Query historical rows by `cust_po` (`DEV4-233`, `DEV4-238`), bukan R-number.
+2. Verify staging `co_num` equals actual existing SyteLine CO number.
+3. Verify historical/current `coitem_mst.release_date = co_mst.order_date`.
+4. Hit one **new** valid PO.
 5. Verify new CO number follows `PYYMMDD###`.
-6. Verify staging `co_num` equals that same new CO number.
+6. Verify staging `co_num` equals the same new CO number.
 7. Verify header `type=B`, correct `cust_po`, `consolidate=1`.
-8. Verify coitem `stat=O`, `consolidate=1`, correct release date.
+8. Verify coitem `stat=O`, `consolidate=1`, correct Release Date.
 9. Verify matching `co_bln_mst`, `stat=O`, `allow_on_pick_list=0`.
-10. Quantity-invalid test must still return `[POS-108]` with no CO.
+10. Retry same successful BatchId must not create duplicate CO.
+11. Quantity-invalid test must still return `[POS-108]` with no CO.
