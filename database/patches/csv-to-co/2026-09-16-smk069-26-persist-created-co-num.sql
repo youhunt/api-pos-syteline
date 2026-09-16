@@ -1,5 +1,5 @@
 /* =============================================================================
-   SMK069 - Patch 26 - Persist created_co_num in temp staging
+   SMK069 - Patch 26 Rev.2 - Persist created_co_num in temp staging
    -----------------------------------------------------------------------------
    Date    : 2026-09-16
    Objects : dbo.SMK069ProcessCustomerOrderSp
@@ -7,12 +7,16 @@
    Depends : Patch 24 + Patch 25
    Scope   : CSV / POS inbound -> Blanket Customer Order ONLY
 
-   PURPOSE
-   -------
-   The Error Processing form has a dedicated SyteLine CO Number property backed
-   by ue_SMK069_temp_sales_mst.created_co_num. Auto CO already returns the real
-   SyteLine CO in @CreatedCoNum, but that value was not persisted into this
-   dedicated staging column.
+   REV.2
+   -----
+   Rev.1 used an exact multi-line text anchor around the staging UPDATE. The
+   working tenant procedure has equivalent logic but a different formatting /
+   comment layout, so Apply Database stopped with 510275 before ALTER occurred.
+
+   Rev.2 deliberately anchors only on the unique assignments:
+       co_num = @ExistingCoNum,
+       co_num = @CreatedCoNum,
+   and supports common whitespace variants. It is idempotent and safe to rerun.
 
    Final behavior:
      - existing/idempotent CO path -> created_co_num = @ExistingCoNum
@@ -36,8 +40,9 @@ DECLARE
     @ProcId INT = OBJECT_ID(N'dbo.SMK069ProcessCustomerOrderSp', N'P'),
     @Definition NVARCHAR(MAX),
     @Lf NCHAR(1) = NCHAR(10),
-    @Old NVARCHAR(MAX),
-    @New NVARCHAR(MAX),
+    @Anchor NVARCHAR(200),
+    @InsertText NVARCHAR(400),
+    @Pos INT,
     @Count INT;
 
 IF @ProcId IS NULL
@@ -49,80 +54,97 @@ IF NULLIF(@Definition, N'') IS NULL
 
 SET @Definition = REPLACE(REPLACE(@Definition, NCHAR(13) + NCHAR(10), NCHAR(10)), NCHAR(13), NCHAR(10));
 
-IF CHARINDEX(N'PATCH-25: canonical cust_po staging selector', @Definition) = 0
-    THROW 510274, N'[PATCH-26] Patch 25 belum terpasang. Apply Patch 25 terlebih dahulu.', 1;
+/* Guard that this is the CustPo-based final processor family. */
+IF CHARINDEX(N'cust_po', LOWER(@Definition)) = 0
+    THROW 510274, N'[PATCH-26] Processor tenant belum memakai cust_po. Apply Patch 25 terlebih dahulu.', 1;
 
-IF CHARINDEX(N'PATCH-26: persist created_co_num', @Definition) = 0
+/* -----------------------------------------------------------------------------
+   Existing/idempotent Customer Order path.
+   Do not depend on surrounding comments/indentation; anchor on the assignment.
+   ----------------------------------------------------------------------------- */
+IF CHARINDEX(N'created_co_num = @ExistingCoNum', @Definition) = 0
+   AND CHARINDEX(N'created_co_num=@ExistingCoNum', @Definition) = 0
 BEGIN
-    /* Existing/idempotent Customer Order path. */
-    SET @Old =
-          N'            UPDATE dbo.ue_SMK069_temp_sales_mst' + @Lf
-        + N'            SET' + @Lf
-        + N'                co_num = @ExistingCoNum,' + @Lf
-        + N'                process_status = N''P'',';
+    SET @Anchor = NULL;
 
-    SET @New =
-          N'            UPDATE dbo.ue_SMK069_temp_sales_mst' + @Lf
-        + N'            SET' + @Lf
-        + N'                /* PATCH-26: persist created_co_num */' + @Lf
-        + N'                co_num = @ExistingCoNum,' + @Lf
-        + N'                created_co_num = @ExistingCoNum,' + @Lf
-        + N'                process_status = N''P'',';
+    IF CHARINDEX(N'co_num = @ExistingCoNum,', @Definition) > 0
+        SET @Anchor = N'co_num = @ExistingCoNum,';
+    ELSE IF CHARINDEX(N'co_num=@ExistingCoNum,', @Definition) > 0
+        SET @Anchor = N'co_num=@ExistingCoNum,';
+    ELSE IF CHARINDEX(N'co_num =@ExistingCoNum,', @Definition) > 0
+        SET @Anchor = N'co_num =@ExistingCoNum,';
+    ELSE IF CHARINDEX(N'co_num= @ExistingCoNum,', @Definition) > 0
+        SET @Anchor = N'co_num= @ExistingCoNum,';
 
-    SET @Count = (LEN(@Definition) - LEN(REPLACE(@Definition, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 1
-        THROW 510275, N'[PATCH-26] Anchor existing-CO staging update tidak ditemukan tepat satu kali.', 1;
+    IF @Anchor IS NULL
+        THROW 510275, N'[PATCH-26] Assignment co_num -> @ExistingCoNum tidak ditemukan.', 1;
 
-    SET @Definition = REPLACE(@Definition, @Old, @New);
+    SET @Count = (LEN(@Definition) - LEN(REPLACE(@Definition, @Anchor, N''))) / LEN(@Anchor);
+    IF @Count <> 1
+        THROW 510276, N'[PATCH-26] Assignment co_num -> @ExistingCoNum tidak unik.', 1;
 
-    /* Newly-created Customer Order path. */
-    SET @Old =
-          N'        UPDATE dbo.ue_SMK069_temp_sales_mst' + @Lf
-        + N'        SET' + @Lf
-        + N'            co_num = @CreatedCoNum,' + @Lf
-        + N'            process_status = N''P'',';
-
-    SET @New =
-          N'        UPDATE dbo.ue_SMK069_temp_sales_mst' + @Lf
-        + N'        SET' + @Lf
-        + N'            co_num = @CreatedCoNum,' + @Lf
-        + N'            created_co_num = @CreatedCoNum,' + @Lf
-        + N'            process_status = N''P'',';
-
-    SET @Count = (LEN(@Definition) - LEN(REPLACE(@Definition, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 1
-        THROW 510276, N'[PATCH-26] Anchor new-CO staging update tidak ditemukan tepat satu kali.', 1;
-
-    SET @Definition = REPLACE(@Definition, @Old, @New);
-
-    /* Normalize procedure header for dynamic ALTER execution. */
-    IF CHARINDEX(N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp', @Definition) = 0
-    BEGIN
-        SET @Definition = REPLACE
-        (
-            @Definition,
-            N'CREATE OR ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp',
-            N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp'
-        );
-        SET @Definition = REPLACE
-        (
-            @Definition,
-            N'CREATE PROCEDURE dbo.SMK069ProcessCustomerOrderSp',
-            N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp'
-        );
-        SET @Definition = REPLACE
-        (
-            @Definition,
-            N'CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp',
-            N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp'
-        );
-    END;
-
-    IF CHARINDEX(N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp', @Definition) = 0
-        THROW 510277, N'[PATCH-26] Header ProcessCustomerOrder tidak dapat dinormalisasi.', 1;
-
-    EXEC sys.sp_executesql @Definition;
+    SET @Pos = CHARINDEX(@Anchor, @Definition) + LEN(@Anchor);
+    SET @InsertText = @Lf + N'                /* PATCH-26: persist created_co_num */'
+                    + @Lf + N'                created_co_num = @ExistingCoNum,';
+    SET @Definition = STUFF(@Definition, @Pos, 0, @InsertText);
 END;
+
+/* -----------------------------------------------------------------------------
+   Newly-created Customer Order path.
+   ----------------------------------------------------------------------------- */
+IF CHARINDEX(N'created_co_num = @CreatedCoNum', @Definition) = 0
+   AND CHARINDEX(N'created_co_num=@CreatedCoNum', @Definition) = 0
+BEGIN
+    SET @Anchor = NULL;
+
+    IF CHARINDEX(N'co_num = @CreatedCoNum,', @Definition) > 0
+        SET @Anchor = N'co_num = @CreatedCoNum,';
+    ELSE IF CHARINDEX(N'co_num=@CreatedCoNum,', @Definition) > 0
+        SET @Anchor = N'co_num=@CreatedCoNum,';
+    ELSE IF CHARINDEX(N'co_num =@CreatedCoNum,', @Definition) > 0
+        SET @Anchor = N'co_num =@CreatedCoNum,';
+    ELSE IF CHARINDEX(N'co_num= @CreatedCoNum,', @Definition) > 0
+        SET @Anchor = N'co_num= @CreatedCoNum,';
+
+    IF @Anchor IS NULL
+        THROW 510277, N'[PATCH-26] Assignment co_num -> @CreatedCoNum tidak ditemukan.', 1;
+
+    SET @Count = (LEN(@Definition) - LEN(REPLACE(@Definition, @Anchor, N''))) / LEN(@Anchor);
+    IF @Count <> 1
+        THROW 510278, N'[PATCH-26] Assignment co_num -> @CreatedCoNum tidak unik.', 1;
+
+    SET @Pos = CHARINDEX(@Anchor, @Definition) + LEN(@Anchor);
+    SET @InsertText = @Lf + N'            created_co_num = @CreatedCoNum,';
+    SET @Definition = STUFF(@Definition, @Pos, 0, @InsertText);
+END;
+
+/* Normalize procedure header for dynamic ALTER execution. */
+IF CHARINDEX(N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp', @Definition) = 0
+BEGIN
+    SET @Definition = REPLACE
+    (
+        @Definition,
+        N'CREATE OR ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp',
+        N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp'
+    );
+    SET @Definition = REPLACE
+    (
+        @Definition,
+        N'CREATE PROCEDURE dbo.SMK069ProcessCustomerOrderSp',
+        N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp'
+    );
+    SET @Definition = REPLACE
+    (
+        @Definition,
+        N'CREATE   PROCEDURE dbo.SMK069ProcessCustomerOrderSp',
+        N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp'
+    );
+END;
+
+IF CHARINDEX(N'ALTER PROCEDURE dbo.SMK069ProcessCustomerOrderSp', @Definition) = 0
+    THROW 510279, N'[PATCH-26] Header ProcessCustomerOrder tidak dapat dinormalisasi.', 1;
+
+EXEC sys.sp_executesql @Definition;
 
 /* -----------------------------------------------------------------------------
    Backfill existing Processed staging rows safely.
@@ -158,12 +180,15 @@ INNER JOIN SafeMatch AS m
     ON m.RowPointer = t.RowPointer;
 
 /* Post-check installed procedure. */
+SET @ProcId = OBJECT_ID(N'dbo.SMK069ProcessCustomerOrderSp', N'P');
 SET @Definition = OBJECT_DEFINITION(@ProcId);
-IF CHARINDEX(N'PATCH-26: persist created_co_num', COALESCE(@Definition, N'')) = 0
-    THROW 510278, N'[PATCH-26] Post-check marker created_co_num gagal.', 1;
-IF CHARINDEX(N'created_co_num = @ExistingCoNum', COALESCE(@Definition, N'')) = 0
-    THROW 510279, N'[PATCH-26] Existing-CO path belum mengisi created_co_num.', 1;
-IF CHARINDEX(N'created_co_num = @CreatedCoNum', COALESCE(@Definition, N'')) = 0
-    THROW 510280, N'[PATCH-26] New-CO path belum mengisi created_co_num.', 1;
 
-PRINT N'[PATCH-26] SUCCESS - created_co_num dipersist untuk existing/new CO dan historical Processed rows di-backfill secara aman.';
+IF CHARINDEX(N'created_co_num = @ExistingCoNum', COALESCE(@Definition, N'')) = 0
+   AND CHARINDEX(N'created_co_num=@ExistingCoNum', COALESCE(@Definition, N'')) = 0
+    THROW 510280, N'[PATCH-26] Existing-CO path belum mengisi created_co_num.', 1;
+
+IF CHARINDEX(N'created_co_num = @CreatedCoNum', COALESCE(@Definition, N'')) = 0
+   AND CHARINDEX(N'created_co_num=@CreatedCoNum', COALESCE(@Definition, N'')) = 0
+    THROW 510281, N'[PATCH-26] New-CO path belum mengisi created_co_num.', 1;
+
+PRINT N'[PATCH-26 REV.2] SUCCESS - created_co_num dipersist untuk existing/new CO dan historical Processed rows di-backfill secara aman.';
