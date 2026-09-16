@@ -1,131 +1,152 @@
-# Patch 24 — Final CO Number, Cust PO Linkage, and Release Date
+# Final CO Number, Cust PO Linkage, and Release Date
 
-**Date:** 16 September 2026
+**Date:** 16 September 2026  
+**Scope:** CSV / POS inbound → Blanket Customer Order only
 
-## Business decision
+## Business request
 
-Stakeholder requested three changes:
-
-```text
-1. Nomor CO baru = P + YYMMDD + 3 digit running
-2. Nomor CO yang terlihat di staging/form harus sama dengan CO yang benar-benar terbentuk di SyteLine
-3. Released Date harus sama dengan Order Date
-```
-
-Business linkage juga ditegaskan memakai:
+Latest UAT feedback requires:
 
 ```text
-cust_po
+1. SyteLine CO number in Error Processing must equal the actual CO created.
+2. New CO format = P + YY + MM + DD + 3-digit daily running.
+   Example: P260916001.
+3. Released Date must equal Order Date.
+4. cust_po is the business linkage carried downstream.
+5. Legacy generated R... source co_num must not be used as the business key.
 ```
 
-bukan lagi nomor teknis `R...` sebagai identifier yang dibawa ke proses bisnis.
-
-## Final numbering format
+## Final identity model
 
 ```text
-PYYMMDD###
+cust_po          = business order identity / linkage
+                    example DEV4-233
+
+temp.co_num      = actual SyteLine CO after successful processing
+                    example P260916001
+
+raw/source R...  = legacy/transient compatibility value only before processing;
+                    it is not the downstream business key
 ```
 
-Example:
+No separate `syteline_co_num` column is required. Patch 23 was withdrawn/superseded.
 
-```text
-Order Date : 2026-09-16
-CO #1      : P260916001
-CO #2      : P260916002
-```
+## Patch 24 — final CO number + Release Date
 
-Karena tanggal menjadi bagian prefix, running 3 digit reset secara natural untuk setiap tanggal.
-
-Total panjang = 10 karakter dan Patch 24 melakukan guard terhadap panjang `co_mst.co_num` dan staging `co_num` sebelum mengubah procedure.
-
-## Temp `co_num`
-
-Keputusan final:
-
-```text
-sebelum success  : co_num dapat masih berisi transient legacy selector R...
-setelah success  : co_num = actual SyteLine CO number
-```
-
-Contoh:
-
-```text
-cust_po = DEV4-233
-before  = R260904069   (transient)
-after   = CO lama yang sudah terbuat, atau PYYMMDD### untuk CO baru
-```
-
-Existing standard CO tidak pernah direnumber oleh Patch 24. Untuk historical Processed staging, Patch 24 hanya mengganti staging `co_num` ke existing Blanket CO bila `SiteRef + customer + cust_po` menghasilkan tepat satu target CO.
-
-## Business linkage
-
-`cust_po` menjadi business key untuk:
-
-```text
-- idempotency Customer Order
-- pending match batch processing
-- operator/error messages
-- historical relink staging -> actual CO
-```
-
-Legacy `R...` tetap dipertahankan hanya sebagai transient selector untuk row yang belum sukses, karena receive Core lama masih menghasilkan key tersebut. Setelah sukses, staging key diganti dengan actual CO.
-
-## Release Date
-
-Rule final:
-
-```text
-coitem_mst.release_date = co_mst.order_date
-```
-
-Untuk CO baru, `release_date` ditulis langsung saat insert `coitem_mst`.
-
-Untuk existing matching Blanket CO yang sedang direprocess, Patch 24 memperbaiki `release_date` yang NULL atau berbeda dari `order_date`.
-
-Patch juga melakukan safe historical repair untuk matching Processed integration rows.
-
-## Patch
-
-Apply melalui Infor Apply Database:
+Apply:
 
 ```text
 database/patches/csv-to-co/2026-09-16-smk069-24-co-number-custpo-release-date.sql
 ```
 
-Patch adalah satu executable batch dan tidak memakai `GO`.
+Patch 24 provides:
 
-Patch 23 tidak diperlukan dan sudah ditarik dari active patch set.
+```text
+new CO number = PYYMMDD###
+temp.co_num = actual generated/existing SyteLine CO after success
+coitem_mst.release_date = order_date
+safe historical relink of Processed temp rows to existing Blanket CO
+```
 
-## Verification — current historical rows
+Existing Customer Orders are not renumbered. If an older processed order already has `CO2609...`, its temp row is linked to that existing number rather than renaming the standard CO.
 
-Setelah apply, cari berdasarkan business Cust PO, bukan R-number:
+## Patch 25 — canonical Cust PO downstream linkage
+
+Apply immediately after Patch 24:
+
+```text
+database/patches/csv-to-co/2026-09-16-smk069-25-canonical-custpo-linkage.sql
+```
+
+Patch 25 closes the remaining architectural gap:
+
+```text
+Batch discovery/pending check -> cust_po
+Batch cursor                  -> cust_po
+Batch -> per-order call       -> cust_po
+Per-order staging reads       -> cust_po
+Per-order staging updates     -> cust_po
+Idempotency                   -> customer + cust_po
+```
+
+`SMK069ProcessCustomerOrderSp.@SourceCoNum` is retained only as a compatibility parameter name so existing method metadata/callers are not broken abruptly. New callers pass `cust_po` in that parameter. A legacy direct retry that still passes an old R... key can resolve it once to the staging `cust_po`; after that, all business processing is `cust_po` based.
+
+## Released Date rule
+
+For a newly created line:
+
+```text
+coitem_mst.release_date = @OrderDate
+```
+
+For an existing matching integration CO, missing/different line release dates are repaired to the CO header `order_date`.
+
+## Numbering rule
+
+For Order Date `2026-09-16`:
+
+```text
+P260916001
+P260916002
+P260916003
+...
+P260916999
+```
+
+The procedure keeps an application lock per `SiteRef + daily prefix` and reads the highest existing `co_mst.co_num` for that prefix before assigning the next 3-digit sequence.
+
+## Historical rows
+
+For existing processed rows such as:
+
+```text
+R260904069 / DEV4-233
+R260904070 / DEV4-238
+```
+
+Patch 24 safely changes `temp.co_num` to the already-created SyteLine CO only when `SiteRef + customer + cust_po` resolves to exactly one Blanket CO. Existing standard CO numbers are not renamed.
+
+## UAT after Patch 24 + Patch 25
+
+Use one **new** valid PO. Do not use an already-processed business Cust PO to prove the new numbering format.
+
+Verify staging and header:
 
 ```sql
 SELECT
     t.SiteRef,
-    t.co_num,
     t.cust_po,
+    t.co_num AS TempSyteLineCo,
     t.order_date,
     t.process_status,
-    c.type,
-    c.order_date AS co_order_date
+    t.processed_date,
+    c.co_num AS ActualCoNum,
+    c.[type],
+    c.cust_po AS CoCustPo,
+    c.order_date AS CoOrderDate,
+    c.consolidate
 FROM dbo.ue_SMK069_temp_sales_mst AS t
 LEFT JOIN dbo.co_mst AS c
     ON c.site_ref = t.SiteRef
    AND c.co_num = t.co_num
 WHERE t.SiteRef = RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
-  AND t.cust_po IN (N'DEV4-233', N'DEV4-238')
-ORDER BY t.cust_po, t.co_line;
+  AND t.cust_po = N'<NEW_CUST_PO>'
+ORDER BY t.co_line;
 ```
 
 Expected:
 
 ```text
-t.co_num = actual existing SyteLine CO
-c.type   = B
+t.cust_po          = payload business Cust PO
+t.co_num            = PYYMMDD###
+c.co_num            = same PYYMMDD###
+c.type              = B
+c.cust_po           = same business Cust PO
+c.consolidate       = 1
+process_status      = P
 ```
 
-Release Date:
+Verify CO line / Release Date:
 
 ```sql
 SELECT
@@ -134,32 +155,60 @@ SELECT
     c.order_date,
     ci.co_line,
     ci.item,
-    ci.release_date
+    ci.due_date,
+    ci.release_date,
+    ci.stat,
+    ci.consolidate
 FROM dbo.co_mst AS c
 INNER JOIN dbo.coitem_mst AS ci
     ON ci.site_ref = c.site_ref
    AND ci.co_num = c.co_num
 WHERE c.site_ref = RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
-  AND c.cust_po IN (N'DEV4-233', N'DEV4-238')
-ORDER BY c.cust_po, ci.co_line;
+  AND c.cust_po = N'<NEW_CUST_PO>'
+ORDER BY ci.co_line;
 ```
 
 Expected:
 
 ```text
 ci.release_date = c.order_date
+ci.stat         = O
+ci.consolidate  = 1
 ```
 
-## Verification — new CO
+Verify Blanket lines:
 
-Send one new valid PO after Patch 24.
+```sql
+SELECT
+    b.co_num,
+    b.co_line,
+    b.item,
+    b.blanket_qty,
+    b.cont_price,
+    b.stat,
+    b.u_m,
+    b.allow_on_pick_list,
+    b.whse
+FROM dbo.co_bln_mst AS b
+WHERE b.site_ref = RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
+  AND b.co_num = N'<PYYMMDD###>'
+ORDER BY b.co_line;
+```
 
 Expected:
 
 ```text
-co_mst.co_num       = PYYMMDD###
-staging.co_num      = same PYYMMDD###
-co_mst.cust_po      = payload/staging cust_po
-co_mst.type         = B
-coitem.release_date = co_mst.order_date
+stat               = O
+allow_on_pick_list = 0
 ```
+
+## Error Processing form
+
+Final semantic binding:
+
+```text
+SyteLine CO Number = temp.co_num
+Business/Source PO = temp.cust_po
+```
+
+The generated `R...` value is not a user-facing business reference and should not be used for downstream navigation/linkage.
