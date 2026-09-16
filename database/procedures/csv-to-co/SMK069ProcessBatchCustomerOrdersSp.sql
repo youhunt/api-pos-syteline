@@ -3,12 +3,12 @@
    -----------------------------------------------------------------------------
    Purpose : Process every pending Customer Order of one POS/CSV batch.
    Notes   : - Per-order processing is delegated to SMK069ProcessCustomerOrderSp.
+             - Business pending linkage uses cust_po.
+             - Legacy co_num may remain as a transient pre-process selector.
              - Already processed temp orders are skipped.
              - Caller/IDO must NOT be Transactional.
              - POS-302 is returned when a received batch has no resolvable order
                mapping, preventing a silent ProcessedOrders=0 success.
-             - Successful generated CO numbers are persisted to staging field
-               syteline_co_num for Error Processing traceability.
    ============================================================================= */
 
 CREATE OR ALTER PROCEDURE dbo.SMK069ProcessBatchCustomerOrdersSp
@@ -55,17 +55,21 @@ BEGIN
         SELECT DISTINCT
             v.SiteRef                                             AS SiteRef,
             LTRIM(RTRIM(CONVERT(NVARCHAR(60), v.co_num)))         AS co_num,
+            LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po)))       AS cust_po,
             v.cust_seq                                            AS cust_seq
         FROM dbo.ue_SMK069_pos_sales_inbound_mapping_view AS v
         WHERE v.SiteRef       = @Site
           AND v.source_system = @SourceSystem
           AND v.batch_id      = @BatchId
           AND NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(60), v.co_num))), N'') IS NOT NULL
+          AND NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po))), N'') IS NOT NULL
     )
     SELECT
         b.SiteRef,
         b.co_num,
+        b.cust_po,
         b.cust_seq,
+        /* PATCH-24: cust_po business pending linkage */
         CONVERT
         (
             BIT,
@@ -78,9 +82,9 @@ BEGIN
                               COLLATE DATABASE_DEFAULT
                           = UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(16), b.SiteRef))))
                               COLLATE DATABASE_DEFAULT
-                      AND UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(60), t.co_num))))
+                      AND UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po))))
                               COLLATE DATABASE_DEFAULT
-                          = UPPER(b.co_num) COLLATE DATABASE_DEFAULT
+                          = UPPER(b.cust_po) COLLATE DATABASE_DEFAULT
                       AND t.process_status IN (N'V', N'E')
                 )
                 THEN 1
@@ -101,7 +105,7 @@ BEGIN
             + COALESCE(CONVERT(NVARCHAR(16), @Site), N'<NULL>')
             + N'; SourceSystem=' + COALESCE(@SourceSystem, N'<NULL>')
             + N'; BatchId=' + COALESCE(@BatchId, N'<NULL>')
-            + N'; pastikan co_num terisi dan row staging tersedia.',
+            + N'; pastikan cust_po/co_num mapping dan row staging tersedia.',
             2800
         );
         SET @CreatedCoNums = NULL;
@@ -116,6 +120,7 @@ BEGIN
     DECLARE
         @SiteRef       SiteType,
         @CoNum         CoNumType,
+        @CustPo        NVARCHAR(100),
         @CustSeq       CustSeqType,
         @CreatedCoNum  CoNumType,
         @Success       ListYesNoType,
@@ -124,13 +129,13 @@ BEGIN
         @CodePos       INT;
 
     DECLARE OrderCursor CURSOR LOCAL FAST_FORWARD FOR
-        SELECT SiteRef, co_num, cust_seq
+        SELECT SiteRef, co_num, cust_po, cust_seq
         FROM #SMK069BatchOrders
         WHERE is_pending = 1
-        ORDER BY co_num;
+        ORDER BY cust_po;
 
     OPEN OrderCursor;
-    FETCH NEXT FROM OrderCursor INTO @SiteRef, @CoNum, @CustSeq;
+    FETCH NEXT FROM OrderCursor INTO @SiteRef, @CoNum, @CustPo, @CustSeq;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -150,18 +155,6 @@ BEGIN
         IF ISNULL(@Success, 0) = 1
         BEGIN
             SET @ProcessedOrders += 1;
-
-            /* PATCH-23: persist generated SyteLine CO number */
-            IF NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(60), @CreatedCoNum))), N'') IS NOT NULL
-            BEGIN
-                UPDATE dbo.ue_SMK069_temp_sales_mst
-                SET
-                    syteline_co_num = CONVERT(NVARCHAR(10), @CreatedCoNum),
-                    RecordDate = GETDATE(),
-                    UpdatedBy = @ProcessedBy
-                WHERE SiteRef = @SiteRef
-                  AND LTRIM(RTRIM(co_num)) = LTRIM(RTRIM(CONVERT(NVARCHAR(60), @CoNum)));
-            END;
 
             IF NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(60), @CreatedCoNum))), N'') IS NOT NULL
                 SET @CreatedCoNums = LEFT
@@ -189,8 +182,8 @@ BEGIN
             (
                 @ProcessDetail
                 + CASE WHEN NULLIF(@ProcessDetail, N'') IS NULL THEN N'' ELSE N' | ' END
-                + N'CO '
-                + COALESCE(CONVERT(NVARCHAR(60), @CoNum), N'<NULL>')
+                + N'Cust PO '
+                + COALESCE(@CustPo, N'<NULL>')
                 + N': '
                 + COALESCE
                   (
@@ -201,7 +194,7 @@ BEGIN
             );
         END;
 
-        FETCH NEXT FROM OrderCursor INTO @SiteRef, @CoNum, @CustSeq;
+        FETCH NEXT FROM OrderCursor INTO @SiteRef, @CoNum, @CustPo, @CustSeq;
     END;
 
     CLOSE OrderCursor;
