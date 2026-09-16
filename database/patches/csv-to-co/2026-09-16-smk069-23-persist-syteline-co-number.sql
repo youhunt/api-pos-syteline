@@ -1,5 +1,5 @@
 /* =============================================================================
-   SMK069 - Patch 23 - Persist generated SyteLine CO number to staging
+   SMK069 - Patch 23 Rev.2 - Persist generated SyteLine CO number to staging
    -----------------------------------------------------------------------------
    Date    : 2026-09-16
    Objects : dbo.ue_SMK069_temp_sales_mst
@@ -28,6 +28,7 @@
 
    SAFETY
    ------
+   - Requires Patch-21-era business cust_po staging field.
    - Source/POS co_num is NOT overwritten.
    - Business cust_po is NOT overwritten.
    - Ambiguous historical matches are deliberately not backfilled.
@@ -46,6 +47,9 @@ SET XACT_ABORT ON;
 
 IF OBJECT_ID(N'dbo.ue_SMK069_temp_sales_mst', N'U') IS NULL
     THROW 510230, N'[PATCH-23] dbo.ue_SMK069_temp_sales_mst tidak ditemukan.', 1;
+
+IF COL_LENGTH(N'dbo.ue_SMK069_temp_sales_mst', N'cust_po') IS NULL
+    THROW 510236, N'[PATCH-23] Kolom staging cust_po tidak ditemukan. Apply Patch 21 / sinkronisasi staging terlebih dahulu.', 1;
 
 IF COL_LENGTH(N'dbo.ue_SMK069_temp_sales_mst', N'syteline_co_num') IS NULL
 BEGIN
