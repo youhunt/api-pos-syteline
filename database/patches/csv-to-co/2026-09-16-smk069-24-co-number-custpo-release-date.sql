@@ -1,5 +1,5 @@
 /* =============================================================================
-   SMK069 - Patch 24 Rev.2
+   SMK069 - Patch 24 Rev.3
    Final CO number in temp + Cust PO business linkage + Release Date
    -----------------------------------------------------------------------------
    Date    : 2026-09-16
@@ -10,15 +10,16 @@
 
    BUSINESS DECISION
    -----------------
-   - New CO format = P + YYMMDD + 3-digit daily running number.
-     Example: P260916001.
-   - After success, staging co_num = actual SyteLine CO number.
-   - cust_po is the business linkage. Legacy R... is only a transient selector
-     before a row has successfully become a SyteLine CO.
-   - coitem_mst.release_date = order_date.
-   - Existing standard CO numbers are NEVER renamed by this patch.
-   - Patch 23 (extra syteline_co_num field) is superseded / not required.
-   - One executable batch; NO GO.
+   1. New CO format = P + YYMMDD + 3-digit daily running.
+      Example: P260916001.
+   2. After success, staging co_num = actual SyteLine CO number.
+   3. cust_po is the business linkage. Legacy R... remains only a transient
+      pre-process selector required by the older receive/staging flow.
+   4. coitem_mst.release_date = order_date.
+   5. Existing standard CO numbers are NOT renamed.
+   6. Patch 23 (extra syteline_co_num field) is superseded / not required.
+
+   One executable batch; NO GO.
    ============================================================================= */
 
 SET NOCOUNT ON;
@@ -67,6 +68,7 @@ SET @Definition = REPLACE(REPLACE(@Definition, NCHAR(13) + NCHAR(10), NCHAR(10))
 
 IF CHARINDEX(N'PATCH-24: PYYMMDD### final CO number', @Definition) = 0
 BEGIN
+    /* COYYMM#### -> PYYMMDD### */
     SET @Old =
           N'        SET @KeyPrefix = N''CO'' + CONVERT(CHAR(4), @OrderDate, 12);' + @Lf
         + N'        SET @NumberLength = 4;';
@@ -79,6 +81,7 @@ BEGIN
         THROW 510247, N'[PATCH-24] Anchor format CO lama tidak ditemukan tepat satu kali.', 1;
     SET @Definition = REPLACE(@Definition, @Old, @New);
 
+    /* Release Date on new CO item line. */
     IF CHARINDEX(N'            release_date,', @Definition) = 0
     BEGIN
         SET @Old =
@@ -108,6 +111,7 @@ BEGIN
         SET @Definition = REPLACE(@Definition, @Old, @New);
     END;
 
+    /* Existing matching Blanket: repair Release Date and rename staging key. */
     SET @Old = N'            SET @CreatedCoNum = @ExistingCoNum;';
     SET @New =
           N'            /* PATCH-24: existing CO release date + final staging co_num */' + @Lf
@@ -135,6 +139,7 @@ BEGIN
         THROW 510250, N'[PATCH-24] Anchor existing @CreatedCoNum tidak ditemukan tepat satu kali.', 1;
     SET @Definition = REPLACE(@Definition, @Old, @New);
 
+    /* New CO: after all lines/blanket lines succeed, make temp.co_num final. */
     SET @Old =
           N'        WHERE SiteRef = @SiteRef' + @Lf
         + N'          AND LTRIM(RTRIM(co_num)) = @SourceCoNum;' + @Lf + @Lf
@@ -163,6 +168,7 @@ BEGIN
         THROW 510251, N'[PATCH-24] Anchor final staging update tidak ditemukan tepat satu kali.', 1;
     SET @Definition = REPLACE(@Definition, @Old, @New);
 
+    /* Success response uses business Cust PO, not R... */
     SET @Old =
           N'        SET @Infobar = N''Customer Order ''' + @Lf
         + N'                     + LTRIM(RTRIM(@CreatedCoNum))' + @Lf
@@ -191,7 +197,9 @@ BEGIN
 END;
 
 /* ============================================================================
-   B. Batch processor: business matching and operator messages use cust_po.
+   B. Batch processor: determine pending order by cust_po, not by R... key.
+      The legacy co_num remains only the transient selector passed to the
+      existing per-order signature.
    ============================================================================ */
 DECLARE
     @BatchProcId INT = OBJECT_ID(N'dbo.SMK069ProcessBatchCustomerOrdersSp', N'P'),
@@ -216,13 +224,15 @@ BEGIN
         + N'            LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po)))       AS cust_po,' + @Lf
         + N'            v.cust_seq                                            AS cust_seq';
     SET @Count = (LEN(@BatchDef) - LEN(REPLACE(@BatchDef, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 1 THROW 510255, N'[PATCH-24] Anchor BatchOrders select tidak ditemukan.', 1;
+    IF ISNULL(@Count, 0) <> 1
+        THROW 510255, N'[PATCH-24] Anchor BatchOrders select tidak ditemukan.', 1;
     SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
 
     SET @Old = N'          AND NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(60), v.co_num))), N'''') IS NOT NULL';
     SET @New = @Old + @Lf + N'          AND NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po))), N'''') IS NOT NULL';
     SET @Count = (LEN(@BatchDef) - LEN(REPLACE(@BatchDef, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 1 THROW 510256, N'[PATCH-24] Anchor BatchOrders filter tidak ditemukan.', 1;
+    IF ISNULL(@Count, 0) <> 1
+        THROW 510256, N'[PATCH-24] Anchor BatchOrders filter tidak ditemukan.', 1;
     SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
 
     SET @Old =
@@ -236,7 +246,8 @@ BEGIN
         + N'        b.cust_seq,' + @Lf
         + N'        /* PATCH-24: cust_po business pending linkage */';
     SET @Count = (LEN(@BatchDef) - LEN(REPLACE(@BatchDef, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 1 THROW 510257, N'[PATCH-24] Anchor #BatchOrders columns tidak ditemukan.', 1;
+    IF ISNULL(@Count, 0) <> 1
+        THROW 510257, N'[PATCH-24] Anchor #BatchOrders columns tidak ditemukan.', 1;
     SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
 
     SET @Old =
@@ -248,40 +259,8 @@ BEGIN
         + N'                              COLLATE DATABASE_DEFAULT' + @Lf
         + N'                          = UPPER(b.cust_po) COLLATE DATABASE_DEFAULT';
     SET @Count = (LEN(@BatchDef) - LEN(REPLACE(@BatchDef, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 1 THROW 510258, N'[PATCH-24] Anchor pending match co_num tidak ditemukan.', 1;
-    SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
-
-    SET @Old =
-          N'        @SiteRef       SiteType,' + @Lf
-        + N'        @CoNum         CoNumType,' + @Lf
-        + N'        @CustSeq       CustSeqType,';
-    SET @New =
-          N'        @SiteRef       SiteType,' + @Lf
-        + N'        @CoNum         CoNumType,' + @Lf
-        + N'        @CustPo        NVARCHAR(100),' + @Lf
-        + N'        @CustSeq       CustSeqType,';
-    SET @Count = (LEN(@BatchDef) - LEN(REPLACE(@BatchDef, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 1 THROW 510259, N'[PATCH-24] Anchor cursor variable tidak ditemukan.', 1;
-    SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
-
-    SET @Old =
-          N'        SELECT SiteRef, co_num, cust_seq' + @Lf
-        + N'        FROM #SMK069BatchOrders' + @Lf
-        + N'        WHERE is_pending = 1' + @Lf
-        + N'        ORDER BY co_num;';
-    SET @New =
-          N'        SELECT SiteRef, co_num, cust_po, cust_seq' + @Lf
-        + N'        FROM #SMK069BatchOrders' + @Lf
-        + N'        WHERE is_pending = 1' + @Lf
-        + N'        ORDER BY cust_po;';
-    SET @Count = (LEN(@BatchDef) - LEN(REPLACE(@BatchDef, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 1 THROW 510260, N'[PATCH-24] Anchor cursor select tidak ditemukan.', 1;
-    SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
-
-    SET @Old = N'    FETCH NEXT FROM OrderCursor INTO @SiteRef, @CoNum, @CustSeq;';
-    SET @New = N'    FETCH NEXT FROM OrderCursor INTO @SiteRef, @CoNum, @CustPo, @CustSeq;';
-    SET @Count = (LEN(@BatchDef) - LEN(REPLACE(@BatchDef, @Old, N''))) / NULLIF(LEN(@Old), 0);
-    IF ISNULL(@Count, 0) <> 2 THROW 510261, N'[PATCH-24] Dua anchor FETCH cursor tidak ditemukan.', 1;
+    IF ISNULL(@Count, 0) <> 1
+        THROW 510258, N'[PATCH-24] Anchor pending match co_num tidak ditemukan.', 1;
     SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
 
     SET @Old =
@@ -289,12 +268,11 @@ BEGIN
         + N'                + COALESCE(CONVERT(NVARCHAR(60), @CoNum), N''<NULL>'')';
     SET @New =
           N'                + N''Cust PO ''' + @Lf
-        + N'                + COALESCE(@CustPo, N''<NULL>'')';
-    IF CHARINDEX(@Old, @BatchDef) > 0
-        SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
-
-    SET @Old = N'            + N''; pastikan co_num terisi dan row staging tersedia.'',';
-    SET @New = N'            + N''; pastikan cust_po/co_num mapping dan row staging tersedia.'',';
+        + N'                + COALESCE' + @Lf
+        + N'                  (' + @Lf
+        + N'                      (SELECT TOP (1) cust_po FROM #SMK069BatchOrders WHERE co_num = @CoNum),' + @Lf
+        + N'                      N''<NULL>''' + @Lf
+        + N'                  )';
     IF CHARINDEX(@Old, @BatchDef) > 0
         SET @BatchDef = REPLACE(@BatchDef, @Old, @New);
 
@@ -305,14 +283,14 @@ BEGIN
         SET @BatchDef = REPLACE(@BatchDef, N'CREATE   PROCEDURE dbo.SMK069ProcessBatchCustomerOrdersSp', N'ALTER PROCEDURE dbo.SMK069ProcessBatchCustomerOrdersSp');
     END;
     IF CHARINDEX(N'ALTER PROCEDURE dbo.SMK069ProcessBatchCustomerOrdersSp', @BatchDef) = 0
-        THROW 510262, N'[PATCH-24] Header ProcessBatch tidak dapat dinormalisasi.', 1;
+        THROW 510259, N'[PATCH-24] Header ProcessBatch tidak dapat dinormalisasi.', 1;
 
     EXEC sys.sp_executesql @BatchDef;
 END;
 
 /* ============================================================================
-   C. Existing Processed staging rows: relink temp.co_num to the already-created
-      Blanket CO only when business Cust PO resolves to exactly one CO.
+   C. Historical Processed rows: staging co_num -> actual existing Blanket CO.
+      Relink only when SiteRef + customer + cust_po resolves to exactly one CO.
    ============================================================================ */
 ;WITH SourceOrders AS
 (
@@ -370,6 +348,7 @@ INNER JOIN SafeMap AS u
 WHERE t.process_status = N'P'
   AND LTRIM(RTRIM(CONVERT(NVARCHAR(60), t.co_num))) <> LTRIM(RTRIM(CONVERT(NVARCHAR(60), u.TargetCoNum)));
 
+/* Historical/current matching integration CO lines: release_date = order_date. */
 UPDATE ci
 SET ci.release_date = c.order_date
 FROM dbo.coitem_mst AS ci
@@ -389,6 +368,7 @@ WHERE c.[type] = N'B'
         AND LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po))) = LTRIM(RTRIM(CONVERT(NVARCHAR(100), c.cust_po)))
   );
 
+/* Compatibility only if withdrawn Patch 23 had already been applied. */
 IF COL_LENGTH(N'dbo.ue_SMK069_temp_sales_mst', N'syteline_co_num') IS NOT NULL
 BEGIN
     EXEC sys.sp_executesql N'
@@ -398,16 +378,17 @@ BEGIN
           AND (syteline_co_num IS NULL OR syteline_co_num <> CONVERT(NVARCHAR(10), co_num));';
 END;
 
+/* Post-checks. */
 SET @Definition = OBJECT_DEFINITION(@ProcId);
 IF CHARINDEX(N'PATCH-24: PYYMMDD### final CO number', COALESCE(@Definition, N'')) = 0
-    THROW 510263, N'[PATCH-24] Post-check format nomor CO gagal.', 1;
+    THROW 510260, N'[PATCH-24] Post-check format nomor CO gagal.', 1;
 IF CHARINDEX(N'            release_date,', COALESCE(@Definition, N'')) = 0
-    THROW 510264, N'[PATCH-24] Post-check release_date gagal.', 1;
+    THROW 510261, N'[PATCH-24] Post-check release_date gagal.', 1;
 IF CHARINDEX(N'co_num = @CreatedCoNum', COALESCE(@Definition, N'')) = 0
-    THROW 510265, N'[PATCH-24] Post-check final temp.co_num gagal.', 1;
+    THROW 510262, N'[PATCH-24] Post-check final temp.co_num gagal.', 1;
 
 SET @BatchDef = OBJECT_DEFINITION(@BatchProcId);
 IF CHARINDEX(N'PATCH-24: cust_po business pending linkage', COALESCE(@BatchDef, N'')) = 0
-    THROW 510266, N'[PATCH-24] Post-check cust_po batch linkage gagal.', 1;
+    THROW 510263, N'[PATCH-24] Post-check cust_po batch linkage gagal.', 1;
 
 PRINT N'[PATCH-24] SUCCESS - CO baru PYYMMDD###; temp.co_num = actual CO; cust_po = business link; release_date = order_date.';
