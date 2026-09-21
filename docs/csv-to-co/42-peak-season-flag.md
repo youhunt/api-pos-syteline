@@ -69,25 +69,24 @@ Peak Season -> is_peak_season on the CSV detail collection
 read-only checkbox beside CustPo
 ```
 
-## Mapping view gate
+## Mapping view ownership
 
-Eva confirmed that the flag must also be available in:
+Eva confirmed that `is_peak_season` will also be added to:
 
 ```text
 dbo.ue_SMK069_pos_sales_inbound_mapping_view
 ```
 
-The repository does not contain that view definition. Patch 27 deliberately does not rewrite an unproven tenant view.
+This view update is owned by Eva / the SMK side and is intentionally **not** included in Patch 27 or the repository canonical SQL at this time.
 
-Capture it with:
+Our side only needs to ensure the source tables already contain the field so Eva's mapping view can consume it:
 
-```sql
-SELECT OBJECT_DEFINITION(
-    OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view')
-) AS view_definition;
+```text
+ue_SMK069_pos_sales_inbound_mst.is_peak_season
+ue_SMK069_temp_sales_mst.is_peak_season
 ```
 
-After the tenant definition is captured, fold `is_peak_season` into the canonical view source and deployment baseline.
+Do not create a competing ALTER VIEW patch from this repository unless ownership changes explicitly.
 
 ## Quantity-multiple rule
 
