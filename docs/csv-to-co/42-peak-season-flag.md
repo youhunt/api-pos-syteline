@@ -1,0 +1,96 @@
+# Peak Season flag — POS / CSV inbound
+
+**Date:** 21 September 2026
+
+## Confirmed requirement
+
+```text
+Payload field  : is_peak_season
+SQL type       : INT
+Default        : 0
+1              : Peak Season
+0              : Normal
+```
+
+Persist the flag in:
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mst
+dbo.ue_SMK069_temp_sales_mst
+```
+
+The CSV test console also requires a supporting persisted field in:
+
+```text
+dbo.ue_SMK069_pos_csv_upload_mst
+```
+
+so the read-only grid can display and forward the same contract.
+
+## Runtime plumbing
+
+Patch 27 updates the public Receive wrapper after Core receive/validate:
+
+```text
+Payload JSON
+  -> SMK069ReceivePosSalesJsonCoreSp
+  -> PATCH-27 sync by cust_po + coline
+       inbound.is_peak_season
+       temp.is_peak_season
+  -> quantity validation
+  -> Auto CO
+```
+
+This avoids inventing a replacement for `SMK069ReceivePosSalesJsonCoreSp`, whose canonical tenant definition is still not present in the repository.
+
+## CSV
+
+Optional CSV field:
+
+```text
+is_peak_season
+```
+
+Aliases `is_peak_seson` and `peak_season` are accepted. Missing/blank defaults to 0. Values other than 0/1 are parser errors.
+
+## Forms
+
+`SMK API SALES ERROR PROCESSING`:
+
+```text
+Peak Season -> object.is_peak_season
+read-only checkbox beside CustPo
+```
+
+`SMK POS CSV TO BLANKET CO`:
+
+```text
+Peak Season -> is_peak_season on the CSV detail collection
+read-only checkbox beside CustPo
+```
+
+## Mapping view gate
+
+Eva confirmed that the flag must also be available in:
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mapping_view
+```
+
+The repository does not contain that view definition. Patch 27 deliberately does not rewrite an unproven tenant view.
+
+Capture it with:
+
+```sql
+SELECT OBJECT_DEFINITION(
+    OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view')
+) AS view_definition;
+```
+
+After the tenant definition is captured, fold `is_peak_season` into the canonical view source and deployment baseline.
+
+## Quantity-multiple rule
+
+Patch 27 only transports/persists the flag. It does **not** change POS-108 yet.
+
+The chat requirement says Peak/Normal affects the applicable conversion/multiple (Peak 20, Normal 15), but Eva also stated the flag is used as additional mapping information in the inbound mapping view. Therefore the existing view/conversion definition must be audited before replacing the current `SMK030_UomConvQty2/Getumcf` validation.
