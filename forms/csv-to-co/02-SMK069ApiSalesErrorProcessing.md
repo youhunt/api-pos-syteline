@@ -48,6 +48,7 @@ Use these bindings:
 ```text
 SyteLine CO Number  -> object.created_co_num
 CustPo              -> object.cust_po
+Peak Season          -> object.is_peak_season
 ```
 
 `co_num` remains controlled by the active staging/process design and must not be used as the dedicated display property for the `SyteLine CO Number` column when `created_co_num` exists specifically for that purpose.
@@ -64,6 +65,7 @@ Customer
 CustSeq
 Name
 CustPo               = object.cust_po
+Peak Season           = object.is_peak_season (read-only checkbox)
 Item
 Quantity
 U/M
@@ -110,3 +112,21 @@ Expected for successful rows:
 created_co_num = actual SyteLine CO number
 process_status = P
 ```
+
+
+## Peak Season field — 21 September 2026
+
+Requirement:
+
+```text
+Caption     : Peak Season
+Binding     : object.is_peak_season
+Control     : Checkbox
+Checked     : value = 1
+Unchecked   : value = 0
+Read Only   : True
+Position    : immediately beside CustPo
+Default SQL : 0
+```
+
+After Patch 27, resynchronize the IDO `ue_SMK069TempSales` so the new property is available to the form. The checkbox is display-only; operators must not change the flag from Error Processing.
