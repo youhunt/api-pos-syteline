@@ -119,6 +119,43 @@ Idempotency               -> customer + cust_po
 
 Legacy direct retry yang masih mengirim `R...` dapat resolve satu kali ke `cust_po`; setelah resolve, business processing memakai `cust_po`.
 
+## Peak Season flag — Patch 27
+
+Confirmed contract on 21 Sep 2026:
+
+```text
+is_peak_season INT NOT NULL DEFAULT 0
+0 = Normal
+1 = Peak Season
+```
+
+Persisted in:
+
+```text
+ue_SMK069_pos_sales_inbound_mst
+ue_SMK069_temp_sales_mst
+```
+
+The CSV UAT console also uses a supporting `is_peak_season` column on `ue_SMK069_pos_csv_upload_mst`, because its detail grid is backed by that table.
+
+Canonical Receive copies the value from JSON into inbound + temp by `cust_po + coline` after Core receive/validate. Canonical CSV parser/runner can carry the same optional field.
+
+Forms:
+
+```text
+SMK API SALES ERROR PROCESSING
+  Peak Season -> object.is_peak_season
+  read-only checkbox beside CustPo
+
+SMK POS CSV TO BLANKET CO
+  Peak Season -> CSV detail is_peak_season
+  read-only checkbox beside CustPo
+```
+
+The tenant mapping view `ue_SMK069_pos_sales_inbound_mapping_view` must also expose the field, but its definition is not yet stored in the repository. Do not guess-rewrite that view; capture its tenant definition first.
+
+Patch 27 does **not** yet replace the POS-108 quantity rule with the new Peak/Normal multiple rule. The mapping/conversion view must be audited first.
+
 ## Quantity multiple rule — Patch 18
 
 Business rule:
@@ -206,7 +243,23 @@ coitem.release_date       = order_date
 historical Processed rows = safe relink by SiteRef + customer + cust_po
 ```
 
-### Patch 25 — active latest
+### Patch 26
+
+Persists the actual SyteLine CO into `ue_SMK069_temp_sales_mst.created_co_num` for the Error Processing form, including safe backfill for historical Processed rows.
+
+Canonical `SMK069ProcessCustomerOrderSp.sql` now includes the same behavior for production baseline.
+
+### Patch 27 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-09-21-smk069-27-peak-season-flag.sql
+```
+
+Adds Peak Season data plumbing for API/CSV and the two required forms. Mapping-view exposure remains a separate tenant-definition gate.
+
+### Patch 25
 
 File:
 
@@ -232,6 +285,8 @@ Apply Database, satu executable batch / tanpa `GO`:
 22  2026-09-15-smk069-22-create-blanket-lines.sql
 24  2026-09-16-smk069-24-co-number-custpo-release-date.sql
 25  2026-09-16-smk069-25-canonical-custpo-linkage.sql
+26  2026-09-16-smk069-26-persist-created-co-num.sql
+27  2026-09-21-smk069-27-peak-season-flag.sql
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -278,8 +333,9 @@ process_status = P
 Final binding/logical meaning:
 
 ```text
-SyteLine CO Number = object.co_num
+SyteLine CO Number = object.created_co_num
 Business/Source PO = object.cust_po
+Peak Season        = object.is_peak_season (read-only checkbox)
 ```
 
 `R...` tidak dipakai sebagai user-facing business reference.
@@ -301,7 +357,7 @@ database/procedures/csv-to-co/SMK069ProcessBatchCustomerOrdersSp.sql
 database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
 ```
 
-`SMK069ProcessBatchCustomerOrdersSp.sql` dan `SMK069ProcessCustomerOrderSp.sql` sudah direbase ke desain final Cust PO + `PYYMMDD###` + Blanket lines + Release Date.
+`SMK069ProcessBatchCustomerOrdersSp.sql` dan `SMK069ProcessCustomerOrderSp.sql` sudah direbase ke desain final Cust PO + `PYYMMDD###` + Blanket lines + Release Date + `created_co_num`. Public Receive/CSV canonical sources juga sudah membawa `is_peak_season`.
 
 ## Operational docs
 
