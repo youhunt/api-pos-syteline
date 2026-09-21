@@ -2,7 +2,7 @@
    Canonical source: dbo.SMK069ReceivePosSalesJsonSp
    Receive -> Validate -> Quantity Multiple Check -> Blanket Customer Order
    -----------------------------------------------------------------------------
-   Date    : 2026-09-15
+   Date    : 2026-09-21
    Object  : dbo.SMK069ReceivePosSalesJsonSp
    Depends : dbo.SMK069ReceivePosSalesJsonCoreSp
              dbo.SMK069ProcessBatchCustomerOrdersSp
@@ -106,6 +106,64 @@ BEGIN
         @ErrorOrders     = @ErrorOrders     OUTPUT,
         @TransferredRows = @TransferredRows OUTPUT,
         @Infobar         = @ReceiveInfo     OUTPUT;
+
+
+    /* =========================================================================
+       PATCH-27: propagate is_peak_season from payload to inbound + temp.
+       Contract: 1 = Peak Season, 0/default = Normal.
+       ========================================================================= */
+    IF ISJSON(@PayloadJson) = 1
+    BEGIN
+        DECLARE @PeakSeasonPayload TABLE
+        (
+            cust_po        NVARCHAR(100) NOT NULL,
+            co_line        INT           NOT NULL,
+            is_peak_season INT           NOT NULL
+        );
+
+        INSERT INTO @PeakSeasonPayload (cust_po, co_line, is_peak_season)
+        SELECT
+            LTRIM(RTRIM(CONVERT(NVARCHAR(100), p.cust_po))),
+            p.coline,
+            CASE WHEN ISNULL(p.is_peak_season, 0) = 1 THEN 1 ELSE 0 END
+        FROM OPENJSON(@PayloadJson)
+        WITH
+        (
+            cust_po        NVARCHAR(100) '$.cust_po',
+            coline         INT           '$.coline',
+            is_peak_season INT           '$.is_peak_season'
+        ) AS p
+        WHERE NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), p.cust_po))), N'') IS NOT NULL
+          AND ISNULL(p.coline, 0) > 0;
+
+        UPDATE i
+        SET i.is_peak_season = p.is_peak_season
+        FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+        INNER JOIN
+        (
+            SELECT cust_po, co_line, MAX(is_peak_season) AS is_peak_season
+            FROM @PeakSeasonPayload
+            GROUP BY cust_po, co_line
+        ) AS p
+            ON p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+           AND p.co_line = i.co_line
+        WHERE i.SiteRef       = @Site
+          AND i.source_system = @SourceSystem
+          AND i.batch_id      = @BatchId;
+
+        UPDATE t
+        SET t.is_peak_season = p.is_peak_season
+        FROM dbo.ue_SMK069_temp_sales_mst AS t
+        INNER JOIN
+        (
+            SELECT cust_po, co_line, MAX(is_peak_season) AS is_peak_season
+            FROM @PeakSeasonPayload
+            GROUP BY cust_po, co_line
+        ) AS p
+            ON p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po)))
+           AND p.co_line = t.co_line
+        WHERE t.SiteRef = @Site;
+    END;
 
     /* =========================================================================
        1B. Quantity multiple validation (POS-108)
