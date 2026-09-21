@@ -49,12 +49,29 @@ The canonical CSV runner includes the flag in JSON sent to `dbo.SMK069ReceivePos
 
 ## Mongoose metadata
 
+The CSV detail IDO is:
+
+```text
+IDO : ue_SMK069PosCsvUpload
+Table : dbo.ue_SMK069_pos_csv_upload_mst
+```
+
 After Patch 27:
 
-1. Resynchronize the IDO/collection backed by `ue_SMK069_pos_csv_upload_mst`.
-2. Add a grid column beside the current CustPo column.
-3. Bind it to property `is_peak_season` on that same detail collection.
-4. Render as Checkbox.
-5. Set Read Only = True.
+1. Resynchronize IDO `ue_SMK069PosCsvUpload`.
+2. Confirm property `is_peak_season` is exposed on the IDO.
+3. Add a grid column beside the current CustPo column.
+4. Bind it to `object.is_peak_season` on the CSV detail collection.
+5. Render as Checkbox.
+6. Set Read Only = True.
 
-Do not bind the CSV checkbox to a form variable; it must show the persisted row value.
+Target property:
+
+```text
+Property Name : is_peak_season
+Type          : int
+Default SQL   : 0
+Read Only UI  : True
+```
+
+Do not bind the CSV checkbox to a form variable; it must show the persisted row value from `ue_SMK069PosCsvUpload`.
