@@ -71,6 +71,7 @@ The standard `SiteRef` column therefore fulfills both purposes:
 | `qty_ordered` | dbo | ue_SMK069_temp_sales_mst | QtyUnitType | decimal | 23 | 8 | `0` | YES | 0 |  |
 | `due_date` | dbo | ue_SMK069_temp_sales_mst | DateType | datetime |  |  |  | YES | 0 |  |
 | `u_m` | dbo | ue_SMK069_temp_sales_mst | UMType | nvarchar | 3 |  |  | YES | 0 |  |
+| `is_peak_season` | dbo | ue_SMK069_temp_sales_mst | int | int |  |  | `0` | NO | 0 |  |
 | `process_status` | dbo | ue_SMK069_temp_sales_mst | nvarchar | nvarchar | 1 |  | `N'N'` | NO | 0 |  |
 | `validation_msg` | dbo | ue_SMK069_temp_sales_mst | nvarchar | nvarchar | 1000 |  |  | YES | 0 |  |
 | `error_msg` | dbo | ue_SMK069_temp_sales_mst | nvarchar | nvarchar | 4000 |  |  | YES | 0 |  |
@@ -84,6 +85,17 @@ The standard `SiteRef` column therefore fulfills both purposes:
 | `RecordDate` | dbo | ue_SMK069_temp_sales_mst | CurrentDateType | datetime |  |  | `getdate()` | NO | 0 |  |
 | `RowPointer` | dbo | ue_SMK069_temp_sales_mst | RowPointerType | uniqueidentifier |  |  | `newid()` | NO | 0 |  |
 | `UpdatedBy` | dbo | ue_SMK069_temp_sales_mst | UsernameType | nvarchar | 128 |  | `suser_sname()` | NO | 0 |  |
+
+## Peak Season flag — 21 Sep 2026
+
+`is_peak_season` is a system-maintained flag sourced from the POS/CSV contract:
+
+```text
+0 = Normal / non-peak (default)
+1 = Peak Season
+```
+
+The Error Processing form displays it as a read-only checkbox beside `CustPo`.
 
 ## Process Status
 
