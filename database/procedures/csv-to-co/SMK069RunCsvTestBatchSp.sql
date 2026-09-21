@@ -2,7 +2,7 @@
    Canonical source: dbo.SMK069RunCsvTestBatchSp
    CSV -> JSON -> SMK069ReceivePosSalesJsonSp -> Blanket CO
    -----------------------------------------------------------------------------
-   Date    : 2026-09-14
+   Date    : 2026-09-21
    Object  : dbo.SMK069RunCsvTestBatchSp
    Depends : dbo.SMK069ReceivePosSalesJsonSp canonical entry point
 
@@ -162,6 +162,7 @@ BEGIN
             LTRIM(RTRIM(d.item)) AS item,
             d.qty_ordered AS qty_ordered,
             LTRIM(RTRIM(d.u_m)) AS u_m,
+            ISNULL(d.is_peak_season, 0) AS is_peak_season, /* PATCH-27: peak season CSV payload */
             CONVERT(NVARCHAR(8), @Site) AS siteref,
             CASE WHEN d.due_date IS NULL THEN NULL ELSE CONVERT(NVARCHAR(10), d.due_date, 23) END AS due_date,
             NULLIF(LTRIM(RTRIM(d.terms_code)), N'') AS terms_code,
