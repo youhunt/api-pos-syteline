@@ -152,7 +152,7 @@ SMK POS CSV TO BLANKET CO
   read-only checkbox beside CustPo
 ```
 
-The tenant mapping view `ue_SMK069_pos_sales_inbound_mapping_view` must also expose the field, but its definition is not yet stored in the repository. Do not guess-rewrite that view; capture its tenant definition first.
+The tenant mapping view `ue_SMK069_pos_sales_inbound_mapping_view` will be updated by Eva / SMK. This repository must not create a competing view patch unless ownership changes explicitly.
 
 Patch 27 does **not** yet replace the POS-108 quantity rule with the new Peak/Normal multiple rule. The mapping/conversion view must be audited first.
 
@@ -257,7 +257,7 @@ File:
 database/patches/csv-to-co/2026-09-21-smk069-27-peak-season-flag.sql
 ```
 
-Adds Peak Season data plumbing for API/CSV and the two required forms. Mapping-view exposure remains a separate tenant-definition gate.
+Adds Peak Season data plumbing for API/CSV and the two required forms. Mapping-view exposure is owned by Eva / SMK and is outside this patch.
 
 ### Patch 25
 
