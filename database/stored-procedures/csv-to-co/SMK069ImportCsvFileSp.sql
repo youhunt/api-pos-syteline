@@ -18,6 +18,12 @@
       terms_code    : terms_code, terms
       tax_code1     : tax_code1, tax_code
       exch_rate     : exch_rate, exchange_rate
+      is_peak_season: is_peak_season, is_peak_seson, peak_season
+
+    Revision 2026-09-21 - Peak Season:
+      - Optional CSV field is_peak_season (aliases: is_peak_seson, peak_season).
+      - Defaults to 0 when omitted/blank.
+      - Only 0 or 1 is accepted when supplied.
 
     Revision 2026-09-02 - Stable POS Error Codes:
       - Parser/CSV errors now use stable POS-4xx / payload POS-0xx codes.
@@ -252,6 +258,7 @@ BEGIN
         whse           NVARCHAR(20) NULL,
         due_date       DATE NULL,
         u_m            NVARCHAR(20) NULL,
+        is_peak_season INT NOT NULL,
         terms_code     NVARCHAR(20) NULL,
         tax_code1      NVARCHAR(20) NULL,
         exch_rate      DECIMAL(18,8) NULL,
@@ -291,6 +298,7 @@ BEGIN
         @RawWhse        NVARCHAR(MAX),
         @RawDueDate     NVARCHAR(MAX),
         @RawUM          NVARCHAR(MAX),
+        @RawIsPeakSeason NVARCHAR(MAX),
         @RawTerms       NVARCHAR(MAX),
         @RawTax         NVARCHAR(MAX),
         @RawExchRate    NVARCHAR(MAX),
@@ -300,6 +308,7 @@ BEGIN
         @UnitPrice      DECIMAL(18,8),
         @DueDate        DATE,
         @ExchRate       DECIMAL(18,8),
+        @IsPeakSeason   INT,
         @Message        NVARCHAR(1000);
 
     WHILE @CursorPos <= LEN(@CsvText + N'#') - 1
@@ -353,6 +362,8 @@ BEGIN
                         THEN N'due_date'
                     WHEN n.normalized IN (N'u_m', N'um', N'unit_of_measure')
                         THEN N'u_m'
+                    WHEN n.normalized IN (N'is_peak_season', N'is_peak_seson', N'peak_season')
+                        THEN N'is_peak_season'
                     WHEN n.normalized IN (N'terms_code', N'terms')
                         THEN N'terms_code'
                     WHEN n.normalized IN (N'tax_code1', N'tax_code')
@@ -440,6 +451,7 @@ BEGIN
         SET @RawWhse = NULL;
         SET @RawDueDate = NULL;
         SET @RawUM = NULL;
+        SET @RawIsPeakSeason = NULL;
         SET @RawTerms = NULL;
         SET @RawTax = NULL;
         SET @RawExchRate = NULL;
@@ -449,6 +461,7 @@ BEGIN
         SET @UnitPrice = NULL;
         SET @DueDate = NULL;
         SET @ExchRate = NULL;
+        SET @IsPeakSeason = 0;
         SET @Message = N'';
 
         INSERT INTO @Fields (field_no, field_value)
@@ -468,6 +481,7 @@ BEGIN
             @RawWhse      = MAX(CASE WHEN h.canonical_name = N'whse'         THEN f.field_value END),
             @RawDueDate   = MAX(CASE WHEN h.canonical_name = N'due_date'     THEN f.field_value END),
             @RawUM        = MAX(CASE WHEN h.canonical_name = N'u_m'          THEN f.field_value END),
+            @RawIsPeakSeason = MAX(CASE WHEN h.canonical_name = N'is_peak_season' THEN f.field_value END),
             @RawTerms     = MAX(CASE WHEN h.canonical_name = N'terms_code'   THEN f.field_value END),
             @RawTax       = MAX(CASE WHEN h.canonical_name = N'tax_code1'    THEN f.field_value END),
             @RawExchRate  = MAX(CASE WHEN h.canonical_name = N'exch_rate'    THEN f.field_value END)
@@ -494,6 +508,13 @@ BEGIN
             TRY_CONVERT(DATE, @RawDueDate)
         );
         SET @ExchRate = TRY_CONVERT(DECIMAL(18,8), @RawExchRate);
+        SET @IsPeakSeason =
+            CASE
+                WHEN @RawIsPeakSeason IS NULL THEN 0
+                WHEN TRY_CONVERT(INT, @RawIsPeakSeason) = 1 THEN 1
+                WHEN TRY_CONVERT(INT, @RawIsPeakSeason) = 0 THEN 0
+                ELSE 0
+            END;
 
         IF @RawCustNum IS NULL
             SET @Message += N'[POS-002] custnum kosong; ';
@@ -521,6 +542,9 @@ BEGIN
             SET @Message += N'[POS-003] due_date tidak valid; ';
         IF @RawExchRate IS NOT NULL AND (@ExchRate IS NULL OR @ExchRate <= 0)
             SET @Message += N'[POS-010] exch_rate harus angka > 0; ';
+        IF @RawIsPeakSeason IS NOT NULL
+           AND (TRY_CONVERT(INT, @RawIsPeakSeason) IS NULL OR TRY_CONVERT(INT, @RawIsPeakSeason) NOT IN (0, 1))
+            SET @Message += N'[POS-010] is_peak_season harus 0 atau 1; ';
 
         IF LEN(ISNULL(@RawCustNum, N'')) > 7
             SET @Message += N'[POS-011] custnum melebihi 7 karakter; ';
@@ -546,6 +570,7 @@ BEGIN
             whse,
             due_date,
             u_m,
+            is_peak_season,
             terms_code,
             tax_code1,
             exch_rate,
@@ -568,6 +593,7 @@ BEGIN
             LEFT(@RawWhse, 20),
             @DueDate,
             LEFT(@RawUM, 20),
+            @IsPeakSeason,
             LEFT(@RawTerms, 20),
             LEFT(@RawTax, 20),
             @ExchRate,
@@ -618,6 +644,7 @@ BEGIN
             whse,
             due_date,
             u_m,
+            is_peak_season,
             terms_code,
             tax_code1,
             exch_rate,
@@ -647,6 +674,7 @@ BEGIN
             p.whse,
             p.due_date,
             p.u_m,
+            p.is_peak_season,
             p.terms_code,
             p.tax_code1,
             p.exch_rate,
@@ -673,6 +701,7 @@ BEGIN
             d.cust_po = p.cust_po,
             d.whse = p.whse,
             d.u_m = p.u_m,
+            d.is_peak_season = p.is_peak_season,
             d.UpdatedBy = @RequestedBy,
             d.RecordDate = GETDATE()
         FROM dbo.ue_SMK069_pos_csv_upload_mst AS d
@@ -684,6 +713,7 @@ BEGIN
               ISNULL(d.cust_po, N'') <> ISNULL(p.cust_po, N'')
               OR ISNULL(d.whse, N'') <> ISNULL(p.whse, N'')
               OR ISNULL(d.u_m, N'') <> ISNULL(p.u_m, N'')
+              OR ISNULL(d.is_peak_season, 0) <> ISNULL(p.is_peak_season, 0)
           );
 
         /*
