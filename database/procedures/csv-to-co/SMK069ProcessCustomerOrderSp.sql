@@ -12,6 +12,7 @@
    - New SyteLine CO format = P + YYMMDD + 3-digit daily running.
      Example: P260916001.
    - After success, ue_SMK069_temp_sales_mst.co_num = actual SyteLine CO number.
+   - created_co_num stores the same actual CO for Error Processing display.
    - co_mst.type = B and consolidate = 1.
    - coitem_mst.stat = O, consolidate = 1, release_date = order_date.
    - co_bln_mst is created for every line, stat = O, allow_on_pick_list = 0.
@@ -480,6 +481,7 @@ BEGIN
             UPDATE dbo.ue_SMK069_temp_sales_mst
             SET
                 co_num = @ExistingCoNum,
+                created_co_num = @ExistingCoNum,
                 process_status = N'P',
                 validation_msg = NULL,
                 error_msg = NULL,
@@ -777,6 +779,7 @@ BEGIN
         UPDATE dbo.ue_SMK069_temp_sales_mst
         SET
             co_num = @CreatedCoNum,
+            created_co_num = @CreatedCoNum,
             process_status = N'P',
             validation_msg = NULL,
             error_msg = NULL,
