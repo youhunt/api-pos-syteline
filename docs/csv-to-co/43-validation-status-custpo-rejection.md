@@ -149,3 +149,16 @@ WHERE i.SiteRef = RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
   AND i.batch_id = N'<BATCH_ID>'
 ORDER BY i.cust_po, i.co_line;
 ```
+
+
+## Patch 28 Rev.2
+
+Rev.1 failed at compile time because the new `@MappingRejectedOrders` counter was referenced but not declared in the canonical Receive variable block.
+
+Rev.2 fixes the canonical `SMK069ReceivePosSalesJsonSp` and redeploys it through the same Apply Database patch file.
+
+Expected Apply Database success message:
+
+```text
+[PATCH-28 REV.2] SUCCESS - CustPO ditolak bila minimal satu item memiliki ValidationStatus=N.
+```
