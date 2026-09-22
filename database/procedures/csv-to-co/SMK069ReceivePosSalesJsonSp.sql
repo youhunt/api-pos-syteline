@@ -2,7 +2,7 @@
    Canonical source: dbo.SMK069ReceivePosSalesJsonSp
    Receive -> Validate -> Quantity Multiple Check -> Blanket Customer Order
    -----------------------------------------------------------------------------
-   Date    : 2026-09-21
+   Date    : 2026-09-22
    Object  : dbo.SMK069ReceivePosSalesJsonSp
    Depends : dbo.SMK069ReceivePosSalesJsonCoreSp
              dbo.SMK069ProcessBatchCustomerOrdersSp
@@ -16,8 +16,9 @@
    - Parameters 11-14 are appended with defaults.
    - Valid rows are processed to Customer Order before a business error is
      surfaced, so partial validation does not strand valid rows in temp.
-   - Quantity-multiple validation runs after Core receive/validate but BEFORE CO
+   - Mapping ValidationStatus and quantity-multiple validation run after Core receive/validate and BEFORE CO
      processing. A fractional converted base quantity rejects the whole cust_po.
+   - ValidationStatus = N rejects the whole cust_po (POS-109).
    - Root quantity error code: POS-108.
    - Sibling lines of the same cust_po: POS-203 atomic-order rejection.
    - Existing POS/API behavior is preserved by default:
@@ -166,7 +167,112 @@ BEGIN
     END;
 
     /* =========================================================================
-       1B. Quantity multiple validation (POS-108)
+       PATCH-28: ValidationStatus per-item / reject whole CustPO
+
+       Source of truth:
+         dbo.ue_SMK069_pos_sales_inbound_mapping_view.ValidationStatus
+
+       Rule:
+         - ValidationStatus = 'V' => item valid
+         - ValidationStatus = 'N' => item invalid
+         - If at least one mapped item in a CustPO is 'N', reject the whole CustPO
+           before Customer Order processing.
+       ========================================================================= */
+    IF ISNULL(@TransferredRows, 0) > 0
+    BEGIN
+        DECLARE @MappingInvalidPo TABLE
+        (
+            cust_po NVARCHAR(100) NOT NULL PRIMARY KEY
+        );
+
+        INSERT INTO @MappingInvalidPo (cust_po)
+        SELECT DISTINCT
+            LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po)))
+        FROM dbo.ue_SMK069_pos_sales_inbound_mapping_view AS v
+        WHERE v.SiteRef       = @Site
+          AND v.source_system = @SourceSystem
+          AND v.batch_id      = @BatchId
+          AND NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po))), N'') IS NOT NULL
+          AND UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(20), v.ValidationStatus)))) = N'N';
+
+        IF EXISTS (SELECT 1 FROM @MappingInvalidPo)
+        BEGIN
+            SELECT @MappingRejectedOrders = COUNT(*)
+            FROM @MappingInvalidPo;
+
+            /*
+               The decision is CustPO-atomic. Every still-transferable inbound row
+               for the rejected CustPO becomes Error. The message is deliberately
+               order-level: it does not falsely claim that every sibling item is N.
+            */
+            UPDATE i
+            SET
+                i.inbound_status = N'E',
+                i.validation_msg = N'[POS-109] CustPO ditolak karena minimal satu item memiliki ValidationStatus=N.'
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef        = @Site
+              AND i.source_system  = @SourceSystem
+              AND i.batch_id       = @BatchId
+              AND i.inbound_status = N'T'
+              AND EXISTS
+                  (
+                      SELECT 1
+                      FROM @MappingInvalidPo AS p
+                      WHERE p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+                  );
+
+            /*
+               Core may already have published the PO to temp. Remove only rows
+               that are still Valid so ProcessBatch cannot create a CO for a
+               CustPO rejected by ValidationStatus.
+            */
+            DELETE t
+            FROM dbo.ue_SMK069_temp_sales_mst AS t
+            WHERE t.SiteRef = @Site
+              AND t.process_status = N'V'
+              AND EXISTS
+                  (
+                      SELECT 1
+                      FROM @MappingInvalidPo AS p
+                      WHERE p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po)))
+                  );
+
+            /* Recompute public counters after mapping business validation. */
+            SELECT @TransferredRows = COUNT(*)
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef        = @Site
+              AND i.source_system  = @SourceSystem
+              AND i.batch_id       = @BatchId
+              AND i.inbound_status = N'T';
+
+            SELECT @ValidOrders = COUNT(*)
+            FROM
+            (
+                SELECT DISTINCT LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po
+                FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+                WHERE i.SiteRef        = @Site
+                  AND i.source_system  = @SourceSystem
+                  AND i.batch_id       = @BatchId
+                  AND i.inbound_status = N'T'
+            ) AS v;
+
+            SELECT @ErrorOrders = COUNT(*)
+            FROM
+            (
+                SELECT DISTINCT LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po
+                FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+                WHERE i.SiteRef        = @Site
+                  AND i.source_system  = @SourceSystem
+                  AND i.batch_id       = @BatchId
+                  AND i.inbound_status = N'E'
+            ) AS e;
+
+            SET @ReturnCode = 16;
+        END;
+    END;
+
+    /* =========================================================================
+       1C. Quantity multiple validation (POS-108)
 
        Business-supplied rule:
          converted base qty = SMK030_UomConvQty2
@@ -339,12 +445,13 @@ BEGIN
             @ProcessDetail   = @ProcessDetail    OUTPUT,
             @CreatedCoNums   = @CreatedCoNums    OUTPUT;
 
-        /* Rejected quantity POs are not "already processed" skips. */
-        IF @QtyRejectedOrders > 0 AND @SkippedOrders > 0
+        /* Business-rejected POs are not "already processed" skips. */
+        IF (@QtyRejectedOrders + @MappingRejectedOrders) > 0
+           AND @SkippedOrders > 0
             SET @SkippedOrders =
                 CASE
-                    WHEN @SkippedOrders >= @QtyRejectedOrders
-                    THEN @SkippedOrders - @QtyRejectedOrders
+                    WHEN @SkippedOrders >= (@QtyRejectedOrders + @MappingRejectedOrders)
+                    THEN @SkippedOrders - (@QtyRejectedOrders + @MappingRejectedOrders)
                     ELSE 0
                 END;
     END
@@ -456,6 +563,12 @@ BEGIN
                                     N'Warehouse tidak valid di Infor'
                                     + N' [coline=' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N'<kosong>')
                                     + N', whse=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(80), e.whse))), N''), N'<kosong>')
+                                    + N']'
+                                WHEN e.validation_msg LIKE N'%ValidationStatus=N%'
+                                THEN
+                                    N'Item/CustPO tidak valid berdasarkan ValidationStatus mapping'
+                                    + N' [coline=' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N'<kosong>')
+                                    + N', item=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.item))), N''), N'<kosong>')
                                     + N']'
                                 WHEN e.validation_msg LIKE N'%Quantity tidak sesuai kelipatan%'
                                 THEN
