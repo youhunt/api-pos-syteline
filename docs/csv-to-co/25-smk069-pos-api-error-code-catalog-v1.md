@@ -42,7 +42,8 @@ The POS-xxx codes below are the implementation contract for the prepared SP sour
 | POS-105 | PRICE_NOT_FOUND | price unavailable for item/U/M/order date |
 | POS-106 | WAREHOUSE_NOT_VALID | warehouse mapping invalid |
 | POS-107 | CUSTOMER_SEQUENCE_NOT_FOUND | customer sequence unavailable |
-| POS-108 | MAPPING_AMBIGUOUS | more than one mapping for the same line |
+| POS-108 | MAPPING_AMBIGUOUS / QUANTITY_MULTIPLE | historical code; current canonical Receive also uses it for quantity-multiple rejection |
+| POS-109 | ITEM_VALIDATION_STATUS_INVALID | at least one mapped item has ValidationStatus=N, so the whole cust_po is rejected |
 | POS-201 | DUPLICATE_COLINE | duplicate coline within the same cust_po |
 | POS-202 | HEADER_INCONSISTENT | header values inconsistent within one cust_po |
 | POS-203 | ORDER_REJECTED | one invalid line rejects the entire cust_po |
