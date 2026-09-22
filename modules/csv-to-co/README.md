@@ -156,6 +156,32 @@ The tenant mapping view `ue_SMK069_pos_sales_inbound_mapping_view` will be updat
 
 Patch 27 does **not** yet replace the POS-108 quantity rule with the new Peak/Normal multiple rule. The mapping/conversion view must be audited first.
 
+## ValidationStatus gate — Patch 28
+
+Source of truth:
+
+```text
+ue_SMK069_pos_sales_inbound_mapping_view.ValidationStatus
+```
+
+Rules:
+
+```text
+V = item valid
+N = item invalid
+
+If any item in a cust_po is N:
+→ reject the whole cust_po
+→ mark still-transferable inbound rows Error
+→ remove its temp V rows before ProcessBatch
+→ no Customer Order is created for that cust_po
+→ [POS-109]
+```
+
+Other valid CustPOs in the same batch can continue.
+
+The mapping view itself remains owned by Eva / SMK. Patch 28 only consumes `ValidationStatus`.
+
 ## Quantity multiple rule — Patch 18
 
 Business rule:
@@ -249,7 +275,7 @@ Persists the actual SyteLine CO into `ue_SMK069_temp_sales_mst.created_co_num` f
 
 Canonical `SMK069ProcessCustomerOrderSp.sql` now includes the same behavior for production baseline.
 
-### Patch 27 — active latest
+### Patch 27
 
 File:
 
@@ -258,6 +284,16 @@ database/patches/csv-to-co/2026-09-21-smk069-27-peak-season-flag.sql
 ```
 
 Adds Peak Season data plumbing for API/CSV and the two required forms. Mapping-view exposure is owned by Eva / SMK and is outside this patch.
+
+### Patch 28 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-09-22-smk069-28-validation-status-reject-custpo.sql
+```
+
+Consumes `ValidationStatus` from Eva/SMK's mapping view and enforces atomic CustPO rejection when any item is `N`.
 
 ### Patch 25
 
@@ -287,6 +323,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 25  2026-09-16-smk069-25-canonical-custpo-linkage.sql
 26  2026-09-16-smk069-26-persist-created-co-num.sql
 27  2026-09-21-smk069-27-peak-season-flag.sql
+28  2026-09-22-smk069-28-validation-status-reject-custpo.sql
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -389,3 +426,4 @@ After Patch 24 **dan Patch 25**:
 9. Verify matching `co_bln_mst`, `stat=O`, `allow_on_pick_list=0`.
 10. Retry same successful BatchId must not create duplicate CO.
 11. Quantity-invalid test must still return `[POS-108]` with no CO.
+12. ValidationStatus mixed-item test: any `N` must reject the whole CustPO with `[POS-109]` and no CO.
