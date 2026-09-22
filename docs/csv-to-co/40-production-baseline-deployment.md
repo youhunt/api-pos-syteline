@@ -125,6 +125,21 @@ SMK069ProcessCustomerOrderSp
 
 CSV operation additionally depends on its CSV batch/upload/import objects and `SMK069RunCsvTestBatchSp`.
 
+Peak Season / POS U/M configuration additionally depends on Mongoose UET metadata:
+
+```text
+Uf_SMK069_is_peak_season
+Uf_SMK069_pos_um
+SMK069_CL_itemcust
+itemcust_mst extension
+```
+
+See:
+
+```text
+docs/csv-to-co/44-uet-itemcust-peak-season-pos-um.md
+```
+
 The external/public IDO method must remain:
 
 ```text
@@ -159,6 +174,8 @@ Production baseline is ready only when all of the following are true:
 [ ] canonical CSV runner current
 [ ] required tables/views exist
 [ ] required IDO methods/forms are packaged
+[ ] UET user fields Uf_SMK069_is_peak_season and Uf_SMK069_pos_um are packaged
+[ ] UET class SMK069_CL_itemcust and itemcust_mst extension are packaged
 [ ] public method Transactional = False
 [ ] clean UAT proves PYYMMDD### numbering
 [ ] clean UAT proves temp.co_num = actual CO
