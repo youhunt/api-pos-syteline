@@ -93,3 +93,30 @@ Do not create a competing ALTER VIEW patch from this repository unless ownership
 Patch 27 only transports/persists the flag. It does **not** change POS-108 yet.
 
 The chat requirement says Peak/Normal affects the applicable conversion/multiple (Peak 20, Normal 15), but Eva also stated the flag is used as additional mapping information in the inbound mapping view. Therefore the existing view/conversion definition must be audited before replacing the current `SMK030_UomConvQty2/Getumcf` validation.
+
+
+## itemcust UET master configuration
+
+Customer-item master configuration has also been extended through Mongoose UET:
+
+```text
+Uf_SMK069_is_peak_season   int, default 0
+Uf_SMK069_pos_um           UMType / nvarchar(3)
+Class                      SMK069_CL_itemcust
+Extended table             itemcust_mst
+Active                     1
+Extend All Records         1
+```
+
+The fields are visible in **Customer Contracts** as:
+
+```text
+POS U/M
+Is Peak Season?
+```
+
+Detailed configuration and production migration checklist:
+
+```text
+docs/csv-to-co/44-uet-itemcust-peak-season-pos-um.md
+```
