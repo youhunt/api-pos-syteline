@@ -90,8 +90,9 @@ BEGIN
         @BusinessError     BIT            = 0,
         @HardFailed        BIT            = 0,
         @HttpError         NVARCHAR(2048) = NULL,
-        @CodePos           INT            = 0,
-        @QtyRejectedOrders INT            = 0;
+        @CodePos                INT            = 0,
+        @QtyRejectedOrders      INT            = 0,
+        @MappingRejectedOrders  INT            = 0;
 
     /* =========================================================================
        1. Canonical Receive/Validate
