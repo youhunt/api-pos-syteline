@@ -276,7 +276,9 @@ BEGIN
        1C. Quantity multiple validation (POS-108)
 
        Business-supplied rule:
-         converted base qty = SMK030_UomConvQty2
+         itemcust mapping must match inbound is_peak_season:
+           itemcust.Uf_SMK069_is_peak_season = inbound.is_peak_season
+         then converted base qty = SMK030_UomConvQty2
          (
              qty_ordered,
              Getumcf(u_m, mapped item, '', ''),
@@ -309,6 +311,7 @@ BEGIN
         INNER JOIN dbo.itemcust AS ic
             ON ic.cust_item = i.item
            AND ic.cust_num = c.cust_num
+           AND ISNULL(ic.Uf_SMK069_is_peak_season, 0) = ISNULL(i.is_peak_season, 0)
         CROSS APPLY
         (
             SELECT CAST
