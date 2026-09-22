@@ -574,6 +574,12 @@ BEGIN
                                     + N' [coline=' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N'<kosong>')
                                     + N', item=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.item))), N''), N'<kosong>')
                                     + N']'
+                                WHEN LEFT(LTRIM(COALESCE(e.validation_msg, N'')), 9) = N'[POS-204]'
+                                THEN
+                                    N'Order/cust_po sudah pernah diproses atau konflik dengan data sebelumnya'
+                                    + N' [coline=' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N'<kosong>')
+                                    + N', cust_po=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.cust_po))), N''), N'<kosong>')
+                                    + N']'
                                 WHEN e.validation_msg LIKE N'%Quantity tidak sesuai kelipatan%'
                                 THEN
                                     N'Quantity tidak sesuai kelipatan U/M'
