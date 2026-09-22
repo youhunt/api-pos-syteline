@@ -285,7 +285,7 @@ database/patches/csv-to-co/2026-09-21-smk069-27-peak-season-flag.sql
 
 Adds Peak Season data plumbing for API/CSV and the two required forms. Mapping-view exposure is owned by Eva / SMK and is outside this patch.
 
-### Patch 28 — active latest
+### Patch 28 Rev.2 — active latest
 
 File:
 
@@ -293,7 +293,7 @@ File:
 database/patches/csv-to-co/2026-09-22-smk069-28-validation-status-reject-custpo.sql
 ```
 
-Consumes `ValidationStatus` from Eva/SMK's mapping view and enforces atomic CustPO rejection when any item is `N`.
+Consumes `ValidationStatus` from Eva/SMK's mapping view and enforces atomic CustPO rejection when any item is `N`. Rev.2 fixes the missing `@MappingRejectedOrders` declaration that caused Rev.1 compile error.
 
 ### Patch 25
 
