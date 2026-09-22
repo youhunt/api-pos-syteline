@@ -186,6 +186,7 @@ This UET metadata must be included in production deployment packaging. Detailed 
 
 ```text
 docs/csv-to-co/44-uet-itemcust-peak-season-pos-um.md
+docs/csv-to-co/45-peak-season-aware-quantity-validation.md
 ```
 
 ## ValidationStatus gate — Patch 28
@@ -213,6 +214,20 @@ If any item in a cust_po is N:
 Other valid CustPOs in the same batch can continue.
 
 The mapping view itself remains owned by Eva / SMK. Patch 28 only consumes `ValidationStatus`.
+
+## Peak-aware quantity validation — Patch 29
+
+The POS-108 quantity validation now selects `itemcust` by:
+
+```text
+cust_item
+cust_num
+Uf_SMK069_is_peak_season = inbound.is_peak_season
+```
+
+Then it runs the existing `SMK030_UomConvQty2/Getumcf` formula. This prevents Normal and Peak customer-item mappings from being mixed during quantity validation.
+
+A POS-108 rejection happens **after** Receive Core created inbound rows; the rejected rows remain in inbound with status `E`, while temp `V` rows for that CustPO are removed and no CO is created.
 
 ## Quantity multiple rule — Patch 18
 
@@ -317,7 +332,7 @@ database/patches/csv-to-co/2026-09-21-smk069-27-peak-season-flag.sql
 
 Adds Peak Season data plumbing for API/CSV and the two required forms. Mapping-view exposure is owned by Eva / SMK and is outside this patch.
 
-### Patch 28 Rev.2 — active latest
+### Patch 28 Rev.2
 
 File:
 
@@ -326,6 +341,16 @@ database/patches/csv-to-co/2026-09-22-smk069-28-validation-status-reject-custpo.
 ```
 
 Consumes `ValidationStatus` from Eva/SMK's mapping view and enforces atomic CustPO rejection when any item is `N`. Rev.2 fixes the missing `@MappingRejectedOrders` declaration that caused Rev.1 compile error.
+
+### Patch 29 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-09-22-smk069-29-peak-season-aware-qty-validation.sql
+```
+
+Makes quantity validation use the `itemcust` row whose `Uf_SMK069_is_peak_season` matches inbound `is_peak_season`.
 
 ### Patch 25
 
@@ -356,6 +381,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 26  2026-09-16-smk069-26-persist-created-co-num.sql
 27  2026-09-21-smk069-27-peak-season-flag.sql
 28  2026-09-22-smk069-28-validation-status-reject-custpo.sql
+29  2026-09-22-smk069-29-peak-season-aware-qty-validation.sql
 ```
 
 Patch 23 tidak ada di active deployment sequence.
