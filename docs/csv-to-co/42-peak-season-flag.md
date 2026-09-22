@@ -90,9 +90,21 @@ Do not create a competing ALTER VIEW patch from this repository unless ownership
 
 ## Quantity-multiple rule
 
-Patch 27 only transports/persists the flag. It does **not** change POS-108 yet.
+Patch 27 transports/persists the flag.
 
-The chat requirement says Peak/Normal affects the applicable conversion/multiple (Peak 20, Normal 15), but Eva also stated the flag is used as additional mapping information in the inbound mapping view. Therefore the existing view/conversion definition must be audited before replacing the current `SMK030_UomConvQty2/Getumcf` validation.
+Patch 29 makes POS-108 quantity validation select the `itemcust` mapping that matches the transaction Peak Season flag:
+
+```text
+itemcust.Uf_SMK069_is_peak_season = inbound.is_peak_season
+```
+
+The existing `SMK030_UomConvQty2/Getumcf` conversion formula is retained after the correct customer-item Peak/Normal mapping has been selected.
+
+See:
+
+```text
+docs/csv-to-co/45-peak-season-aware-quantity-validation.md
+```
 
 
 ## itemcust UET master configuration
