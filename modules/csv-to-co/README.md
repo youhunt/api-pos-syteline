@@ -382,6 +382,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 27  2026-09-21-smk069-27-peak-season-flag.sql
 28  2026-09-22-smk069-28-validation-status-reject-custpo.sql
 29  2026-09-22-smk069-29-peak-season-aware-qty-validation.sql
+30  2026-09-22-smk069-30-clarify-pos204-existing-custpo.sql
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -434,6 +435,14 @@ Peak Season        = object.is_peak_season (read-only checkbox)
 ```
 
 `R...` tidak dipakai sebagai user-facing business reference.
+
+## POS-204 — existing/conflicting CustPO
+
+`POS-204` means `ORDER_ALREADY_EXISTS`: the same business `cust_po` has already been processed or conflicts with prior data. A new `BatchId` does not make the same `cust_po` a new business order because `cust_po` is the idempotency key.
+
+Patch 30 does not change this business rule; it only fixes the public message so POS-204 no longer falls through to the misleading generic text `Data payload tidak terdaftar atau tidak sesuai di Infor`.
+
+Diagnostic order: query inbound rows for the `cust_po`, then `co_mst.cust_po`, then staging. Reuse the existing successful order rather than creating another CO. If the prior order was not actually successful, inspect `validation_msg`/`process_status` before retrying.
 
 ## Retry / idempotency
 
