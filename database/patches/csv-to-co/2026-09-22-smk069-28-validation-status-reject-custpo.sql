@@ -1,5 +1,5 @@
 /* =============================================================================
-   SMK069 - Patch 28 - ValidationStatus per item, reject whole CustPO
+   SMK069 - Patch 28 Rev.2 - ValidationStatus per item, reject whole CustPO
    -----------------------------------------------------------------------------
    Date    : 2026-09-22
    Scope   : CSV / POS inbound -> Blanket Customer Order ONLY
@@ -13,7 +13,13 @@
    - If at least one item in a CustPO is N, reject the ENTIRE CustPO before CO
      processing.
    - Other CustPOs in the same API/CSV batch may continue when valid.
-   - Stable root code introduced here: POS-109.
+   - Stable root code: POS-109.
+
+   REV.2 FIX
+   ---------
+   Rev.1 referenced @MappingRejectedOrders but did not declare it in the
+   canonical Receive variable block. Rev.2 fixes the canonical source and
+   redeploys the corrected procedure.
 
    OWNERSHIP
    ---------
@@ -41,7 +47,7 @@ IF NOT EXISTS
 IF OBJECT_ID(N'dbo.SMK069ReceivePosSalesJsonSp', N'P') IS NULL
     THROW 510282, N'[PATCH-28] dbo.SMK069ReceivePosSalesJsonSp tidak ditemukan.', 1;
 
-/* Redeploy current canonical Receive with ValidationStatus gate. */
+/* Redeploy corrected canonical Receive. */
 DECLARE @Patch28ReceiveSql NVARCHAR(MAX) = N'';
 SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'/* =============================================================================
    Canonical source: dbo.SMK069ReceivePosSalesJsonSp
@@ -136,8 +142,9 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'0;
         @BusinessError     BIT            = 0,
         @HardFailed        BIT            = 0,
         @HttpError         NVARCHAR(2048) = NULL,
-        @CodePos           INT            = 0,
-        @QtyRejectedOrders INT            = 0;
+        @CodePos                INT            = 0,
+        @QtyRejectedOrders      INT            = 0,
+        @MappingRejectedOrders  INT            = 0;
 
     /* =========================================================================
        1. Canonical Receive/Validate
@@ -185,11 +192,11 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'0;
 
         UPDATE i
         SET i.is_peak_season = p.is_peak_season
-        FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+        FROM dbo.ue_SMK069_pos_sales_';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'inbound_mst AS i
         INNER JOIN
         (
-            SELE';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'CT cust_po, co_line, MAX(is_peak_season) AS is_peak_season
+            SELECT cust_po, co_line, MAX(is_peak_season) AS is_peak_season
             FROM @PeakSeasonPayload
             GROUP BY cust_po, co_line
         ) AS p
@@ -260,11 +267,11 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'CT cust_po, co_line, MAX(is_peak
             WHERE i.SiteRef        = @Site
               AND i.source_system  = @SourceSystem
               AND i.batch_id       = @BatchId
-              AND i.inbound_status = N''T''
+              AND i.inbound_status = N';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'''T''
               AND EXISTS
                   (
-             ';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'         SELECT 1
+                      SELECT 1
                       FROM @MappingInvalidPo AS p
                       WHERE p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
                   );
@@ -340,11 +347,11 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'         SELECT 1
             row_no   INT           NOT NULL,
             cust_po  NVARCHAR(100) NOT NULL,
             qty_base DECIMAL(23,5) NOT NULL,
-            PRIMARY KEY (row_no, cust_po)
+            PRIMARY';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N' KEY (row_no, cust_po)
         );
 
-        INSERT INTO @QtyInv';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'alid (row_no, cust_po, qty_base)
+        INSERT INTO @QtyInvalid (row_no, cust_po, qty_base)
         SELECT
             i.row_no,
             LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po,
@@ -421,10 +428,10 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'alid (row_no, cust_po, qty_base)
               AND i.inbound_status = N''T''
               AND EXISTS
                   (
-                      SELECT 1
+                      SELECT 1';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'
                       FROM @QtyInvalid AS q
-                 ';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'     WHERE q.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+                      WHERE q.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
                   );
 
             /*
@@ -493,10 +500,10 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'     WHERE q.cust_po = LTRIM(RTR
             @SkippedOrders   = @SkippedOrders    OUTPUT,
             @FirstErrorCode  = @ProcessErrorCode OUTPUT,
             @ProcessDetail   = @ProcessDetail    OUTPUT,
-            @CreatedCoNums   = @CreatedCoNums    OUTPUT;
+            @CreatedCoNums   = @CreatedC';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'oNums    OUTPUT;
 
-        /* Business-rejected POs are not "al';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'ready processed" skips. */
+        /* Business-rejected POs are not "already processed" skips. */
         IF (@QtyRejectedOrders + @MappingRejectedOrders) > 0
            AND @SkippedOrders > 0
             SET @SkippedOrders =
@@ -569,8 +576,8 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'ready processed" skips. */
                   AND e.batch_id       = @BatchId
                   AND e.inbound_status = N''E''
                   AND e.validation_msg NOT LIKE N''Order memiliki line lain%''
-                  AND LEFT(LTRIM(COALESCE(e.validation_msg, N'''')),';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N' 9) <> N''[POS-203]''
+    ';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'              AND LEFT(LTRIM(COALESCE(e.validation_msg, N'''')), 9) <> N''[POS-203]''
             )
                 SET @HasRealError = 1;
 
@@ -623,9 +630,9 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N' 9) <> N''[POS-203]''
                                     + N'', item='' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.item))), N''''), N''<kosong>'')
                                     + N'']''
                                 WHEN e.validation_msg LIKE N''%Quantity tidak sesuai kelipatan%''
-                                THEN
-                         ';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'           N''Quantity tidak sesuai kelipatan U/M''
+';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'                                THEN
+                                    N''Quantity tidak sesuai kelipatan U/M''
                                     + N'' [coline='' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N''<kosong>'')
                                     + N'', item='' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.item))), N''''), N''<kosong>'')
                                     + N'', qty_ordered='' + COALESCE(CONVERT(NVARCHAR(60), e.qty_ordered), N''<kosong>'')
@@ -659,8 +666,8 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'           N''Quantity tidak ses
                                     N''Data payload tidak terdaftar atau tidak sesuai di Infor''
                                     + N'' [coline='' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N''<kosong>'')
                                     + N'', custnum='' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(40), e.cust_num))), N''''), N''<kosong>'')
-                                    + N'', item='' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.item))), N''''), N''<koso';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'ng>'')
+                                    + N'', item='' + COALESCE(NULL';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'IF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.item))), N''''), N''<kosong>'')
                                     + N'', u_m='' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(80), e.u_m))), N''''), N''<kosong>'')
                                     + N'', whse='' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(80), e.whse))), N''''), N''<kosong>'')
                                     + N'']''
@@ -726,9 +733,9 @@ SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'ng>'')
                   WHEN NULLIF(@CreatedCoNums, N'''') IS NULL THEN N''''
                   ELSE N''. CreatedCoNums: '' + @CreatedCoNums
               END
-            + CASE
-                  WHEN NULLIF(@ProcessDetail, N'''') IS ';
-SET @Patch28ReceiveSql = @Patch28ReceiveSql + N'NULL THEN N''''
+           ';
+SET @Patch28ReceiveSql = @Patch28ReceiveSql + N' + CASE
+                  WHEN NULLIF(@ProcessDetail, N'''') IS NULL THEN N''''
                   ELSE N''. ProcessDetail: '' + @ProcessDetail
               END,
             4000
@@ -768,12 +775,14 @@ END;';
 EXEC sys.sp_executesql @Patch28ReceiveSql;
 
 
-/* Post-check. */
-IF CHARINDEX
-   (
-       N'PATCH-28: ValidationStatus per-item / reject whole CustPO',
-       COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ReceivePosSalesJsonSp')), N'')
-   ) = 0
+/* Post-checks. */
+DECLARE @Patch28Definition NVARCHAR(MAX) =
+    COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ReceivePosSalesJsonSp')), N'');
+
+IF CHARINDEX(N'PATCH-28: ValidationStatus per-item / reject whole CustPO', @Patch28Definition) = 0
     THROW 510283, N'[PATCH-28] ValidationStatus gate belum terpasang pada Receive.', 1;
 
-PRINT N'[PATCH-28] SUCCESS - CustPO ditolak bila minimal satu item memiliki ValidationStatus=N.';
+IF CHARINDEX(N'@MappingRejectedOrders', @Patch28Definition) = 0
+    THROW 510284, N'[PATCH-28] Counter @MappingRejectedOrders belum terpasang pada Receive.', 1;
+
+PRINT N'[PATCH-28 REV.2] SUCCESS - CustPO ditolak bila minimal satu item memiliki ValidationStatus=N.';
