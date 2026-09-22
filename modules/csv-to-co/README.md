@@ -156,6 +156,38 @@ The tenant mapping view `ue_SMK069_pos_sales_inbound_mapping_view` will be updat
 
 Patch 27 does **not** yet replace the POS-108 quantity rule with the new Peak/Normal multiple rule. The mapping/conversion view must be audited first.
 
+## Customer Contracts UET
+
+Additional customer-item master fields are configured through Mongoose UET:
+
+```text
+Uf_SMK069_is_peak_season
+  type    = int
+  default = 0
+
+Uf_SMK069_pos_um
+  UDT     = UMType
+  type    = nvarchar(3)
+
+Class = SMK069_CL_itemcust
+Table = itemcust_mst
+Active = 1
+Extend All Records = 1
+```
+
+Customer Contracts UI exposes:
+
+```text
+POS U/M
+Is Peak Season?
+```
+
+This UET metadata must be included in production deployment packaging. Detailed documentation:
+
+```text
+docs/csv-to-co/44-uet-itemcust-peak-season-pos-um.md
+```
+
 ## ValidationStatus gate — Patch 28
 
 Source of truth:
@@ -409,6 +441,9 @@ docs/csv-to-co/36-auto-co-blanket-type-cust-po.md
 docs/csv-to-co/37-auto-co-create-blanket-lines.md
 docs/csv-to-co/38-syteline-co-number-traceability.md
 docs/csv-to-co/39-final-co-number-custpo-release-date.md
+docs/csv-to-co/42-peak-season-flag.md
+docs/csv-to-co/43-validation-status-custpo-rejection.md
+docs/csv-to-co/44-uet-itemcust-peak-season-pos-um.md
 ```
 
 ## Current UAT gate
