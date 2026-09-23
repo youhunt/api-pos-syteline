@@ -380,7 +380,7 @@ Replacement for withdrawn Patch 32. Uses only tenant-proven lineage columns:
 The earliest transferred inbound row identifies the original successful batch.
 A different source/batch for the same existing CustPO is rejected as `POS-204`.
 
-### Patch 34 — active latest
+### Patch 34
 
 File:
 
@@ -388,10 +388,17 @@ File:
 database/patches/csv-to-co/2026-09-23-smk069-34-preserve-pos204-on-reused-batch.sql
 ```
 
-Fixes contradictory `[POS-000] Request ditolak / Success=false` when an
-already-used BatchId is invoked with a different payload. The duplicate
-business error is now synthesized from the payload CustPO when the persisted
-batch has no matching inbound E row, so the response remains `POS-204`.
+Fixes contradictory `[POS-000] Request ditolak / Success=false` when an already-used BatchId is invoked with a different payload.
+
+### Patch 35 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-09-23-smk069-35-peak-season-before-mapping-view.sql
+```
+
+Fixes a proven ordering defect: `is_peak_season` used to be copied into inbound only after Core had already materialized the mapping view. Core now persists the payload Peak flag before `#MapView`, so Peak/Normal customer-item/U/M mapping is selected correctly.
 
 ### Patch 32 — WITHDRAWN / DO NOT APPLY
 
@@ -437,6 +444,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 31  2026-09-23-smk069-31-explicit-pos204-duplicate-custpo-message.sql
 33  2026-09-23-smk069-33-reject-cross-batch-duplicate-custpo-by-lineage.sql
 34  2026-09-23-smk069-34-preserve-pos204-on-reused-batch.sql
+35  2026-09-23-smk069-35-peak-season-before-mapping-view.sql
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -571,3 +579,14 @@ database/procedures/csv-to-co/SMK069ReceivePosSalesJsonCoreSp.sql
 This closes the previous source-parity gap where only references/documentation
 and wrapper patches were stored in the repository while the Core procedure
 itself existed only in the tenant.
+
+
+## Peak Season mapping order — proven 23 Sep 2026
+
+The business source remains:
+
+```text
+ue_SMK069_pos_sales_inbound_mapping_view
+```
+
+The Core procedure already transfers temp values from `#MapView`. The defect was not use of `inbound_mst` as business source; it was timing. Before Patch 35 the inbound Peak flag was still default `0` while the mapping view was evaluated. Patch 35 sets `inbound.is_peak_season` from `raw_json` before the mapping-view snapshot.
