@@ -1,3 +1,14 @@
+/* WITHDRAWN / DO NOT APPLY
+   ---------------------------------------------------------------------------
+   Patch 32 Rev.1/Rev.2 used timestamp-column assumptions on
+   dbo.ue_SMK069_pos_sales_inbound_mst that are not valid in the tenant
+   (CreateDate and RecordDate are both unavailable).
+
+   This file is retained only as history of the rejected approach.
+   Cross-batch duplicate CustPO behavior must be redesigned from the actual
+   tenant schema before a replacement patch is issued.
+   --------------------------------------------------------------------------- */
+
 /* =============================================================================
    SMK069 - Patch 32 Rev.2 - Reject existing CustPO under a new BatchId
    -----------------------------------------------------------------------------
