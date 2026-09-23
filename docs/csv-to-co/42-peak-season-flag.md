@@ -132,3 +132,64 @@ Detailed configuration and production migration checklist:
 ```text
 docs/csv-to-co/44-uet-itemcust-peak-season-pos-um.md
 ```
+
+## Patch 35 — Peak flag before mapping snapshot
+
+UAT on `DEV4-271` proved an ordering defect.
+
+Payload/inbound after the request showed:
+
+```text
+AC20002B / 340 PCS / is_peak_season=1
+AC20003B / 110 PCS / is_peak_season=1
+```
+
+The current canonical mapping view resolved:
+
+```text
+AC20042 / 17 TRY / 76000
+AC20043 / 11 TRY / 76000
+```
+
+but temp and CO contained the Normal mapping:
+
+```text
+AC20002 / 22.66667 TRY / 57000
+AC20003 / 13.75 TRY / 60800
+```
+
+The reason was execution order:
+
+```text
+Public Receive
+→ Core Receive
+   → #MapView materialized
+   → temp created
+→ Patch 27 set inbound.is_peak_season afterwards
+```
+
+So Core saw the inbound default `0` while the mapping view was being evaluated.
+
+Patch 35 moves the Peak assignment into Core before `#MapView`:
+
+```sql
+is_peak_season =
+    CASE
+        WHEN TRY_CONVERT(INT, JSON_VALUE(i.raw_json, '$.is_peak_season')) = 1
+        THEN 1
+        ELSE 0
+    END
+```
+
+New order:
+
+```text
+raw_json
+→ inbound fields + is_peak_season
+→ mapping view
+→ #MapView
+→ temp
+→ CO
+```
+
+The post-Core Patch 27 sync remains for defensive/temp synchronization.
