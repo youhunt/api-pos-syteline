@@ -1,4 +1,4 @@
-CREATE   PROCEDURE dbo.SMK069ReceivePosSalesJsonCoreSp
+CREATE OR ALTER PROCEDURE dbo.SMK069ReceivePosSalesJsonCoreSp
     @SourceSystem    NVARCHAR(50) = N'POS',
     @BatchId         NVARCHAR(100),
     @PayloadJson     NVARCHAR(MAX),
@@ -343,6 +343,19 @@ BEGIN
                 TRY_CONVERT(DECIMAL(18,8), n.ExchRateRaw),
                 CONVERT(DECIMAL(18,8), 1)
             ),
+            /*
+                Peak Season MUST be persisted before #MapView is materialized.
+                The canonical mapping view uses inbound.is_peak_season to select
+                the correct customer-item/U/M mapping.  Previously the public
+                wrapper populated this flag only AFTER Core returned, which
+                made Peak payloads map as Normal during Core processing.
+            */
+            is_peak_season =
+                CASE
+                    WHEN TRY_CONVERT(INT, JSON_VALUE(i.raw_json, '$.is_peak_season')) = 1
+                    THEN 1
+                    ELSE 0
+                END,
             updated_by = @ReceivedBy
         FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
         INNER JOIN #Normalized AS n
@@ -1211,4 +1224,3 @@ BEGIN
         RETURN 16;
     END CATCH;
 END;
-GO
