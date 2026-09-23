@@ -71,7 +71,7 @@ The current schema does not persist `batch_id` on the created CO or temp row. Pa
 
 ```text
 co_mst.RecordDate
-ue_SMK069_pos_sales_inbound_mst.CreateDate
+ue_SMK069_pos_sales_inbound_mst.RecordDate
 ```
 
 Interpretation:
@@ -80,7 +80,7 @@ Interpretation:
 current BatchId has inbound rows created before/equal to CO RecordDate
 → original batch / legitimate replay
 
-current BatchId has no prior inbound row, or its inbound CreateDate is after CO RecordDate
+current BatchId has no prior inbound row, or its inbound RecordDate is after CO RecordDate
 → cross-batch duplicate
 → POS-204
 ```
@@ -140,4 +140,22 @@ Expected:
 ```text
 normal validation and processing
 new PYYMMDD### CO when valid
+```
+
+
+## Patch 32 Rev.2
+
+Rev.1 used `ue_SMK069_pos_sales_inbound_mst.CreateDate`, but the tenant inbound table does not have that column. The tenant uses `RecordDate`.
+
+Rev.2 changes the provenance comparison to:
+
+```text
+co_mst.RecordDate
+ue_SMK069_pos_sales_inbound_mst.RecordDate
+```
+
+Expected Apply Database success:
+
+```text
+[PATCH-32 REV.2] SUCCESS - existing CustPO pada BatchId baru ditolak sebagai POS-204; duplicate gate memakai inbound.RecordDate.
 ```
