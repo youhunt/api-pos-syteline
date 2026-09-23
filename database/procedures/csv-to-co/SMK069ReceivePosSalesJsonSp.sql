@@ -94,8 +94,9 @@ BEGIN
         @HttpError         NVARCHAR(2048) = NULL,
         @CodePos                INT            = 0,
         @QtyRejectedOrders      INT            = 0,
-        @MappingRejectedOrders  INT            = 0,
-        @DuplicateRejectedOrders INT           = 0;
+        @MappingRejectedOrders   INT            = 0,
+        @DuplicateRejectedOrders INT            = 0,
+        @DuplicateNeedsSyntheticError BIT        = 0;
 
     /* =========================================================================
        1. Canonical Receive/Validate
@@ -242,6 +243,24 @@ BEGIN
                       FROM @DuplicateCustPo AS d
                       WHERE d.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
                   );
+
+            /* PATCH-34: duplicate gate has no matching inbound error row.
+               This happens when a BatchId is reused with a different payload:
+               Core replays the persisted batch, while Patch-33 evaluates the
+               CustPO in the NEW payload. Preserve POS-204 explicitly instead
+               of allowing error composition to fall back to ReceiveInfo POS-000. */
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+                INNER JOIN @DuplicateCustPo AS d
+                    ON d.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+                WHERE i.SiteRef        = @Site
+                  AND i.source_system  = @SourceSystem
+                  AND i.batch_id       = @BatchId
+                  AND i.inbound_status = N'E'
+            )
+                SET @DuplicateNeedsSyntheticError = 1;
 
             /*
                Never touch already-processed P rows. Remove only V rows that
@@ -761,6 +780,36 @@ BEGIN
                               )
                           )
                         ORDER BY e.row_no
+                        FOR XML PATH(N''), TYPE
+                    ).value(N'.', N'NVARCHAR(MAX)'),
+                    1,
+                    3,
+                    N''
+                );
+        END;
+
+        /* PATCH-34: synthesize POS-204 from payload CustPO when the current
+           BatchId was already persisted with a different payload/CustPO and
+           therefore there is no matching inbound E row to compose from. */
+        IF @DuplicateNeedsSyntheticError = 1
+           AND @DuplicateRejectedOrders > 0
+        BEGIN
+            SET @ErrorCode = N'POS-204';
+            SET @ErrorRowCount = @DuplicateRejectedOrders;
+
+            SELECT @ErrorList =
+                STUFF
+                (
+                    (
+                        SELECT
+                            N' | [cust_po=' + d.cust_po + N'] '
+                            + N'CustPO sudah terdaftar pada proses sebelumnya. '
+                            + N'BatchId ' + COALESCE(@BatchId, N'<kosong>')
+                            + N' sudah mempunyai data inbound yang berbeda atau bukan batch original CustPO ini. '
+                            + N'Jika transaksi baru gunakan CustPO dan BatchId baru; '
+                            + N'jika retry gunakan request/batch original tanpa mengubah payload.'
+                        FROM @DuplicateCustPo AS d
+                        ORDER BY d.cust_po
                         FOR XML PATH(N''), TYPE
                     ).value(N'.', N'NVARCHAR(MAX)'),
                     1,
