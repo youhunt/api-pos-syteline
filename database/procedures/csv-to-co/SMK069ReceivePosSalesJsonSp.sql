@@ -227,7 +227,7 @@ BEGIN
         (
             SELECT
                 LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po,
-                MIN(i.CreateDate) AS first_inbound_create_date
+                MIN(i.RecordDate) AS first_inbound_record_date
             FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
             INNER JOIN PayloadPo AS p
                 ON p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
@@ -242,7 +242,7 @@ BEGIN
         LEFT JOIN CurrentBatchInbound AS b
             ON b.cust_po = e.cust_po
         WHERE b.cust_po IS NULL
-           OR b.first_inbound_create_date > e.first_co_record_date;
+           OR b.first_inbound_record_date > e.first_co_record_date;
     END;
 
     IF EXISTS (SELECT 1 FROM @DuplicateCustPo)
