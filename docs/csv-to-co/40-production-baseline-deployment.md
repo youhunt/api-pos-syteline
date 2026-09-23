@@ -88,7 +88,13 @@ Canonical CSV runner already routes CSV-built JSON through `SMK069ReceivePosSale
 dbo.SMK069ReceivePosSalesJsonCoreSp
 ```
 
-As of this audit, the repository contains references to this Core procedure but **does not contain a canonical source file for `SMK069ReceivePosSalesJsonCoreSp` under the current canonical procedure directories**.
+The canonical DEV tenant definition is now stored at:
+
+```text
+database/procedures/csv-to-co/SMK069ReceivePosSalesJsonCoreSp.sql
+```
+
+It was captured directly from the DEV tenant definition supplied on 23 September 2026.
 
 Therefore the production package must **not** yet be described as "copy the four canonical SP files and production is complete".
 
