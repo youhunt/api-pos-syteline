@@ -1,5 +1,5 @@
 /* =============================================================================
-   SMK069 - Patch 32 - Reject existing CustPO submitted under a new BatchId
+   SMK069 - Patch 32 Rev.2 - Reject existing CustPO under a new BatchId
    -----------------------------------------------------------------------------
    Date    : 2026-09-23
    Scope   : CSV / POS inbound -> Blanket Customer Order ONLY
@@ -15,7 +15,7 @@
      BatchId = DEV4-299
      cust_po = DEV4-259
 
-   Old result after replay:
+   Old result:
      Success=true
      POS-000
      ProcessedOrders=0
@@ -32,8 +32,12 @@
      rejected as POS-204.
    - other valid CustPOs in the same multi-order batch may continue.
 
-   The canonical procedure uses existing CO RecordDate and current-batch inbound
-   CreateDate to distinguish original-batch replay from a cross-batch duplicate.
+   REV.2 FIX
+   ---------
+   Rev.1 referenced inbound.CreateDate, but the actual tenant inbound table uses
+   RecordDate. Rev.2 uses:
+     co_mst.RecordDate
+     ue_SMK069_pos_sales_inbound_mst.RecordDate
 
    Apply Database compatible: one executable batch, NO GO.
    ============================================================================= */
@@ -50,7 +54,10 @@ IF OBJECT_ID(N'dbo.co_mst', N'U') IS NULL
 IF OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mst', N'U') IS NULL
     THROW 510322, N'[PATCH-32] inbound table tidak ditemukan.', 1;
 
-/* Redeploy current canonical Receive with cross-batch duplicate gate. */
+IF COL_LENGTH(N'dbo.ue_SMK069_pos_sales_inbound_mst', N'RecordDate') IS NULL
+    THROW 510325, N'[PATCH-32] inbound.RecordDate tidak ditemukan.', 1;
+
+/* Redeploy current canonical Receive with corrected cross-batch duplicate gate. */
 DECLARE @Patch32ReceiveSql NVARCHAR(MAX) = N'';
 SET @Patch32ReceiveSql = @Patch32ReceiveSql + N'/* =============================================================================
    Canonical source: dbo.SMK069ReceivePosSalesJsonSp
@@ -284,7 +291,7 @@ SET @Patch32ReceiveSql = @Patch32ReceiveSql + N' INNER JOIN PayloadPo AS p
         (
             SELECT
                 LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po,
-                MIN(i.CreateDate) AS first_inbound_create_date
+                MIN(i.RecordDate) AS first_inbound_record_date
             FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
             INNER JOIN PayloadPo AS p
                 ON p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
@@ -299,7 +306,7 @@ SET @Patch32ReceiveSql = @Patch32ReceiveSql + N' INNER JOIN PayloadPo AS p
         LEFT JOIN CurrentBatchInbound AS b
             ON b.cust_po = e.cust_po
         WHERE b.cust_po IS NULL
-           OR b.first_inbound_create_date > e.first_co_record_date;
+           OR b.first_inbound_record_date > e.first_co_record_date;
     END;
 
     IF EXISTS (SELECT 1 FROM @DuplicateCustPo)
@@ -950,4 +957,7 @@ IF CHARINDEX(N'PATCH-32: enforce CustPO idempotency across a NEW BatchId', @Patc
 IF CHARINDEX(N'@DuplicateRejectedOrders', @Patch32Definition) = 0
     THROW 510324, N'[PATCH-32] Duplicate rejected-order counter belum terpasang.', 1;
 
-PRINT N'[PATCH-32] SUCCESS - existing CustPO pada BatchId baru ditolak sebagai POS-204; original-batch replay tetap idempotent.';
+IF CHARINDEX(N'MIN(i.RecordDate) AS first_inbound_record_date', @Patch32Definition) = 0
+    THROW 510326, N'[PATCH-32] Duplicate gate belum memakai inbound.RecordDate.', 1;
+
+PRINT N'[PATCH-32 REV.2] SUCCESS - existing CustPO pada BatchId baru ditolak sebagai POS-204; duplicate gate memakai inbound.RecordDate.';
