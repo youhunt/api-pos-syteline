@@ -1,5 +1,19 @@
 # Cross-batch duplicate CustPO rejection
 
+## Status — WITHDRAWN
+
+Patch 32 is **not active and must not be applied**.
+
+The first implementation tried to distinguish original-batch replay from a new
+BatchId by comparing timestamp columns on
+`ue_SMK069_pos_sales_inbound_mst`. Tenant execution proved that neither
+`CreateDate` nor `RecordDate` is available on that table.
+
+The canonical Receive procedure has been restored to the pre-Patch-32 logic.
+A replacement design must be based on the actual tenant schema, not inferred
+audit columns.
+
+
 **Date:** 23 September 2026  
 **Scope:** CSV / POS inbound → Blanket Customer Order
 
