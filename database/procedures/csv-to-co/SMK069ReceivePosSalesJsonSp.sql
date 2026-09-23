@@ -18,6 +18,8 @@
      surfaced, so partial validation does not strand valid rows in temp.
    - Mapping ValidationStatus and quantity-multiple validation run after Core receive/validate and BEFORE CO
      processing. A fractional converted base quantity rejects the whole cust_po.
+   - Original successful source_system+batch_id is identified from earliest transferred inbound_id.
+   - Cross-batch duplicate existing CustPO is rejected as POS-204.
    - ValidationStatus = N rejects the whole cust_po (POS-109).
    - Root quantity error code: POS-108.
    - Sibling lines of the same cust_po: POS-203 atomic-order rejection.
@@ -92,7 +94,8 @@ BEGIN
         @HttpError         NVARCHAR(2048) = NULL,
         @CodePos                INT            = 0,
         @QtyRejectedOrders      INT            = 0,
-        @MappingRejectedOrders  INT            = 0;
+        @MappingRejectedOrders  INT            = 0,
+        @DuplicateRejectedOrders INT           = 0;
 
     /* =========================================================================
        1. Canonical Receive/Validate
@@ -165,6 +168,128 @@ BEGIN
             ON p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po)))
            AND p.co_line = t.co_line
         WHERE t.SiteRef = @Site;
+    END;
+
+    /* =========================================================================
+       PATCH-33: cross-batch duplicate CustPO using original inbound lineage
+
+       Tenant-proven inbound columns:
+         inbound_id, source_system, batch_id, cust_po, inbound_status
+
+       Rule:
+         - cust_po is the business idempotency key.
+         - For an already-created CO, the earliest transferred inbound row
+           (inbound_status = 'T') identifies the original source_system+batch_id.
+         - Replaying that same original source+batch is idempotent and allowed.
+         - Sending the same existing cust_po from a different source/batch is
+           rejected as POS-204 before ProcessBatch can turn it into POS-000 skip.
+       ========================================================================= */
+    IF ISJSON(@PayloadJson) = 1
+    BEGIN
+        DECLARE @DuplicateCustPo TABLE
+        (
+            cust_po NVARCHAR(100) NOT NULL PRIMARY KEY
+        );
+
+        ;WITH PayloadPo AS
+        (
+            SELECT DISTINCT
+                LTRIM(RTRIM(CONVERT(NVARCHAR(100), p.cust_po))) AS cust_po
+            FROM OPENJSON(@PayloadJson)
+            WITH
+            (
+                cust_po NVARCHAR(100) '$.cust_po'
+            ) AS p
+            WHERE NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), p.cust_po))), N'') IS NOT NULL
+        )
+        INSERT INTO @DuplicateCustPo (cust_po)
+        SELECT p.cust_po
+        FROM PayloadPo AS p
+        INNER JOIN dbo.co_mst AS c
+            ON c.site_ref = @Site
+           AND LTRIM(RTRIM(CONVERT(NVARCHAR(100), c.cust_po))) = p.cust_po
+        CROSS APPLY
+        (
+            SELECT TOP (1)
+                i0.source_system AS original_source_system,
+                i0.batch_id      AS original_batch_id
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i0
+            WHERE i0.SiteRef = @Site
+              AND LTRIM(RTRIM(CONVERT(NVARCHAR(100), i0.cust_po))) = p.cust_po
+              AND i0.inbound_status = N'T'
+            ORDER BY i0.inbound_id
+        ) AS orig
+        WHERE UPPER(LTRIM(RTRIM(orig.original_source_system))) <> @SourceSystem
+           OR LTRIM(RTRIM(orig.original_batch_id)) <> @BatchId
+        GROUP BY p.cust_po;
+
+        IF EXISTS (SELECT 1 FROM @DuplicateCustPo)
+        BEGIN
+            SELECT @DuplicateRejectedOrders = COUNT(*)
+            FROM @DuplicateCustPo;
+
+            UPDATE i
+            SET
+                i.inbound_status = N'E',
+                i.validation_msg = N'[POS-204] CustPO sudah terdaftar pada proses sebelumnya. BatchId baru tidak membuat CustPO menjadi transaksi baru.'
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef       = @Site
+              AND i.source_system = @SourceSystem
+              AND i.batch_id      = @BatchId
+              AND EXISTS
+                  (
+                      SELECT 1
+                      FROM @DuplicateCustPo AS d
+                      WHERE d.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+                  );
+
+            /*
+               Never touch already-processed P rows. Remove only V rows that
+               Core may have exposed for a duplicate request, so ProcessBatch
+               cannot classify the duplicate as a clean skip/success.
+            */
+            DELETE t
+            FROM dbo.ue_SMK069_temp_sales_mst AS t
+            WHERE t.SiteRef = @Site
+              AND t.process_status = N'V'
+              AND EXISTS
+                  (
+                      SELECT 1
+                      FROM @DuplicateCustPo AS d
+                      WHERE d.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po)))
+                  );
+
+            SELECT @TransferredRows = COUNT(*)
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef       = @Site
+              AND i.source_system = @SourceSystem
+              AND i.batch_id      = @BatchId
+              AND i.inbound_status = N'T';
+
+            SELECT @ValidOrders = COUNT(*)
+            FROM
+            (
+                SELECT DISTINCT LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po
+                FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+                WHERE i.SiteRef       = @Site
+                  AND i.source_system = @SourceSystem
+                  AND i.batch_id      = @BatchId
+                  AND i.inbound_status = N'T'
+            ) AS v;
+
+            SELECT @ErrorOrders = COUNT(*)
+            FROM
+            (
+                SELECT DISTINCT LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po
+                FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+                WHERE i.SiteRef       = @Site
+                  AND i.source_system = @SourceSystem
+                  AND i.batch_id      = @BatchId
+                  AND i.inbound_status = N'E'
+            ) AS e;
+
+            SET @ReturnCode = 16;
+        END;
     END;
 
     /* =========================================================================
@@ -450,12 +575,12 @@ BEGIN
             @CreatedCoNums   = @CreatedCoNums    OUTPUT;
 
         /* Business-rejected POs are not "already processed" skips. */
-        IF (@QtyRejectedOrders + @MappingRejectedOrders) > 0
+        IF (@QtyRejectedOrders + @MappingRejectedOrders + @DuplicateRejectedOrders) > 0
            AND @SkippedOrders > 0
             SET @SkippedOrders =
                 CASE
-                    WHEN @SkippedOrders >= (@QtyRejectedOrders + @MappingRejectedOrders)
-                    THEN @SkippedOrders - (@QtyRejectedOrders + @MappingRejectedOrders)
+                    WHEN @SkippedOrders >= (@QtyRejectedOrders + @MappingRejectedOrders + @DuplicateRejectedOrders)
+                    THEN @SkippedOrders - (@QtyRejectedOrders + @MappingRejectedOrders + @DuplicateRejectedOrders)
                     ELSE 0
                 END;
     END
