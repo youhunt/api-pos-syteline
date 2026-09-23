@@ -130,3 +130,89 @@ Default SQL : 0
 ```
 
 After Patch 27, resynchronize the IDO `ue_SMK069TempSales` so the new property is available to the form. The checkbox is display-only; operators must not change the flag from Error Processing.
+
+
+## CustSeq / Name derived IDO properties — 23 September 2026
+
+Tenant SQL verification proved the correct relationship after Auto CO processing:
+
+```text
+temp.co_num     = P260923002 / P260923003
+mapping.co_num  = R260904065
+```
+
+Therefore `co_num` must **not** be part of the IDO relationship between
+`ue_SMK069_temp_sales_mst` and
+`ue_SMK069_pos_sales_inbound_mapping_view`.
+
+Use:
+
+```text
+Primary alias:
+  ts = ue_SMK069_temp_sales_mst
+
+Secondary alias:
+  posin = ue_SMK069_pos_sales_inbound_mapping_view
+  LEFT OUTER JOIN
+    posin.SiteRef  = ts.SiteRef
+    posin.cust_num = ts.cust_num
+    posin.cust_po  = ts.cust_po
+    posin.co_line  = ts.co_line
+
+Secondary alias:
+  custaddr = custaddr_mst
+  LEFT OUTER JOIN
+    custaddr.cust_num = ts.cust_num
+    custaddr.cust_seq = posin.cust_seq
+```
+
+Do not use:
+
+```text
+posin.co_num = ts.co_num
+```
+
+because `ts.co_num` becomes the actual SyteLine CO after processing while the
+mapping view can still carry the technical/source R-number.
+
+SQL proof:
+
+```text
+DEV4-271:
+  temp CO       = P260923002
+  mapping CO    = R260904065
+  cust_seq      = 164
+  customer name = DEV4. DEV API POS Integration Testing
+  is_peak_season= 1
+
+DEV4-272:
+  temp CO       = P260923003
+  mapping CO    = R260904065
+  cust_seq      = 164
+  customer name = DEV4. DEV API POS Integration Testing
+  is_peak_season= 0
+```
+
+The secondary-table columns must also be explicitly exposed as IDO properties.
+Recommended property names:
+
+```text
+PosCustSeq
+  source table alias = posin
+  source column      = cust_seq
+
+CustomerName
+  source table alias = custaddr
+  source column      = name
+```
+
+Then bind the grid:
+
+```text
+CustSeq -> object.PosCustSeq
+Name    -> object.CustomerName
+Peak    -> object.is_peak_season
+```
+
+Resynchronizing the primary table alone does not automatically create these
+secondary-table properties.
