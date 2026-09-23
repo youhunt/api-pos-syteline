@@ -365,7 +365,7 @@ database/patches/csv-to-co/2026-09-23-smk069-31-explicit-pos204-duplicate-custpo
 
 Clarifies POS-204 so users see that the CustPO was already registered/processed and that changing only BatchId does not create a new business transaction.
 
-### Patch 32 — active latest
+### Patch 32 Rev.2 — active latest
 
 File:
 
@@ -373,7 +373,7 @@ File:
 database/patches/csv-to-co/2026-09-23-smk069-32-reject-cross-batch-duplicate-custpo.sql
 ```
 
-Fixes a proven UAT defect where an existing CustPO submitted under a different BatchId could return `POS-000 / Success=true / SkippedOrders=1`. Patch 32 keeps the no-duplicate-data behavior but returns `POS-204` for cross-batch duplicates, while allowing the original successful batch to replay idempotently.
+Fixes a proven UAT defect where an existing CustPO submitted under a different BatchId could return `POS-000 / Success=true / SkippedOrders=1`. Patch 32 keeps the no-duplicate-data behavior but returns `POS-204` for cross-batch duplicates, while allowing the original successful batch to replay idempotently. Rev.2 fixes the tenant timestamp column from nonexistent inbound `CreateDate` to `RecordDate`.
 
 ### Patch 25
 
