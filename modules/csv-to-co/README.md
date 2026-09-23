@@ -188,6 +188,7 @@ This UET metadata must be included in production deployment packaging. Detailed 
 docs/csv-to-co/44-uet-itemcust-peak-season-pos-um.md
 docs/csv-to-co/45-peak-season-aware-quantity-validation.md
 docs/csv-to-co/46-pos204-duplicate-custpo-message.md
+docs/csv-to-co/47-cross-batch-duplicate-custpo-rejection.md
 docs/csv-to-co/45-peak-season-aware-quantity-validation.md
 ```
 
@@ -354,7 +355,7 @@ database/patches/csv-to-co/2026-09-22-smk069-29-peak-season-aware-qty-validation
 
 Makes quantity validation use the `itemcust` row whose `Uf_SMK069_is_peak_season` matches inbound `is_peak_season`.
 
-### Patch 31 — active latest
+### Patch 31
 
 File:
 
@@ -363,6 +364,16 @@ database/patches/csv-to-co/2026-09-23-smk069-31-explicit-pos204-duplicate-custpo
 ```
 
 Clarifies POS-204 so users see that the CustPO was already registered/processed and that changing only BatchId does not create a new business transaction.
+
+### Patch 32 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-09-23-smk069-32-reject-cross-batch-duplicate-custpo.sql
+```
+
+Fixes a proven UAT defect where an existing CustPO submitted under a different BatchId could return `POS-000 / Success=true / SkippedOrders=1`. Patch 32 keeps the no-duplicate-data behavior but returns `POS-204` for cross-batch duplicates, while allowing the original successful batch to replay idempotently.
 
 ### Patch 25
 
@@ -396,6 +407,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 29  2026-09-22-smk069-29-peak-season-aware-qty-validation.sql
 30  2026-09-22-smk069-30-clarify-pos204-existing-custpo.sql
 31  2026-09-23-smk069-31-explicit-pos204-duplicate-custpo-message.sql
+32  2026-09-23-smk069-32-reject-cross-batch-duplicate-custpo.sql
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -451,7 +463,7 @@ Peak Season        = object.is_peak_season (read-only checkbox)
 
 ## POS-204 — existing/conflicting CustPO
 
-`POS-204` means `ORDER_ALREADY_EXISTS`: the same business `cust_po` has already been registered/processed or conflicts with prior data. A new `BatchId` does not make the same `cust_po` a new business order because `cust_po` is the idempotency key. Patch 31 makes this explicit in the public response.
+`POS-204` means `ORDER_ALREADY_EXISTS`: the same business `cust_po` has already been registered/processed or conflicts with prior data. A new `BatchId` does not make the same `cust_po` a new business order because `cust_po` is the idempotency key. Patch 31 clarifies the text; Patch 32 enforces this across new/different BatchIds even when the batch processor would otherwise report the existing order as skipped.
 
 Patch 30 does not change this business rule; it only fixes the public message so POS-204 no longer falls through to the misleading generic text `Data payload tidak terdaftar atau tidak sesuai di Infor`.
 
@@ -510,3 +522,4 @@ After Patch 24 **dan Patch 25**:
 10. Retry same successful BatchId must not create duplicate CO.
 11. Quantity-invalid test must still return `[POS-108]` with no CO.
 12. ValidationStatus mixed-item test: any `N` must reject the whole CustPO with `[POS-109]` and no CO.
+13. Cross-batch duplicate test: existing CustPO under a different BatchId must return `[POS-204]`, not `POS-000/SkippedOrders=1`.
