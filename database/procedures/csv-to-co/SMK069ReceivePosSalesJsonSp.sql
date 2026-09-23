@@ -92,7 +92,8 @@ BEGIN
         @HttpError         NVARCHAR(2048) = NULL,
         @CodePos                INT            = 0,
         @QtyRejectedOrders      INT            = 0,
-        @MappingRejectedOrders  INT            = 0;
+        @MappingRejectedOrders  INT            = 0,
+        @DuplicateRejectedOrders INT           = 0;
 
     /* =========================================================================
        1. Canonical Receive/Validate
@@ -165,6 +166,156 @@ BEGIN
             ON p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po)))
            AND p.co_line = t.co_line
         WHERE t.SiteRef = @Site;
+    END;
+
+    /* =========================================================================
+       PATCH-32: enforce CustPO idempotency across a NEW BatchId
+
+       Problem proven in UAT:
+         - an already processed CustPO could be submitted under a different
+           BatchId;
+         - Core/replay could report the rows as transferable;
+         - ProcessBatch then skipped the order because temp was already P;
+         - public response became POS-000 / Success=true even though no new CO
+           was created.
+
+       Rule:
+         - cust_po is the business idempotency key;
+         - same successful original batch may replay idempotently;
+         - a different/new batch must not turn an already-created CustPO into a
+           clean POS-000 success.
+
+       Provenance heuristic:
+         - if the payload CustPO already has a CO and this BatchId has no inbound
+           rows yet, it is a cross-batch duplicate;
+         - if this BatchId already has inbound rows created AFTER the existing
+           CO RecordDate, it is also a cross-batch duplicate (covers UAT rows
+           created by the old behavior);
+         - inbound rows created before/equal to the CO are treated as the
+           original batch and may replay idempotently.
+       ========================================================================= */
+    DECLARE @DuplicateCustPo TABLE
+    (
+        cust_po NVARCHAR(100) NOT NULL PRIMARY KEY
+    );
+
+    IF ISJSON(@PayloadJson) = 1
+    BEGIN
+        ;WITH PayloadPo AS
+        (
+            SELECT DISTINCT
+                LTRIM(RTRIM(CONVERT(NVARCHAR(100), p.cust_po))) AS cust_po
+            FROM OPENJSON(@PayloadJson)
+            WITH
+            (
+                cust_po NVARCHAR(100) '$.cust_po'
+            ) AS p
+            WHERE NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), p.cust_po))), N'') IS NOT NULL
+        ),
+        ExistingCo AS
+        (
+            SELECT
+                c.cust_po,
+                MIN(c.RecordDate) AS first_co_record_date
+            FROM dbo.co_mst AS c
+            INNER JOIN PayloadPo AS p
+                ON p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), c.cust_po)))
+            WHERE c.site_ref = @Site
+            GROUP BY c.cust_po
+        ),
+        CurrentBatchInbound AS
+        (
+            SELECT
+                LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po,
+                MIN(i.CreateDate) AS first_inbound_create_date
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            INNER JOIN PayloadPo AS p
+                ON p.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+            WHERE i.SiteRef       = @Site
+              AND i.source_system = @SourceSystem
+              AND i.batch_id      = @BatchId
+            GROUP BY LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+        )
+        INSERT INTO @DuplicateCustPo (cust_po)
+        SELECT e.cust_po
+        FROM ExistingCo AS e
+        LEFT JOIN CurrentBatchInbound AS b
+            ON b.cust_po = e.cust_po
+        WHERE b.cust_po IS NULL
+           OR b.first_inbound_create_date > e.first_co_record_date;
+    END;
+
+    IF EXISTS (SELECT 1 FROM @DuplicateCustPo)
+    BEGIN
+        SELECT @DuplicateRejectedOrders = COUNT(*)
+        FROM @DuplicateCustPo;
+
+        /*
+           Standardize the current batch rows as POS-204. Core may already have
+           created/replayed these rows; either way they must not remain a clean
+           transferable success for a cross-batch duplicate CustPO.
+        */
+        UPDATE i
+        SET
+            i.inbound_status = N'E',
+            i.validation_msg = N'[POS-204] CustPO sudah terdaftar pada proses sebelumnya. BatchId baru tidak membuat CustPO menjadi transaksi baru.'
+        FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+        WHERE i.SiteRef       = @Site
+          AND i.source_system = @SourceSystem
+          AND i.batch_id      = @BatchId
+          AND EXISTS
+              (
+                  SELECT 1
+                  FROM @DuplicateCustPo AS d
+                  WHERE d.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+              );
+
+        /*
+           Core can publish V rows before wrapper-level business gates. Remove
+           only V rows for duplicate CustPOs so ProcessBatch cannot report them
+           as newly processable work.
+        */
+        DELETE t
+        FROM dbo.ue_SMK069_temp_sales_mst AS t
+        WHERE t.SiteRef = @Site
+          AND t.process_status = N'V'
+          AND EXISTS
+              (
+                  SELECT 1
+                  FROM @DuplicateCustPo AS d
+                  WHERE d.cust_po = LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po)))
+              );
+
+        SELECT @TransferredRows = COUNT(*)
+        FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+        WHERE i.SiteRef       = @Site
+          AND i.source_system = @SourceSystem
+          AND i.batch_id      = @BatchId
+          AND i.inbound_status = N'T';
+
+        SELECT @ValidOrders = COUNT(*)
+        FROM
+        (
+            SELECT DISTINCT LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef       = @Site
+              AND i.source_system = @SourceSystem
+              AND i.batch_id      = @BatchId
+              AND i.inbound_status = N'T'
+        ) AS v;
+
+        SELECT @ErrorOrders = COUNT(*)
+        FROM
+        (
+            SELECT DISTINCT LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po))) AS cust_po
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef       = @Site
+              AND i.source_system = @SourceSystem
+              AND i.batch_id      = @BatchId
+              AND i.inbound_status = N'E'
+        ) AS e;
+
+        SET @ReturnCode = 16;
     END;
 
     /* =========================================================================
@@ -450,12 +601,12 @@ BEGIN
             @CreatedCoNums   = @CreatedCoNums    OUTPUT;
 
         /* Business-rejected POs are not "already processed" skips. */
-        IF (@QtyRejectedOrders + @MappingRejectedOrders) > 0
+        IF (@QtyRejectedOrders + @MappingRejectedOrders + @DuplicateRejectedOrders) > 0
            AND @SkippedOrders > 0
             SET @SkippedOrders =
                 CASE
-                    WHEN @SkippedOrders >= (@QtyRejectedOrders + @MappingRejectedOrders)
-                    THEN @SkippedOrders - (@QtyRejectedOrders + @MappingRejectedOrders)
+                    WHEN @SkippedOrders >= (@QtyRejectedOrders + @MappingRejectedOrders + @DuplicateRejectedOrders)
+                    THEN @SkippedOrders - (@QtyRejectedOrders + @MappingRejectedOrders + @DuplicateRejectedOrders)
                     ELSE 0
                 END;
     END
