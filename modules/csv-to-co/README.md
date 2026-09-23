@@ -509,6 +509,7 @@ Diagnostic order: query inbound rows for the `cust_po`, then `co_mst.cust_po`, t
 ## Canonical source
 
 ```text
+database/procedures/csv-to-co/SMK069ReceivePosSalesJsonCoreSp.sql
 database/procedures/csv-to-co/SMK069ReceivePosSalesJsonSp.sql
 database/procedures/csv-to-co/SMK069RunCsvTestBatchSp.sql
 database/procedures/csv-to-co/SMK069ProcessBatchCustomerOrdersSp.sql
@@ -552,3 +553,21 @@ After Patch 24 **dan Patch 25**:
 11. Quantity-invalid test must still return `[POS-108]` with no CO.
 12. ValidationStatus mixed-item test: any `N` must reject the whole CustPO with `[POS-109]` and no CO.
 13. Cross-batch duplicate test: existing CustPO under a different source/batch must return `[POS-204]`; Patch 33 uses earliest transferred `inbound_id` lineage. Patch 34 also prevents `[POS-000] Request ditolak` when a used BatchId is invoked with a different payload. Patch 32 remains withdrawn.
+
+## Receive Core canonical source — captured 23 Sep 2026
+
+The DEV tenant definition of:
+
+```text
+dbo.SMK069ReceivePosSalesJsonCoreSp
+```
+
+is now stored canonically at:
+
+```text
+database/procedures/csv-to-co/SMK069ReceivePosSalesJsonCoreSp.sql
+```
+
+This closes the previous source-parity gap where only references/documentation
+and wrapper patches were stored in the repository while the Core procedure
+itself existed only in the tenant.
