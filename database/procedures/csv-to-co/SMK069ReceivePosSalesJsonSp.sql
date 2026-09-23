@@ -576,10 +576,10 @@ BEGIN
                                     + N']'
                                 WHEN LEFT(LTRIM(COALESCE(e.validation_msg, N'')), 9) = N'[POS-204]'
                                 THEN
-                                    N'Order/cust_po sudah pernah diproses atau konflik dengan data sebelumnya'
-                                    + N' [coline=' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N'<kosong>')
-                                    + N', cust_po=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.cust_po))), N''), N'<kosong>')
-                                    + N']'
+                                    N'CustPO sudah terdaftar pada proses sebelumnya. BatchId baru tidak membuat CustPO menjadi transaksi baru'
+                                    + N' [cust_po=' + COALESCE(NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.cust_po))), N''), N'<kosong>')
+                                    + N', coline=' + COALESCE(CONVERT(NVARCHAR(20), e.co_line), N'<kosong>')
+                                    + N']. Jika transaksi baru gunakan cust_po baru; jika retry gunakan request/batch original tanpa mengubah data.'
                                 WHEN e.validation_msg LIKE N'%Quantity tidak sesuai kelipatan%'
                                 THEN
                                     N'Quantity tidak sesuai kelipatan U/M'
