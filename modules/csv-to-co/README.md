@@ -190,6 +190,7 @@ docs/csv-to-co/45-peak-season-aware-quantity-validation.md
 docs/csv-to-co/46-pos204-duplicate-custpo-message.md
 docs/csv-to-co/47-cross-batch-duplicate-custpo-rejection.md
 docs/csv-to-co/48-lineage-based-cross-batch-duplicate-custpo.md
+docs/csv-to-co/49-pos204-reused-batch-payload-mismatch.md
 docs/csv-to-co/45-peak-season-aware-quantity-validation.md
 ```
 
@@ -366,7 +367,7 @@ database/patches/csv-to-co/2026-09-23-smk069-31-explicit-pos204-duplicate-custpo
 
 Clarifies POS-204 so users see that the CustPO was already registered/processed and that changing only BatchId does not create a new business transaction.
 
-### Patch 33 — active latest
+### Patch 33
 
 File:
 
@@ -378,6 +379,19 @@ Replacement for withdrawn Patch 32. Uses only tenant-proven lineage columns:
 `inbound_id + source_system + batch_id + cust_po + inbound_status`.
 The earliest transferred inbound row identifies the original successful batch.
 A different source/batch for the same existing CustPO is rejected as `POS-204`.
+
+### Patch 34 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-09-23-smk069-34-preserve-pos204-on-reused-batch.sql
+```
+
+Fixes contradictory `[POS-000] Request ditolak / Success=false` when an
+already-used BatchId is invoked with a different payload. The duplicate
+business error is now synthesized from the payload CustPO when the persisted
+batch has no matching inbound E row, so the response remains `POS-204`.
 
 ### Patch 32 — WITHDRAWN / DO NOT APPLY
 
@@ -422,6 +436,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 30  2026-09-22-smk069-30-clarify-pos204-existing-custpo.sql
 31  2026-09-23-smk069-31-explicit-pos204-duplicate-custpo-message.sql
 33  2026-09-23-smk069-33-reject-cross-batch-duplicate-custpo-by-lineage.sql
+34  2026-09-23-smk069-34-preserve-pos204-on-reused-batch.sql
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -477,7 +492,7 @@ Peak Season        = object.is_peak_season (read-only checkbox)
 
 ## POS-204 — existing/conflicting CustPO
 
-`POS-204` means `ORDER_ALREADY_EXISTS`: the same business `cust_po` has already been registered/processed or conflicts with prior data. A new `BatchId` does not make the same `cust_po` a new business order because `cust_po` is the idempotency key. Patch 31 clarifies the text; Patch 32 enforces this across new/different BatchIds even when the batch processor would otherwise report the existing order as skipped.
+`POS-204` means `ORDER_ALREADY_EXISTS`: the same business `cust_po` has already been registered/processed or conflicts with prior data. A new `BatchId` does not make the same `cust_po` a new business order because `cust_po` is the idempotency key. Patch 31 clarifies the text; Patch 33 enforces this across new/different BatchIds using inbound lineage; Patch 34 preserves POS-204 when a previously-used BatchId is called with a different payload.
 
 Patch 30 does not change this business rule; it only fixes the public message so POS-204 no longer falls through to the misleading generic text `Data payload tidak terdaftar atau tidak sesuai di Infor`.
 
@@ -536,4 +551,4 @@ After Patch 24 **dan Patch 25**:
 10. Retry same successful BatchId must not create duplicate CO.
 11. Quantity-invalid test must still return `[POS-108]` with no CO.
 12. ValidationStatus mixed-item test: any `N` must reject the whole CustPO with `[POS-109]` and no CO.
-13. Cross-batch duplicate test: existing CustPO under a different source/batch must return `[POS-204]`; Patch 33 uses earliest transferred `inbound_id` lineage. Patch 32 remains withdrawn.
+13. Cross-batch duplicate test: existing CustPO under a different source/batch must return `[POS-204]`; Patch 33 uses earliest transferred `inbound_id` lineage. Patch 34 also prevents `[POS-000] Request ditolak` when a used BatchId is invoked with a different payload. Patch 32 remains withdrawn.
