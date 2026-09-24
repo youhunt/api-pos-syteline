@@ -1,0 +1,416 @@
+# SMK069 PROD — Mongoose / UET / IDO / Form Migration Checklist
+
+**Date:** 24 September 2026  
+**Scope:** CSV / POS inbound → Blanket Customer Order only
+
+The SQL runtime package is not a replacement for Mongoose metadata migration.
+
+Prefer exporting/importing the **verified working DEV metadata** rather than rebuilding objects manually in PROD.
+
+## 1. UET — Customer Contracts / itemcust_mst
+
+Required user fields:
+
+```text
+Uf_SMK069_is_peak_season
+  Data Type     : int
+  Initial Value : 0
+
+Uf_SMK069_pos_um
+  User Data Type: UMType
+  Physical      : nvarchar(3)
+```
+
+Required UET class:
+
+```text
+Class Name : SMK069_CL_itemcust
+Fields:
+  Uf_SMK069_is_peak_season
+  Uf_SMK069_pos_um
+```
+
+Required table extension:
+
+```text
+Table             : itemcust_mst
+Class             : SMK069_CL_itemcust
+Active            : 1
+Extend All Records: 1
+```
+
+Customer Contracts form:
+
+```text
+POS U/M
+[ ] Is Peak Season?
+```
+
+After migration, confirm values can be saved and are visible physically on `itemcust_mst`.
+
+## 2. POS inbound table
+
+Physical table:
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mst
+```
+
+Critical current fields include:
+
+```text
+inbound_id
+source_system
+batch_id
+row_no
+raw_json
+SiteRef
+cust_num
+order_date
+co_num
+co_line
+item
+qty_ordered
+unit_price
+whse
+due_date
+u_m
+terms_code
+tax_code1
+exch_rate
+inbound_status
+validation_msg
+received_date
+validated_date
+transferred_date
+cust_po
+is_peak_season
+```
+
+`is_peak_season`:
+
+```text
+INT NOT NULL
+default 0
+```
+
+## 3. Temp staging / Error Processing IDO
+
+Physical table:
+
+```text
+dbo.ue_SMK069_temp_sales_mst
+```
+
+Entity IDO:
+
+```text
+ue_SMK069TempSales
+```
+
+Critical current fields:
+
+```text
+SiteRef
+cust_num
+order_date
+terms_code
+co_num
+cust_po
+co_line
+unit_price
+tax_code1
+exch_rate
+whse
+item
+qty_ordered
+due_date
+u_m
+is_peak_season
+process_status
+validation_msg
+error_msg
+retry_count
+processed_date
+processed_by
+created_co_num
+```
+
+After metadata import / Impact Schema:
+
+- resynchronize `ue_SMK069TempSales`;
+- confirm `cust_po`, `created_co_num`, and `is_peak_season` are exposed;
+- inspect generated `INSTEAD OF INSERT` trigger;
+- generated trigger should be aligned with the physical table metadata.
+
+DEV evidence showed an older generated trigger that did not list `is_peak_season`. Runtime still works because the public wrapper synchronizes Peak after Core, but **PROD metadata should be regenerated/aligned**, not knowingly migrated stale.
+
+## 4. SMK API SALES ERROR PROCESSING form
+
+Form:
+
+```text
+ue_SMK069APISalesErrorProcessing
+Caption: SMK API SALES ERROR PROCESSING
+Primary Collection: ue_SMK069TempSales
+```
+
+Final important bindings:
+
+```text
+SyteLine CO Number → object.created_co_num
+CustPo             → object.cust_po
+Peak Season        → object.is_peak_season
+```
+
+Peak Season:
+
+```text
+Control   : Checkbox
+1         : checked
+0         : unchecked
+Read Only : True
+Position  : beside CustPo
+```
+
+Do not bind the actual SyteLine CO display to the old technical/source R-number.
+
+### CustSeq / Name lookup
+
+DEV SQL proved:
+
+```text
+temp.co_num    = actual PYYMMDD### CO
+mapping.co_num = technical/source R...
+```
+
+Therefore **never** join temp to mapping view using `co_num`.
+
+Correct business lookup keys:
+
+```text
+SiteRef
+cust_num
+cust_po
+co_line
+```
+
+SQL-proven relation:
+
+```text
+posin.SiteRef  = ts.SiteRef
+posin.cust_num = ts.cust_num
+posin.cust_po  = ts.cust_po
+posin.co_line  = ts.co_line
+```
+
+Customer name:
+
+```text
+custaddr.cust_num = ts.cust_num
+custaddr.cust_seq = posin.cust_seq
+```
+
+For PROD, migrate the working DEV IDO/form implementation. If derived properties are used instead of secondary tables, validate them in DEV first and ensure no `co_num` condition remains.
+
+Expected display example:
+
+```text
+Peak CustPO:
+CustSeq = mapped cust_seq
+Name    = mapped custaddr.name
+Peak    = checked
+
+Normal CustPO:
+CustSeq = mapped cust_seq
+Name    = mapped custaddr.name
+Peak    = unchecked
+```
+
+## 5. Public Receive IDO method
+
+External/public method must invoke:
+
+```text
+dbo.SMK069ReceivePosSalesJsonSp
+```
+
+Critical setting:
+
+```text
+Transactional = False
+```
+
+Parameter order:
+
+```text
+ 1 @SourceSystem
+ 2 @BatchId
+ 3 @PayloadJson
+ 4 @ReceivedBy
+ 5 @ReceivedRows OUT
+ 6 @TotalOrders OUT
+ 7 @ValidOrders OUT
+ 8 @ErrorOrders OUT
+ 9 @TransferredRows OUT
+10 @Infobar OUT
+11 @ProcessedOrders OUT
+12 @ProcessErrors OUT
+13 @CreatedCoNums OUT
+14 @ThrowOnBusinessError
+```
+
+Do not reorder the first 10 parameters.
+
+Postman/API calls depend on this positional contract.
+
+## 6. Manual Error Processing methods
+
+Preserve/export any DEV IDO methods/events currently used by:
+
+```text
+Preview
+Validate
+Process/Reprocess
+```
+
+Canonical SQL available in the repo includes:
+
+```text
+dbo.SMK069ValidateCustomerSp
+dbo.SMK069ProcessCustomerOrderSp
+```
+
+Do not recreate event handlers from old archived documentation when a working DEV form export exists.
+
+## 7. CSV batch/upload metadata
+
+Required physical objects:
+
+```text
+dbo.ue_SMK069_pos_csv_batch_mst
+dbo.ue_SMK069_pos_csv_upload_mst
+```
+
+CSV detail IDO:
+
+```text
+ue_SMK069PosCsvUpload
+```
+
+Required Peak property:
+
+```text
+is_peak_season
+INT
+default 0
+```
+
+After metadata migration:
+
+1. resynchronize `ue_SMK069PosCsvUpload`;
+2. verify property `is_peak_season`;
+3. checkbox is read-only beside CustPo.
+
+## 8. CSV console form
+
+Form:
+
+```text
+ue_SMK069PosCsvBatchConsole
+Caption: SMK POS CSV TO BLANKET CO
+```
+
+Keep safe operator flow:
+
+```text
+1. New Batch
+2. Upload CSV to Blanket CO
+3. Choose file
+4. Parse
+5. Run canonical CSV full process
+6. Refresh result
+```
+
+One-hit event design must keep file import as direct primary action:
+
+```text
+Sequence 0 | ACTION(Import) COMPONENT(btnCsvToCoOneHit)
+Sequence 1 | disable
+Sequence 2 | SMK069ParseCsv
+Sequence 3 | SMK069RunCsvFullProcess
+Sequence 4+| refresh
+```
+
+Do not restore the withdrawn nested event:
+
+```text
+One-Hit → Upload Event → ACTION(Import)
+```
+
+because Web Client previously failed with the anonymous `choices` error.
+
+Keep troubleshooting buttons:
+
+```text
+New Batch
+Upload Only
+Re-Parse CSV
+Retry / Process CO
+Upload & Process CSV to CO
+```
+
+## 9. Mapping view
+
+Object:
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mapping_view
+```
+
+Ownership:
+
+```text
+Eva / SMK
+```
+
+Do not create a competing repository-owned view.
+
+Production migration must use the exact current DEV definition.
+
+It must support:
+
+```text
+Peak/Normal customer-item mapping
+POS U/M mapping
+mapped cust_num/cust_seq
+business CustPO
+mapped item
+mapped qty/U/M
+unit price
+warehouse
+ValidationStatus
+```
+
+## 10. Metadata acceptance
+
+Before opening PROD to API traffic:
+
+```text
+[ ] UET user fields migrated
+[ ] UET class migrated
+[ ] itemcust extension active
+[ ] custom table metadata migrated
+[ ] Impact Schema completed
+[ ] generated triggers aligned
+[ ] ue_SMK069TempSales resynchronized
+[ ] public Receive IDO method migrated
+[ ] Transactional=False verified
+[ ] Error Processing form migrated and opens
+[ ] Peak checkbox correct
+[ ] CustSeq/Name correct
+[ ] CSV detail IDO resynchronized
+[ ] CSV console form migrated and opens
+[ ] one-hit file-import event chain verified
+[ ] mapping view exact DEV definition migrated
+```
