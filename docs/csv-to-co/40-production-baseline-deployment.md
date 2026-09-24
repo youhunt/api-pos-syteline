@@ -1,6 +1,6 @@
 # Production Baseline Deployment — CSV / POS Inbound → Blanket CO
 
-**Date:** 16 September 2026  
+**Date:** 24 September 2026  
 **Scope:** CSV / POS inbound → Blanket Customer Order only
 
 ## Decision
@@ -80,38 +80,31 @@ database/procedures/csv-to-co/SMK069RunCsvTestBatchSp.sql
 
 Canonical CSV runner already routes CSV-built JSON through `SMK069ReceivePosSalesJsonSp` instead of maintaining a separate CO-processing path.
 
-## Important production prerequisite gap
+## Canonical Receive Core source captured
 
-`dbo.SMK069ReceivePosSalesJsonSp` depends on:
+The working DEV definition of:
 
 ```text
 dbo.SMK069ReceivePosSalesJsonCoreSp
 ```
 
-The canonical DEV tenant definition is now stored at:
+is now stored canonically at:
 
 ```text
 database/procedures/csv-to-co/SMK069ReceivePosSalesJsonCoreSp.sql
 ```
 
-It was captured directly from the DEV tenant definition supplied on 23 September 2026.
+The canonical Core includes the 23 Sep Peak Season ordering fix: payload
+`is_peak_season` is persisted to inbound before the mapping view is
+materialized.
 
-Therefore the production package must **not** yet be described as "copy the four canonical SP files and production is complete".
+For production, use the consolidated current-state package:
 
-Before production deployment:
-
-1. export the exact working DEV definition of `dbo.SMK069ReceivePosSalesJsonCoreSp`;
-2. audit it against the current DEV/UAT behavior;
-3. commit it as a canonical source file in the repository;
-4. include it in the production baseline deployment order.
-
-Suggested tenant query to capture the exact definition:
-
-```sql
-SELECT OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ReceivePosSalesJsonCoreSp')) AS ProcedureDefinition;
+```text
+deployment/csv-to-co/prod/
 ```
 
-Do not reconstruct or guess this Core procedure from old patch history when a working DEV definition is available.
+Do not replay the numbered DEV/UAT patch history for a fresh PROD baseline.
 
 ## Supporting objects are separate from SP patch history
 
@@ -162,7 +155,7 @@ Use numbered patches only when upgrading an older installed object to the curren
 
 ### Fresh production baseline
 
-Do **not** replay Patch 01 → 25.
+Do **not** replay Patch 01 → Patch 35. Use `deployment/csv-to-co/prod/02-deploy-canonical-runtime.sql` after metadata/schema preflight.
 
 Deploy the final canonical object definitions in dependency order, plus the required table/view/IDO/form baseline.
 
@@ -173,7 +166,7 @@ Historical data-repair behavior contained in a migration patch is not needed on 
 Production baseline is ready only when all of the following are true:
 
 ```text
-[ ] canonical Receive Core source captured in repo
+[x] canonical Receive Core source captured in repo
 [ ] canonical public Receive source current
 [ ] canonical Batch processor current
 [ ] canonical per-order processor current
@@ -191,4 +184,67 @@ Production baseline is ready only when all of the following are true:
 [ ] clean UAT proves release_date = order_date without manual edit
 [ ] replay/idempotency test passes
 [ ] POS-108 quantity rejection test passes
+```
+
+
+## Current PROD package — 24 Sep 2026
+
+Primary migration directory:
+
+```text
+deployment/csv-to-co/prod/
+```
+
+Use in this order:
+
+```text
+00-capture-dev-baseline.sql      (DEV / Query Select)
+01-preflight.sql                 (PROD / pre-deploy)
+02-deploy-canonical-runtime.sql  (PROD / Apply Database)
+03-post-deploy-verify.sql        (PROD / Query Select)
+04-mongoose-metadata-checklist.md
+05-prod-uat-checklist.md
+```
+
+Latest current-state runtime includes:
+
+```text
+Patch 26 behavior  : created_co_num persistence
+Patch 27 behavior  : Peak Season plumbing
+Patch 28 behavior  : ValidationStatus=N atomic rejection
+Patch 29 behavior  : Peak-aware quantity validation
+Patch 31 behavior  : clear POS-204 message
+Patch 33 behavior  : cross-batch duplicate CustPO lineage
+Patch 34 behavior  : preserve POS-204 on reused BatchId payload mismatch
+Patch 35 behavior  : set Peak flag before mapping-view snapshot
+```
+
+Patch 32 remains WITHDRAWN and is not part of production deployment.
+
+### External migration gate
+
+The exact working DEV definition of:
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mapping_view
+```
+
+is owned by Eva/SMK and must be migrated separately. The repository does not
+create a competing definition.
+
+### Mongoose migration gate
+
+Export/import the verified DEV UET/IDO/Form metadata before runtime cutover.
+In particular:
+
+```text
+Uf_SMK069_is_peak_season
+Uf_SMK069_pos_um
+SMK069_CL_itemcust
+itemcust_mst extension
+ue_SMK069TempSales
+ue_SMK069PosCsvUpload
+ue_SMK069APISalesErrorProcessing
+ue_SMK069PosCsvBatchConsole
+public Receive IDO method (Transactional=False)
 ```
