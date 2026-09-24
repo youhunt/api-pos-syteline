@@ -1,0 +1,308 @@
+# SMK069 PROD Migration Package
+
+**Date:** 24 September 2026  
+**Scope:** CSV / POS inbound → Blanket Customer Order only
+
+This directory is the production migration entry point.
+
+## Main decision
+
+For a fresh/current-state PROD environment:
+
+> **Do not replay Patch 01 → Patch 35 one by one.**
+
+The numbered patches are DEV/UAT migration history. PROD uses the latest canonical object definitions plus the required Mongoose/UET/table/view metadata.
+
+Patch 32 is explicitly **WITHDRAWN / DO NOT APPLY**.
+
+## Package contents
+
+```text
+00-capture-dev-baseline.sql
+01-preflight.sql
+02-deploy-canonical-runtime.sql
+03-post-deploy-verify.sql
+04-mongoose-metadata-checklist.md
+05-prod-uat-checklist.md
+```
+
+## Canonical SQL deployed by 02-deploy-canonical-runtime.sql
+
+The consolidated one-batch deployment installs the current repository versions of:
+
+```text
+dbo.SMK069CsvSplitLine
+dbo.SMK069ImportCsvFileSp
+dbo.SMK069ValidateCustomerSp
+dbo.SMK069ProcessCustomerOrderSp
+dbo.SMK069ProcessBatchCustomerOrdersSp
+dbo.SMK069ReceivePosSalesJsonCoreSp
+dbo.SMK069ReceivePosSalesJsonSp
+dbo.SMK069RunCsvTestBatchSp
+```
+
+The deployment is generated from these canonical repository sources:
+
+```text
+database/stored-procedures/csv-to-co/SMK069ImportCsvFileSp.sql
+database/stored-procedures/csv-to-co/SMK069ValidateCustomerSp.sql
+database/procedures/csv-to-co/SMK069ProcessCustomerOrderSp.sql
+database/procedures/csv-to-co/SMK069ProcessBatchCustomerOrdersSp.sql
+database/procedures/csv-to-co/SMK069ReceivePosSalesJsonCoreSp.sql
+database/procedures/csv-to-co/SMK069ReceivePosSalesJsonSp.sql
+database/procedures/csv-to-co/SMK069RunCsvTestBatchSp.sql
+```
+
+## Final runtime contract
+
+```text
+POS JSON / CSV
+→ dbo.SMK069ReceivePosSalesJsonSp
+→ dbo.SMK069ReceivePosSalesJsonCoreSp
+→ raw inbound + is_peak_season
+→ dbo.ue_SMK069_pos_sales_inbound_mapping_view
+→ ValidationStatus / Peak-aware mapping
+→ dbo.ue_SMK069_temp_sales_mst
+→ dbo.SMK069ProcessBatchCustomerOrdersSp
+→ dbo.SMK069ProcessCustomerOrderSp
+→ co_mst + coitem_mst + co_bln_mst
+```
+
+Target result:
+
+```text
+CO number                 = PYYMMDD###
+co_mst.type               = B
+co_mst.cust_po            = business CustPO
+co_mst.consolidate        = 1
+coitem_mst.stat           = O
+coitem_mst.consolidate    = 1
+coitem_mst.release_date   = co_mst.order_date
+co_bln_mst.stat           = O
+co_bln_mst.allow_on_pick_list = 0
+temp.created_co_num       = actual SyteLine CO
+temp.process_status       = P
+```
+
+## Peak Season final behavior
+
+Payload:
+
+```json
+"is_peak_season": 1
+```
+
+is persisted into inbound **before the mapping view is materialized**.
+
+This is important. Patch 35 fixed the DEV defect where Core evaluated the mapping view while inbound still held default `is_peak_season = 0`.
+
+Final sequence:
+
+```text
+raw_json
+→ inbound.is_peak_season
+→ mapping view
+→ #MapView
+→ temp
+→ CO
+```
+
+## Objects not owned by this SQL package
+
+### Mapping view — owned by Eva / SMK
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mapping_view
+```
+
+The repository deliberately does not invent or replace this view.
+
+For PROD, migrate the **exact working DEV definition** from the SMK/Eva-owned source. At minimum it must expose:
+
+```text
+inbound_id
+source_system
+batch_id
+row_no
+SiteRef
+cust_num
+cust_seq
+cust_po
+order_date
+co_num
+co_line
+item
+qty_ordered
+unit_price
+whse
+due_date
+u_m
+terms_code
+tax_code1
+exch_rate
+is_peak_season
+ValidationStatus
+```
+
+Run `00-capture-dev-baseline.sql` in DEV and compare the mapping-view SHA-256 with PROD after migration.
+
+### Mongoose metadata
+
+SQL deployment does not replace Mongoose metadata migration.
+
+Migrate/export from the verified DEV configuration:
+
+```text
+UET/User Fields
+IDO/table metadata
+IDO methods + parameter order
+forms/events/components
+generated table triggers / Impact Schema result
+```
+
+See `04-mongoose-metadata-checklist.md`.
+
+## Deployment order
+
+### A. Before maintenance window
+
+1. Freeze relevant DEV changes.
+2. Run `00-capture-dev-baseline.sql` in DEV and save the outputs.
+3. Export the exact DEV mapping view owned by Eva/SMK.
+4. Export the Mongoose/UET/IDO/Form metadata listed in the metadata checklist.
+5. Take a PROD backup / metadata export appropriate for the tenant.
+
+### B. PROD metadata/schema
+
+1. Import UET/table/IDO metadata.
+2. Apply/Impact Schema according to Mongoose procedure.
+3. Import the exact SMK mapping-view definition.
+4. Refresh metadata/cache where required.
+5. Run `01-preflight.sql`.
+
+Do not continue when preflight fails.
+
+### C. PROD runtime SQL
+
+Run only:
+
+```text
+02-deploy-canonical-runtime.sql
+```
+
+in Apply Database.
+
+It is one executable batch and contains **no GO**.
+
+Do not separately apply numbered DEV patches 14–35 after this consolidated runtime deployment.
+
+### D. Verification
+
+1. Run `03-post-deploy-verify.sql` in Query Select.
+2. Verify IDO methods/forms manually.
+3. Execute `05-prod-uat-checklist.md`.
+
+## Critical IDO contract
+
+The external/public method that invokes:
+
+```text
+dbo.SMK069ReceivePosSalesJsonSp
+```
+
+must remain:
+
+```text
+Transactional = False
+```
+
+The per-order processor owns its transaction boundaries.
+
+Public Receive parameter order must remain:
+
+```text
+ 1 SourceSystem
+ 2 BatchId
+ 3 PayloadJson
+ 4 ReceivedBy
+ 5 ReceivedRows OUT
+ 6 TotalOrders OUT
+ 7 ValidOrders OUT
+ 8 ErrorOrders OUT
+ 9 TransferredRows OUT
+10 Infobar OUT
+11 ProcessedOrders OUT
+12 ProcessErrors OUT
+13 CreatedCoNums OUT
+14 ThrowOnBusinessError
+```
+
+## Idempotency contract
+
+```text
+cust_po  = business idempotency key
+batch_id = request/transport identity
+```
+
+Rules:
+
+```text
+same original BatchId + same payload
+→ idempotent replay
+→ no duplicate CO
+
+new/different BatchId + existing CustPO
+→ POS-204
+→ Success=false
+→ no new CO
+
+new transaction
+→ new BatchId + new CustPO
+```
+
+## Error contracts that must survive migration
+
+```text
+POS-108 = quantity not according to allowed U/M multiple
+POS-109 = mapping-view ValidationStatus=N; reject whole CustPO
+POS-203 = sibling line rejected because same CustPO has a real invalid line
+POS-204 = existing/conflicting CustPO
+POS-302 = no canonical business order mapping for batch; no silent success
+```
+
+## Rollback
+
+The consolidated runtime deployment does not mass-update historical PROD integration rows.
+
+Rollback strategy:
+
+1. Reapply the pre-deployment PROD object definitions captured before cutover.
+2. Restore the exported Mongoose metadata if metadata rollback is required.
+3. Do not delete or rewrite Customer Orders created during UAT without business approval.
+4. Do not attempt to roll back by replaying old numbered patches in reverse.
+
+## Cutover gate
+
+Production is ready only when all items below pass:
+
+```text
+[ ] DEV baseline captured
+[ ] Exact SMK mapping view migrated
+[ ] UET Peak Season / POS U/M migrated
+[ ] custom tables + generated triggers aligned
+[ ] IDOs and methods migrated
+[ ] forms/events migrated
+[ ] public Receive method Transactional=False
+[ ] 01-preflight.sql PASS
+[ ] 02 canonical deployment SUCCESS
+[ ] 03 post-deploy verification PASS
+[ ] normal order UAT PASS
+[ ] peak order UAT PASS
+[ ] non-peak order UAT PASS
+[ ] POS-108 negative UAT PASS
+[ ] POS-109 atomic rejection UAT PASS
+[ ] POS-204 duplicate UAT PASS
+[ ] original BatchId replay UAT PASS
+[ ] CSV one-hit UAT PASS
+[ ] Error Processing display UAT PASS
+```
