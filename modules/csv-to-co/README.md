@@ -590,3 +590,40 @@ ue_SMK069_pos_sales_inbound_mapping_view
 ```
 
 The Core procedure already transfers temp values from `#MapView`. The defect was not use of `inbound_mst` as business source; it was timing. Before Patch 35 the inbound Peak flag was still default `0` while the mapping view was evaluated. Patch 35 sets `inbound.is_peak_season` from `raw_json` before the mapping-view snapshot.
+
+
+## Production migration package — 24 Sep 2026
+
+Use:
+
+```text
+deployment/csv-to-co/prod/
+```
+
+Production rule:
+
+```text
+DO NOT replay Patch 01..35 for a fresh PROD baseline.
+Use the consolidated canonical runtime deployment.
+```
+
+Files:
+
+```text
+00-capture-dev-baseline.sql
+01-preflight.sql
+02-deploy-canonical-runtime.sql
+03-post-deploy-verify.sql
+04-mongoose-metadata-checklist.md
+05-prod-uat-checklist.md
+```
+
+External dependencies that must be migrated separately:
+
+```text
+- exact SMK/Eva-owned ue_SMK069_pos_sales_inbound_mapping_view
+- Mongoose UET/table/IDO/form metadata
+- public Receive IDO method with Transactional=False
+```
+
+Patch 32 remains withdrawn and is not part of production deployment.
