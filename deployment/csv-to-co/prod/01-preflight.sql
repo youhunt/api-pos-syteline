@@ -218,9 +218,15 @@ BEGIN
             1, 2, N''
         );
 
-    THROW 520001,
-        LEFT(N'[SMK069 PROD PREFLIGHT] BELUM SIAP. Missing: ' + COALESCE(@MissingText, N'<unknown>'), 2048),
-        1;
+    DECLARE @ThrowMessage NVARCHAR(2048) =
+        LEFT
+        (
+            N'[SMK069 PROD PREFLIGHT] BELUM SIAP. Missing: '
+            + COALESCE(@MissingText, N'<unknown>'),
+            2048
+        );
+
+    THROW 520001, @ThrowMessage, 1;
 END;
 
 SELECT
