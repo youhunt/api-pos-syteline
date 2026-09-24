@@ -10,48 +10,51 @@ SMK069_ShipmentAPI_mst
 → POS login
 → HTTP POST
 → Complete Shipment
-→ Retry / Backoff
+→ Retry
 → Scheduler / TaskMan
 ```
 
-CSV parsing dan pembuatan Blanket Customer Order berada di modul `csv-to-co`. Jangan campur workstream kecuali benar-benar diperlukan oleh dependency data Shipment.
+POS inbound / CSV-to-CO berada di modul `csv-to-co` dan tidak boleh dicampur ke workstream ini kecuali ada dependency data yang benar-benar nyata.
 
 ## Runtime utama
 
 ```text
-View       : dbo.SMK069_ShipmentAPI_mst
-Service IDO: ue_SMK069ShipmentTransport
-Extension  : SMK069ShipmentTransportExtension
-Form       : ue_SMK069ShipmentScheduler
-Task       : SMK069ShipmentScheduler
+View          : dbo.SMK069_ShipmentAPI_mst
+Service IDO   : ue_SMK069ShipmentTransport
+Extension     : SMK069ShipmentTransportExtension
+Form          : ue_SMK069ShipmentScheduler
+Task          : SMK069ShipmentScheduler
+Runtime truth : built-in ActiveBGTasks
 ```
 
-## Current status — 10 Sep 2026
+## Current status — 24 Sep 2026
 
 ```text
-P96331 missing DOC_NO local Build gate    FIXED + VERIFIED (Patch 14 Rev.2)
-Complete nvarchar -> bigint               FIXED + VERIFIED (Patch 15)
-Old /inventory/v1/infor_dn route          REPLACED + VERIFIED (Patch 16)
-Controlled P96331 arm state               VERIFIED (Patch 17)
-Patch 18 SQL ActiveBGTasks view           WITHDRAWN / NO-OP for Cloud tenant
-TaskMan runtime source                    VERIFIED: standard IDO ActiveBGTasks
-Actual SMK069ShipmentScheduler task       NOT REGISTERED at latest runtime check
+Patch 14 Rev.2  DOC_NO blank non-blocking            VERIFIED
+Patch 15        Complete prefixed DN mapping          VERIFIED
+Patch 18        SQL ActiveBGTasks runtime view         WITHDRAWN / NO-OP
+Patch 19        RUN ONCE bypass scheduler switches    ACTIVE
+Patch 20        STORE_ORDER_NO blank non-blocking     ACTIVE
+Patch 21        retry 1 minute / max 1440             VERIFIED PASS
+Patch 22        PRICE NULL/0/negative local blocker   CREATED; PROD GO requires target/UAT verification
+REV8 Form       retry filters + date/time             CURRENT UX
+Duplicate rule  HTTP400/code1010/data is exist        SOURCE PATCH APPLIED BY OPERATOR; runtime PASS still required
 ```
 
-## Endpoint — verified
+UAT route in use:
 
 ```text
-SiteRef             Default
-ApiName             SHIPMENT
-IsActive            1
-LoginUrl            https://api-uat.pizzahut.co.id/service-auth/login-once
-EndpointUrl         https://api-uat.pizzahut.co.id/inventory-phi/v1/infor_dn
-HttpMethod          POST
-ContentType         application/json
-SuccessMode         KACS_V1
+LoginUrl    https://api-uat.pizzahut.co.id/service-auth/login-once
+EndpointUrl https://api-uat.pizzahut.co.id/inventory-phi/v1/infor_dn
+HttpMethod  POST
+SuccessMode KACS_V1
 ```
 
-## DN contract — current tenant evidence
+The old `/inventory/v1/infor_dn` route must not be reintroduced.
+
+## DN contract
+
+Current tenant evidence:
 
 ```sql
 CAST(
@@ -63,238 +66,226 @@ CAST(
 ) AS DN_No
 ```
 
-Therefore:
+Therefore `P96330` means prefix `P963` + internal `shipment_id = 30`; it is **not** numeric key 96330.
+
+## Payload / validation contract
+
+Current Shipment behavior:
 
 ```text
-P96330 = P963 + shipment_id 30
-P96331 = P963 + shipment_id 31
-P96332 = P963 + shipment_id 32
+DOC_NO blank            -> allowed; JSON sends ""
+STORE_ORDER_NO blank    -> allowed; JSON sends ""
+BATCH null              -> allowed
+EXPIRY_DATE null        -> allowed
+PRODUCT_CODE blank      -> blocked locally
+PRICE NULL / 0 / < 0    -> blocked locally by Patch 22
+shipment_qty <= 0       -> not eligible for send
 ```
 
-`P96330` is **not** numeric shipment_id 96330.
-
-## DOC_NO contract
-
-Since Patch 14 Rev.2:
+Patch 22 message:
 
 ```text
-DOC_NO blank                 -> allowed; Build continues and JSON sends "DOC_NO":""
-one nonblank DOC_NO          -> use it
-multiple distinct DOC_NO     -> block as ambiguous
+Terdapat detail shipment dengan PRICE kosong atau <= 0. Shipment tidak dikirim ke POS.
 ```
 
-Therefore DOC_NO is no longer a local required field for Shipment. POS remains the final authority and may still return a business validation response for blank DOC_NO.
+A local Build validation failure prevents the Shipment POST itself, but the current scheduler attempt lifecycle may still record the run as failed/pending. Do not interpret `HTTP 0` local-validation rows as an HTTP call.
 
-## Patch 15 — Complete Shipment string DN fix
+## Success contract
 
-Patch 15 separates external DN text from internal numeric shipment key:
+Normal Shipment success:
 
 ```text
-@ShipmentDn NVARCHAR(40) -> P96330
-@ShipmentId BIGINT       -> 30
+HTTP 201 + body code 200 + message Success
+→ BusinessSuccess = 1
 ```
 
-Tenant verification:
+Idempotent duplicate success:
 
 ```text
-Patch15Marker               PASS
-OldBigintAssignmentRemoved  PASS
-StringDnPresent             PASS
+Shipment POST stage only
+AND SuccessMode = KACS_V1
+AND HTTP = 400
+AND code = 1010
+AND message = "data is exist"
+→ BusinessSuccess = 1
+→ Complete success
+→ api_post = 1
+→ RetryState = S
+→ NextAttemptDate = NULL
+→ LastError = NULL
 ```
 
-## Patch 17 — controlled P96331 UAT arm
+The original HTTP 400 response remains in API history for audit.
 
-Latest verified controlled state:
+Do **not** generalize `code=1010` to all endpoints. Login can also use code 1010 for invalid credentials and must remain a login failure.
+
+Reference:
 
 ```text
-MasterEnabled     0
-EndpointUrl       https://api-uat.pizzahut.co.id/inventory-phi/v1/infor_dn
-ScheduleCode      HOURLY
-MaxShipments      1
-ScheduleEnabled   1
-RunRequested      0
-RunState          I
-ShipmentId        P96331
-AttemptCount      0
-RetryState        P
-NextAttemptDate   NULL
+extension-classes/shipment/SMK069ShipmentDuplicateAlreadyExists.patch
+docs/shipment/47-idempotent-data-is-exist-success.md
 ```
 
-Candidate ranking was also verified:
+## Retry policy
+
+Current confirmed policy:
 
 ```text
-1. P96331 attempt 0
-2. P96332 attempt 2
-3. P96330 attempt 3
+MaxAttempts         = 1440
+BackoffBaseMinutes  = 1
+BackoffCapMinutes   = 1
+Business interval   = 1 minute
+TaskMan heartbeat   = 1 minute
 ```
 
-With `MaxShipments=1`, P96331 is the controlled first candidate.
+`MaxAttempts` is a per-DN retry budget.
 
-## Scheduler runtime truth — Cloud-safe design
+`MaxBatchSize` is only the default/config batch size.
 
-Do **not** treat custom table flags as proof that TaskMan exists.
+`MaxShipments` / form **Shipments / Run** limits how many DNs one scheduler execution may process. For controlled UAT/initial PROD smoke test keep it at `1`.
 
-Business/config state comes from:
+## Scheduler runtime truth
 
-```text
-ApiActive
-MasterEnabled
-IsEnabled
-RunState
-NextRunDate
-```
+Do not infer TaskMan existence from custom table flags.
 
-Actual TaskMan runtime comes directly from the standard Mongoose IDO:
+Use the standard Mongoose IDO:
 
 ```text
 ActiveBGTasks
+FILTERPERM(TaskName = 'SMK069ShipmentScheduler')
 ```
 
-with permanent filter:
+Runtime interpretation:
 
 ```text
-TaskName = 'SMK069ShipmentScheduler'
+0 rows  -> NOT REGISTERED
+1 WAITING/RUNNING/READY row -> REGISTERED with actual state
+>1 rows -> duplicate scheduler warning
 ```
 
-Minimum TaskMan properties:
+Do not create a custom SQL replacement for `ActiveBGTasks`.
+
+## START / STOP / RUN ONCE
+
+Current one-form behavior:
 
 ```text
-TaskNumber
-TaskName
-TaskStatusCode
+START:
+  if no matching TaskMan instance exists
+  -> create recurring SMK069ShipmentScheduler
+  -> configure 1-minute heartbeat
+  -> verify exactly one ActiveBGTasks row
+  -> enable business schedule/master
+
+STOP:
+  -> master OFF first
+  -> business schedule OFF
+  -> remove matching WAITING recurring instance
+  -> if READY/RUNNING, let in-flight execution finish and STOP again when WAITING
+
+RUN ONCE (AUTO SAVE):
+  -> saves schedule fields first
+  -> requests one manual run
+  -> can run while recurring master/business switches are OFF
 ```
 
-Tenant IDO Runtime / Load Collection verification on 10 Sep 2026 returned **0 actual rows** for that filter. The blank `*` row is only the form insert/placeholder row. Therefore the latest real runtime state is:
+A recurring TaskMan captures credentials/recurrence when it is created. Changing credentials or heartbeat in the form does **not** rewrite an existing recurring task; STOP until NOT REGISTERED, then START to recreate it.
+
+## REV8 form
+
+Current UI generation source:
 
 ```text
-TASKMAN HEARTBEAT = NOT REGISTERED
+tools/shipment/upgrade_scheduler_rev8_filters_datetime.py
+docs/shipment/46-rev8-retry-filter-and-datetime.md
 ```
 
-Evidence:
+Retry tab:
 
 ```text
-tests/evidence/2026-09-10-smk069-activebgtasks-zero-row.md
-docs/shipment/38-runtime-truth-via-mgcore-activebgtasks.md
+OPEN       -> RetryState <> S
+SUCCESS    -> S
+EXHAUSTED  -> X
+ALL        -> all states
+DN filter  -> partial ShipmentId
 ```
 
-## Patch 18 status
+Successful retry rows are retained for audit; they are only hidden by the default OPEN filter.
 
-`database/patches/shipment/2026-09-10-smk069-18-taskman-runtime-status.sql` is now **WITHDRAWN / NO-OP**.
-
-Reason: `dbo.ActiveBGTasks` is not visible from this Cloud application database. Runtime truth must be read through the Mongoose `ActiveBGTasks` IDO instead of an application-database SQL view.
-
-Do not create `ue_SMK069ShipmentSchedulerRuntime` from a custom SQL view.
-
-## Final one-form scheduler model
-
-```text
-ue_SMK069ShipmentScheduler
-│
-├── object  : ue_SMK069ShipmentSchedules
-├── object2 : ue_SMK069ShipmentSchedulerDashboard
-├── object3 : ue_SMK069ShipmentSchedulerQueue
-└── object4 : ActiveBGTasks
-              FILTERPERM(TaskName = 'SMK069ShipmentScheduler')
-```
-
-Operator status should be textual, not raw `1/0/I/R`:
-
-```text
-OVERALL STATUS
-API SERVICE
-MASTER CONTROL
-BUSINESS SCHEDULE
-TASKMAN HEARTBEAT
-TASK STATUS
-TASK NUMBER
-BUSINESS RUNNER
-```
-
-Runtime rules:
-
-```text
-0 matching ActiveBGTasks row -> NOT REGISTERED
-1 WAITING row                -> REGISTERED / WAITING
-1 READY row                  -> REGISTERED / READY
-1 RUNNING row                -> REGISTERED / RUNNING
->1 matching rows             -> WARNING - DUPLICATE SCHEDULER
-```
-
-Overall examples:
-
-```text
-STOPPED - TASKMAN NOT REGISTERED
-STOPPED - MASTER OFF
-STOPPED - SCHEDULE OFF
-ACTIVE - WAITING
-ACTIVE - READY
-RUNNING NOW
-WARNING - DUPLICATE SCHEDULER
-```
-
-## Final START / STOP behavior
-
-### START SCHEDULER
-
-The final one-form artifact checks `ActiveBGTasks` first.
-
-If no task exists, it reproduces the standard Background Queue flow without opening the second form:
-
-```text
-submit SMK069ShipmentScheduler as WAITING
-→ receive TaskNumber
-→ call SLJobQueues.BackGroundQueue2Sp
-→ configure a 5-minute recurring heartbeat
-→ verify exactly one actual ActiveBGTasks row exists
-→ enable business schedule
-→ enable master scheduler
-```
-
-The 5-minute TaskMan heartbeat is infrastructure only. `IntervalMinutes` / `NextRunDate` remain the business cadence.
-
-If more than one matching task already exists, START aborts and reports duplicate scheduler state.
-
-### STOP SCHEDULER
-
-```text
-master OFF first
-→ business schedule OFF
-→ refresh ActiveBGTasks
-→ delete matching WAITING heartbeat row(s)
-→ refresh runtime truth
-```
-
-A standard SyteLine Active Background Tasks delete cannot remove a task already in `READY` or `RUNNING`. In that case the in-flight invocation is allowed to finish while master/business remain OFF; when it returns to WAITING, STOP can remove it.
+Operational timestamps display date **and** time.
 
 ## Credentials
 
-The UAT form artifact keeps POS username/password hidden and uses placeholders only:
+Sanitized form artifacts use:
 
 ```text
 __POS_USERNAME__
 __POS_PASSWORD__
 ```
 
-Real values must not be committed to GitHub. Replace placeholders only in the local XML if UAT requires hardcoded hidden credentials. `Hidden=True` is UI hiding, not encryption.
+Real values must never be committed.
 
-## Controlled one-DN UAT policy
+`Hidden=True` and TaskMan parameters are **not encryption**. Production credential handling requires an approved operational/security approach. Do not store a production password in GitHub, SQL migration scripts, API logs, or visible task diagnostics.
 
-Do not process P96330/P96332 yet. First establish exactly one TaskMan heartbeat and then run/observe P96331 with `MaxShipments=1`.
+## PROD migration
 
-Decision gate:
+The dedicated production package is authoritative for PROD cutover:
 
 ```text
-HTTP 404 again
-  -> STOP; do not consume P96330/P96332
-
-HTTP reaches POS business response
-  -> route proven; inspect business response
-
-Business success
-  -> verify Complete -> API log -> retry state -> shipment_mst.SMK069_Uf_api_post
+deployment/shipment/prod/README.md
+deployment/shipment/prod/apply-database/
+deployment/shipment/prod/query-select/
 ```
 
-## Tenant Query Select limitations confirmed
+Key rules:
+
+- historical UAT patches 16/17 must not be used as a PROD run list;
+- Patch 18 remains withdrawn;
+- PROD URL values are intentionally placeholders until confirmed by the POS team;
+- config is prepared in **safe OFF** state;
+- initial PROD `Shipments / Run = 1`;
+- do not copy UAT retry/API-log/ActiveBGTasks runtime rows into PROD;
+- perform one controlled PROD RUN ONCE before enabling recurring scheduling.
+
+Emergency stop:
+
+```text
+deployment/shipment/prod/apply-database/090-emergency-stop.sql
+```
+
+## Source-control readiness warning
+
+The repository contains patch history and a PROD incremental migration pack, but not every original Shipment baseline object is yet preserved as an authoritative standalone current UAT definition.
+
+Known source-control gaps include the exact current tenant definition/source for some of:
+
+```text
+dbo.SMK069_ShipmentAPI_mst
+dbo.SMK069BuildShipmentJsonSp
+dbo.SMK069PrepareShipmentSendSp
+dbo.ue_SMK069_shipment_api_log_mst
+current compiled Shipment extension source/assembly
+```
+
+Therefore, for a **clean PROD tenant**, export the exact current UAT definitions/artifacts before cutover. Do not reconstruct them from stale historical standalone files.
+
+See:
+
+```text
+database/shipment/SMK069_SHIPMENT_SOURCE_INVENTORY.md
+deployment/shipment/prod/README.md
+```
+
+## Tenant execution limitations
+
+### Apply Database
+
+```text
+one executable batch/object per submission
+NO GO
+```
+
+### SMK Query Select Execution
 
 ```text
 pure SELECT only
@@ -303,33 +294,26 @@ no SET
 no EXEC
 no BEGIN/END
 no GO
-no plain ORDER BY
 no trailing semicolon
-short output values only
+avoid plain trailing ORDER BY
+keep large result cells short
 ```
 
-## Source utama
+## PROD GO gate
+
+Before recurring PROD activation, require evidence for all of these:
 
 ```text
-database/patches/shipment/
-database/procedures/shipment/
-database/views/shipment/
-database/shipment/
-extension-classes/shipment/
-forms/shipment/
-ido/shipment/
-docs/shipment/
-implementation/shipment/
-tests/evidence/
+PROD LoginUrl confirmed
+PROD Shipment EndpointUrl confirmed
+production credential handling approved
+exact current UAT baseline exports available/imported as needed
+exact current UAT Shipment custom assembly compiled in PROD
+data-is-exist idempotent rule runtime PASS
+Patch 22 PRICE guard PASS
+post-deploy config Query Select PASS
+one real PROD DN controlled RUN ONCE PASS
+ActiveBGTasks shows exactly one new PROD recurring task after START
 ```
 
-Patch 05 and Patch 06 under `database/patches/shipment/withdrawn/` must not be run.
-
-## Next steps
-
-1. Import the final one-form runtime-truth XML generated from `FS_20260910_065349.XML`.
-2. Keep `Max / Run = 1` for UAT.
-3. Press START once and verify exactly one `SMK069ShipmentScheduler` appears in Active Background Tasks.
-4. Verify form shows `REGISTERED` plus actual `WAITING/READY/RUNNING` state.
-5. Test STOP and verify the WAITING heartbeat disappears.
-6. Only then continue controlled P96331 HTTP lifecycle testing.
+Do not increase `Shipments / Run` above 1 until the initial PROD observation window has passed and capacity is explicitly approved.
