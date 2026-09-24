@@ -5,6 +5,13 @@ Scope: **Shipment outbound SyteLine -> POS API only**
 
 This folder is the PROD cutover package. It deliberately does **not** include POS inbound / CSV-to-CO objects.
 
+Companion operator documents:
+
+```text
+EXPORT_FROM_UAT_CHECKLIST.md
+ROLLBACK.md
+```
+
 ## Critical rule
 
 Do not treat the historical UAT patch folder as a PROD run list.
@@ -34,7 +41,9 @@ ue_SMK069ShipmentTransport
 SMK069ShipmentTransportExtension
 ```
 
-Do not rebuild these from the stale historical standalone files.
+Do not rebuild these from stale historical standalone files.
+
+Use `EXPORT_FROM_UAT_CHECKLIST.md` to capture/import the exact current definitions.
 
 If PROD already has that baseline, run `query-select/001-prod-preflight.sql` first and use the incremental Apply Database files only where needed.
 
@@ -57,6 +66,7 @@ Run in numeric order:
 072       fixed 1-minute retry, max 1440
 073       block PRICE NULL/0/negative before HTTP
 080       PROD URL/config template, safe OFF state
+090       emergency business-gate stop; use only when needed
 ```
 
 Before file 080, replace:
@@ -75,6 +85,27 @@ MaxShipments            = 1
 ```
 
 No username/password belongs in SQL or GitHub.
+
+## Query Select verification
+
+All files under `query-select/` are pure SELECT and have no trailing semicolon:
+
+```text
+001-prod-preflight.sql
+  baseline/runtime object and rule checks
+
+002-prod-postdeploy-config.sql
+  PROD URL/config/retry/safe-OFF validation
+
+003-prod-smoke-retry.sql
+  replace __PROD_DN__; verify retry state for controlled DN
+
+004-prod-smoke-api-history.sql
+  replace __PROD_DN__; verify HTTP/response history
+
+005-prod-smoke-view.sql
+  replace __PROD_DN__; verify source Api_post, qty, price, lot/expiry
+```
 
 ## Application metadata to migrate from UAT
 
@@ -172,8 +203,8 @@ Schema/config can migrate; UAT runtime history must not.
 ## Cutover sequence
 
 1. STOP Shipment scheduler in UAT and keep PROD scheduler OFF.
-2. Export/backup current UAT Form, IDOs, Custom Assembly, Task Definition, and exact baseline DB definitions.
-3. Run PROD preflight.
+2. Export/backup current UAT Form, IDOs, Custom Assembly, Task Definition, and exact baseline DB definitions using `EXPORT_FROM_UAT_CHECKLIST.md`.
+3. Run `query-select/001-prod-preflight.sql`.
 4. Migrate missing baseline Shipment objects.
 5. Run Apply Database files 010..073 as required, in order.
 6. Import IDOs and register all required methods on `ue_SMK069ShipmentTransport`.
@@ -186,21 +217,23 @@ Schema/config can migrate; UAT runtime history must not.
 13. Open form and confirm Actual TaskMan is NOT REGISTERED before first START.
 14. Keep Shipments / Run = 1.
 15. Run one controlled **RUN ONCE (AUTO SAVE)** while recurring business schedule is still OFF.
-16. Verify one real PROD DN end-to-end: payload, API history, retry state, `shipment_mst.SMK069_Uf_api_post`.
-17. Verify duplicate response behavior if a safe known duplicate test is available.
-18. Verify PRICE <= 0 stops locally and does not create a new Shipment POST.
-19. Only after smoke PASS: START SCHEDULER.
-20. Verify one new PROD Task Number, REGISTERED/WAITING, 1-minute heartbeat and business schedule enabled.
+16. Replace `__PROD_DN__` in queries 003/004/005 and verify one real PROD DN end-to-end.
+17. Verify API history, retry state, source `Api_post`, and `shipment_mst.SMK069_Uf_api_post`.
+18. Verify duplicate response behavior if a safe known duplicate test is available.
+19. Verify PRICE <= 0 stops locally and does not create a new Shipment POST.
+20. Only after smoke PASS: START SCHEDULER.
+21. Verify one new PROD Task Number, REGISTERED/WAITING, 1-minute heartbeat and business schedule enabled.
 
 Do not raise `Shipments / Run` above 1 during the initial PROD observation window. Capacity can be increased later as an explicit operational decision.
 
-## Emergency stop
+## Emergency stop / rollback
 
-If any unexpected PROD behavior occurs:
+Use `ROLLBACK.md` as the operational rollback guide.
+
+Fast path:
 
 1. Use **STOP SCHEDULER** on the form.
-2. If the UI cannot be used quickly, run:
-   `apply-database/090-emergency-stop.sql`.
+2. If the UI cannot be used quickly, run `apply-database/090-emergency-stop.sql`.
 3. Refresh until business/master are OFF.
 4. If TaskMan is READY/RUNNING, allow the in-flight call to finish, then STOP again once it is WAITING so the recurring instance can be removed.
 5. Preserve API/retry logs for diagnosis; do not delete history as rollback.
@@ -215,5 +248,6 @@ Before declaring PROD GO, record evidence for:
 - exact current UAT baseline DB definitions available if PROD is clean.
 - runtime PASS for the extension `data is exist` classification.
 - Patch 22 PRICE guard PASS in UAT/target before recurring scheduler activation.
+- one controlled real PROD DN RUN ONCE PASS.
 
 The migration pack is designed to fail safely rather than invent missing tenant definitions or endpoint values.
