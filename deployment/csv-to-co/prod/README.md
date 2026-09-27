@@ -182,13 +182,15 @@ See `04-mongoose-metadata-checklist.md`.
 4. Keep the DEV mapping-view baseline/hash as rollback/audit evidence; the canonical view is now included in the SQL package.
 5. Take a PROD backup / metadata export appropriate for the tenant.
 
-### B. PROD metadata/schema
+### B. PROD physical tables first
 
-1. Import UET/table/IDO metadata.
-2. Apply/Impact Schema according to Mongoose procedure.
-3. Refresh metadata/cache where required.
-4. Run `01-preflight.sql`.
-5. The canonical mapping view is created/altered by `02-deploy-canonical-runtime.sql`.
+1. Ensure standard SyteLine UDTs exist.
+2. Run `00c-create-core-physical-tables.sql` in Apply Database.
+3. Import remaining UET/IDO/Form metadata as needed.
+4. Apply/Impact Schema where required.
+5. Refresh metadata/cache.
+6. Run `01-preflight.sql`.
+7. The canonical mapping view is created/altered by `02-deploy-canonical-runtime.sql`.
 
 Do not continue when preflight fails.
 
@@ -316,3 +318,26 @@ Production is ready only when all items below pass:
 [ ] CSV one-hit UAT PASS
 [ ] Error Processing display UAT PASS
 ```
+
+
+## Core physical tables — captured from DEV
+
+The four transaction/staging tables are now scripted directly from the DEV
+column/key/index metadata captured on 28 Sep 2026:
+
+```text
+dbo.ue_SMK069_pos_sales_inbound_mst
+dbo.ue_SMK069_temp_sales_mst
+dbo.ue_SMK069_pos_csv_batch_mst
+dbo.ue_SMK069_pos_csv_upload_mst
+```
+
+Apply:
+
+```text
+deployment/csv-to-co/prod/00c-create-core-physical-tables.sql
+```
+
+This script is one executable batch with no `GO`, includes captured
+identity/PK/unique/index/FK definitions, and is safe to rerun because existing
+tables are left unchanged.
