@@ -107,17 +107,27 @@ raw_json
 → CO
 ```
 
-## Objects not owned by this SQL package
+## Mapping view
 
-### Mapping view — owned by Eva / SMK
+The exact working DEV definition supplied for:
 
 ```text
 dbo.ue_SMK069_pos_sales_inbound_mapping_view
 ```
 
-The repository deliberately does not invent or replace this view.
+is now captured canonically at:
 
-For PROD, migrate the **exact working DEV definition** from the SMK/Eva-owned source. At minimum it must expose:
+```text
+database/views/csv-to-co/ue_SMK069_pos_sales_inbound_mapping_view.sql
+```
+
+and is deployed by:
+
+```text
+02-deploy-canonical-runtime.sql
+```
+
+It exposes at minimum:
 
 ```text
 inbound_id
@@ -144,7 +154,7 @@ is_peak_season
 ValidationStatus
 ```
 
-Run `00-capture-dev-baseline.sql` in DEV and compare the mapping-view SHA-256 with PROD after migration.
+DEV evidence hash remains recorded for audit. Because the repository deploys a normalized `CREATE OR ALTER VIEW` canonical source, functional/source verification is performed by `03-post-deploy-verify.sql`; the historical DEV SHA-256 is retained as a reference, not a byte-for-byte gate for the normalized deployment text.
 
 ### Mongoose metadata
 
@@ -168,17 +178,17 @@ See `04-mongoose-metadata-checklist.md`.
 
 1. Freeze relevant DEV changes.
 2. Run `00-capture-dev-baseline.sql` in DEV and save the outputs.
-3. Export the exact DEV mapping view owned by Eva/SMK.
-4. Export the Mongoose/UET/IDO/Form metadata listed in the metadata checklist.
+3. Export the Mongoose/UET/IDO/Form metadata listed in the metadata checklist.
+4. Keep the DEV mapping-view baseline/hash as rollback/audit evidence; the canonical view is now included in the SQL package.
 5. Take a PROD backup / metadata export appropriate for the tenant.
 
 ### B. PROD metadata/schema
 
 1. Import UET/table/IDO metadata.
 2. Apply/Impact Schema according to Mongoose procedure.
-3. Import the exact SMK mapping-view definition.
-4. Refresh metadata/cache where required.
-5. Run `01-preflight.sql`.
+3. Refresh metadata/cache where required.
+4. Run `01-preflight.sql`.
+5. The canonical mapping view is created/altered by `02-deploy-canonical-runtime.sql`.
 
 Do not continue when preflight fails.
 
