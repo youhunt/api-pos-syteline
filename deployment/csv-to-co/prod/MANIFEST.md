@@ -43,13 +43,23 @@ In particular:
 
 is **WITHDRAWN / DO NOT APPLY**.
 
-## External definition not embedded
+## Mapping-view source captured
+
+The working DEV definition of:
 
 ```text
 dbo.ue_SMK069_pos_sales_inbound_mapping_view
 ```
 
-is owned by Eva / SMK and must be migrated from the exact working DEV definition. Record its DEV SHA-256 from `00-capture-dev-baseline.sql`, then compare it with PROD after import.
+is now stored at:
+
+```text
+database/views/csv-to-co/ue_SMK069_pos_sales_inbound_mapping_view.sql
+```
+
+and embedded in `02-deploy-canonical-runtime.sql`.
+
+The DEV SHA-256 remains recorded as audit evidence. The deployment source uses normalized `CREATE OR ALTER VIEW` text, so compare behavior/source markers rather than expecting the normalized PROD text hash to equal the historical DEV text hash byte-for-byte.
 
 ## Drift rule
 
