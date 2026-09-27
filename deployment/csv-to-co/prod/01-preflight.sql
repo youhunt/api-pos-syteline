@@ -26,9 +26,6 @@ IF OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mst', N'U') IS NULL
 IF OBJECT_ID(N'dbo.ue_SMK069_temp_sales_mst', N'U') IS NULL
     INSERT @Missing VALUES (N'dbo.ue_SMK069_temp_sales_mst', N'table tidak ditemukan');
 
-IF OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view', N'V') IS NULL
-    INSERT @Missing VALUES (N'dbo.ue_SMK069_pos_sales_inbound_mapping_view', N'view canonical mapping tidak ditemukan');
-
 IF OBJECT_ID(N'dbo.ue_SMK069_pos_field_map_mst', N'U') IS NULL
     INSERT @Missing VALUES (N'dbo.ue_SMK069_pos_field_map_mst', N'field-map table tidak ditemukan');
 
@@ -129,8 +126,9 @@ BEGIN
 END;
 
 /* --------------------------------------------------------------------------
-   Mapping-view contract. Definition itself is owned by Eva/SMK and must be
-   migrated from the working DEV version, not reconstructed here.
+   Mapping-view contract. If the view already exists, validate it here.
+   If it is absent, 02-deploy-canonical-runtime.sql creates the captured
+   canonical DEV definition after prerequisite schema/UET checks pass.
    -------------------------------------------------------------------------- */
 IF OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view', N'V') IS NOT NULL
 BEGIN
