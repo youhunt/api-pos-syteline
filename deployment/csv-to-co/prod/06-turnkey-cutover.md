@@ -15,7 +15,18 @@ Forms, IDOs, UET classes, form events and generated table triggers are
 application metadata and should be migrated using Mongoose-supported
 export/import/metadata tooling.
 
-## A. Mongoose metadata package — import first
+## A. Core physical tables — create first
+
+Run:
+
+```text
+deployment/csv-to-co/prod/00c-create-core-physical-tables.sql
+```
+
+This creates the four DEV-proven transaction/staging tables, including their
+captured identities, keys, indexes, defaults and CSV batch/detail foreign key.
+
+## B. Mongoose metadata package
 
 Export the verified working DEV metadata for:
 
@@ -49,7 +60,7 @@ Forms
 After import, run Apply/Impact Schema so Mongoose creates/regenerates the
 physical custom tables, user fields and generated triggers consistently.
 
-## B. One Apply Database SQL
+## C. One Apply Database SQL
 
 After metadata/schema exists, run:
 
@@ -113,12 +124,13 @@ canonical SQL runtime package.
 ## Minimal PROD sequence
 
 ```text
-1. Import verified DEV Mongoose metadata package
-2. Impact/Apply Schema
-3. Run 01-preflight.sql
-4. Run 02-deploy-canonical-runtime.sql in Apply Database
-5. Run 03-post-deploy-verify.sql
-6. Run smoke/UAT checklist
+1. Run 00c-create-core-physical-tables.sql
+2. Import verified DEV Mongoose metadata package
+3. Impact/Apply Schema
+4. Run 01-preflight.sql
+5. Run 02-deploy-canonical-runtime.sql in Apply Database
+6. Run 03-post-deploy-verify.sql
+7. Run smoke/UAT checklist
 ```
 
 If speed is critical, steps 3 and 5 are validation gates; they do not create
