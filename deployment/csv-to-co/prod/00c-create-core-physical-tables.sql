@@ -9,6 +9,7 @@
    2. dbo.ue_SMK069_temp_sales_mst
    3. dbo.ue_SMK069_pos_csv_batch_mst
    4. dbo.ue_SMK069_pos_csv_upload_mst
+   5. dbo.ue_SMK069_pos_field_map_mst
 
    Notes:
    - Re-runnable: an existing table is left unchanged.
@@ -333,4 +334,39 @@ END
 ELSE
     PRINT N'[SMK069 TABLES] EXISTS dbo.ue_SMK069_pos_csv_upload_mst';
 
-PRINT N'[SMK069 TABLES] SUCCESS - four core physical tables are present.';
+/* ==========================================================================
+   5. POS external-to-canonical field map
+   ========================================================================== */
+IF OBJECT_ID(N'dbo.ue_SMK069_pos_field_map_mst', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.ue_SMK069_pos_field_map_mst
+    (
+        source_system NVARCHAR(50) NOT NULL,
+        source_field  NVARCHAR(100) NOT NULL,
+        target_field  NVARCHAR(100) NOT NULL,
+        is_required   BIT NOT NULL
+            CONSTRAINT DF_SMK069FieldMap_IsRequired DEFAULT ((0)),
+        priority_no   INT NOT NULL
+            CONSTRAINT DF_SMK069FieldMap_PriorityNo DEFAULT ((100)),
+        is_active     BIT NOT NULL
+            CONSTRAINT DF_SMK069FieldMap_IsActive DEFAULT ((1)),
+        description   NVARCHAR(255) NULL,
+        RowPointer    UNIQUEIDENTIFIER NOT NULL
+            CONSTRAINT DF_SMK069FieldMap_RowPointer DEFAULT (NEWID()),
+        SiteRef       dbo.SiteType NOT NULL
+            CONSTRAINT DF_SMK069FieldMap_SiteRef
+            DEFAULT (RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))),
+
+        CONSTRAINT PK_SMK069FieldMap
+            PRIMARY KEY CLUSTERED (source_system, source_field)
+    );
+
+    CREATE UNIQUE NONCLUSTERED INDEX UX_SMK069FieldMap_RowPointer
+        ON dbo.ue_SMK069_pos_field_map_mst(RowPointer);
+
+    PRINT N'[SMK069 TABLES] CREATED dbo.ue_SMK069_pos_field_map_mst';
+END
+ELSE
+    PRINT N'[SMK069 TABLES] EXISTS dbo.ue_SMK069_pos_field_map_mst';
+
+PRINT N'[SMK069 TABLES] SUCCESS - five core/config physical tables are present.';
