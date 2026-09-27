@@ -21,8 +21,6 @@ IF OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mst', N'U') IS NULL
     THROW 520020, N'[PROD-RUNTIME] inbound table belum tersedia. Jalankan preflight.', 1;
 IF OBJECT_ID(N'dbo.ue_SMK069_temp_sales_mst', N'U') IS NULL
     THROW 520021, N'[PROD-RUNTIME] temp table belum tersedia. Jalankan preflight.', 1;
-IF OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view', N'V') IS NULL
-    THROW 520022, N'[PROD-RUNTIME] mapping view belum tersedia. Jalankan preflight.', 1;
 IF COL_LENGTH(N'dbo.ue_SMK069_pos_sales_inbound_mst', N'is_peak_season') IS NULL
     THROW 520023, N'[PROD-RUNTIME] inbound.is_peak_season belum tersedia.', 1;
 IF COL_LENGTH(N'dbo.ue_SMK069_temp_sales_mst', N'cust_po') IS NULL
@@ -39,6 +37,119 @@ IF NOT EXISTS
 )
     THROW 520027, N'[PROD-RUNTIME] mapping view.ValidationStatus belum tersedia.', 1;
 
+
+
+/* ========================================================================== 
+   0. Canonical inbound mapping view dbo.ue_SMK069_pos_sales_inbound_mapping_view
+   ========================================================================== */
+DECLARE @ProdSql00 NVARCHAR(MAX) = N'';
+SET @ProdSql00 = @ProdSql00 + N'CREATE OR ALTER VIEW dbo.ue_SMK069_pos_sales_inbound_mapping_view
+AS
+SELECT
+    i.inbound_id,
+    i.source_system,
+    i.batch_id,
+    i.row_no,
+    i.raw_json,
+    i.SiteRef,
+    c.cust_num,
+    c.cust_seq,
+    i.cust_po,
+    i.order_date,
+    i.co_num,
+    i.co_line,
+    it.item AS item,
+    CAST
+    (
+        ISNULL
+        (
+            dbo.SMK030_UomConvQty2
+            (
+                i.qty_ordered,
+                ISNULL(dbo.Getumcf(i.u_m, ic.item, '''', ''''), 1),
+                ''To Base''
+            ),
+            0
+        ) AS decimal(23,5)
+    ) AS qty_ordered,
+    (
+        SELECT TOP 1 p.cont_price
+        FROM itemcustprice p
+        JOIN itemcust ci
+          ON p.item = ci.item
+         AND p.cust_num = ci.cust_num
+        WHERE i.order_date >= p.effect_date
+          AND ci.cust_item = i.item
+          AND ci.u_m = it.u_m
+          AND ci.cust_num = c.cust_num
+          AND ci.Uf_SMK069_is_peak_season = i.is_peak_season
+        ORDER BY p.effect_date DESC
+    ) AS unit_price,
+    IIF(i.whse = ''P963'', ''PLG'', ''MAIN'') AS whse,
+    DATEADD(dd, ISNULL(ic.due_period, 0), i.order_date) AS due_date,
+    it.u_m AS u_m,
+    cs.terms_code,
+    cs.tax_code1,
+    i.exch_rate,
+    i.inbound_status,
+    i.validation_msg,
+    i.received_date,
+    i.validated_date,
+    i.transferred_date,
+    i.created_by,
+    i.updated_by,
+    i.is_peak_season,
+    CASE
+        WHEN
+            CAST
+            (
+                ISNULL
+                (
+                    dbo.SMK030_UomConvQty2
+                    (
+                        i.qty_ordered,
+                        ISNULL(dbo.Getumcf(i.u_m, ic.item, '''', ''''), 1),
+                        ''To Base''
+                    ),
+                    0
+                ) AS decimal(23,5)
+            )
+            <>
+            FLOOR
+            (
+                CAST
+                (
+                    ISNULL
+                    (
+                        dbo.SMK030_UomConvQty2
+                        (
+                            i.qty_ordered,
+                            ISNULL(dbo.Getumcf(i.u_m, ic.item, '''', ''''), 1),
+                            ''To Base''
+                        ),
+                        0
+                    ) AS decimal(23,5)
+                )
+            )
+        THEN ''N''
+        ELSE ''V''
+    END AS ValidationStatus
+FROM ue_SMK069_pos_sales_inbound_mst i
+JOIN custaddr c
+  ON i.cust_num = LEFT(c.name, 4)
+ AND c.cust_num LIKE ''PH%''
+ AND c.cust_seq <> 0
+LEFT JOIN customer cs
+  ON cs.cust_num = c.cust_num
+ AND cs.cust_seq = 0
+JOIN itemcust ic
+  ON ic.cust_item = i.item
+ AND ic.cust_num = c.cust_num
+ AND ic.Uf_SMK069_is_peak_season = i.is_peak_season
+JOIN item it
+  ON it.item = ic.item
+WHERE i.SiteRef = CAST(CONTEXT_INFO() AS NVARCHAR(8));';
+EXEC sys.sp_executesql @ProdSql00;
 
 /* ========================================================================== 
    1. CSV helper dbo.SMK069CsvSplitLine
@@ -4439,6 +4550,8 @@ EXEC sys.sp_executesql @ProdSql08;
 /* ==========================================================================
    Post-deploy source parity checks
    ========================================================================== */
+IF OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view', N'V') IS NULL
+    THROW 520029, N'[PROD-RUNTIME] mapping view gagal deploy.', 1;
 IF OBJECT_ID(N'dbo.SMK069CsvSplitLine') IS NULL
     THROW 520030, N'[PROD-RUNTIME] SMK069CsvSplitLine gagal deploy.', 1;
 IF OBJECT_ID(N'dbo.SMK069ImportCsvFileSp', N'P') IS NULL
