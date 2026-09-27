@@ -84,12 +84,22 @@ SQL Server `HASHBYTES('SHA2_256', CONVERT(VARBINARY(MAX), ...))`.
 
 ### PROD comparison rule
 
-After migrating metadata/view/runtime to PROD, rerun
-`00-capture-dev-baseline.sql` (or the runtime-signature section) in PROD.
+After migrating metadata/view/runtime to PROD, rerun the signature query in
+PROD.
 
-For the exact DEV baseline definitions, all corresponding hashes should match.
+Use the hashes with two different rules:
 
-The most important external dependency is:
+1. **Exact-copy external objects** — especially the SMK/Eva-owned mapping view:
+   the PROD hash **must match** the DEV hash when the exact DEV definition is
+   migrated.
+2. **Repository canonical runtime objects** deployed by
+   `02-deploy-canonical-runtime.sql`: a DEV hash mismatch is **not by itself a
+   failure**, because canonical source can differ textually from an incrementally
+   patched DEV definition (comments, CREATE/ALTER text, formatting, rebased
+   source) while implementing the same final behavior. Verify these objects with
+   `03-post-deploy-verify.sql` and the canonical source manifest.
+
+The most important strict hash gate is:
 
 ```text
 dbo.ue_SMK069_pos_sales_inbound_mapping_view
@@ -100,3 +110,7 @@ E1D32D405FE78D96259224E0D2EF78763E4216189A5F2222EE627228C75D1B0B
 If that view hash differs in PROD, stop functional cutover and compare the
 definition before testing Peak/Normal mapping, `ValidationStatus`, item/U/M,
 price, quantity conversion, or `cust_seq`.
+
+The remaining DEV runtime hashes are retained as audit evidence and a useful
+drift diagnostic, not as a mandatory byte-for-byte gate for the consolidated
+canonical PROD deployment.
