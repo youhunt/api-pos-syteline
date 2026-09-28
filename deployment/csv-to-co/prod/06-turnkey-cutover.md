@@ -125,13 +125,14 @@ canonical SQL runtime package.
 
 ```text
 1. Run 00c-create-core-physical-tables.sql
-2. Run 00e-ensure-itemcust-peak-posum-physical.sql
-3. Import verified DEV Mongoose metadata package
-4. Impact/Apply Schema
-5. Run 01-preflight.sql
-6. Run 02-deploy-canonical-runtime.sql in Apply Database
-7. Run 03-post-deploy-verify.sql
-8. Run smoke/UAT checklist
+2. Import verified DEV UET metadata
+3. Run UET Impact Schema
+4. Verify itemcust physical fields (optional Query Select 00f)
+5. Import remaining verified DEV IDO/Form metadata
+6. Run 01-preflight.sql
+7. Run 02-deploy-canonical-runtime.sql in Apply Database
+8. Run 03-post-deploy-verify.sql
+9. Run smoke/UAT checklist
 ```
 
 If speed is critical, steps 3 and 5 are validation gates; they do not create
@@ -153,3 +154,10 @@ The migration can be considered turnkey when the repository contains:
 ```
 
 The remaining item is an export artifact, not missing business logic.
+
+
+## Direct itemcust SQL fallback
+
+`00e-ensure-itemcust-peak-posum-physical.sql` is retained only as a controlled
+fallback. The verified normal deployment path is Mongoose UET metadata import
+followed by UET Impact Schema.
