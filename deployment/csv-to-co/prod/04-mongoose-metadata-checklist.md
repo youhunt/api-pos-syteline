@@ -452,27 +452,51 @@ CustSeq      -> derived from mapping view by SiteRef + CustPo
 Name         -> derived from mapping view + custaddr by SiteRef + CustPo
 ```
 
-### Required correction before PROD UAT
+### Required corrections before PROD UAT
 
-The imported XML currently defines:
+The imported XML currently defines two processing/orchestration methods with an
+outer Mongoose transaction:
 
 ```text
 SMK069ReceivePosSalesJsonSp
-Transactional = YES
+  Transactional = YES
+
+SMK069ProcessCustomerOrderSp
+  Transactional = YES
 ```
 
-This must be changed to:
+Change both to:
 
 ```text
 Transactional = NO / False
 ```
 
-because the canonical receive path calls the per-order processor that owns its
-own transaction boundary.
+Reason: `SMK069ProcessCustomerOrderSp` owns its own SQL transaction boundary.
+The public Receive path can call the per-order processor, and the Error
+Processing form can call the per-order method directly.
 
-The imported method exposes the original 10 public parameters. This remains
-backward-compatible because canonical parameters 11-14 are appended/defaulted,
-but for the full current metadata contract the preferred definition exposes:
+The imported `SMK069ProcessCustomerOrderSp` metadata also still declares:
+
+```text
+SourceCoNum = VARCHAR(10)
+```
+
+but the final SQL signature is:
+
+```text
+@SourceCoNum NVARCHAR(100)
+```
+
+The parameter name is retained only for compatibility; new callers pass the
+business `cust_po`. Set the IDO method parameter length to **100** so a valid
+CustPO is not constrained by the old 10-character technical order contract.
+
+The imported public Receive method exposes the original 10 parameters. Keep
+that 10-parameter metadata if backward compatibility with existing callers is
+required: the SQL procedure's parameters 11-14 are appended/defaulted, so the
+10-parameter method remains valid.
+
+Optional full-current metadata can expose:
 
 ```text
 11 ProcessedOrders OUT
@@ -481,7 +505,17 @@ but for the full current metadata contract the preferred definition exposes:
 14 ThrowOnBusinessError IN
 ```
 
+but changing the IDO method to 14 parameters can change the positional Mongoose
+Invoke contract for clients. Do not change this merely for migration parity
+without coordinating the caller.
+
 The XML also still contains the legacy
-`SMK069ReceiveAndProcessPosSalesJsonSp` method. Do not use it as the primary
-PROD API path; the canonical public entry point is
+`SMK069ReceiveAndProcessPosSalesJsonSp` method. It may remain for compatibility,
+but do not use it as the primary PROD API path. The final public entry point is
 `SMK069ReceivePosSalesJsonSp`.
+
+### Form export note
+
+The supplied Object Studio XML contains IDO definitions only. It does not contain
+the two form definitions/events. If the forms were imported separately, verify
+them in PROD using sections 4 and 8 of this checklist before UAT.
