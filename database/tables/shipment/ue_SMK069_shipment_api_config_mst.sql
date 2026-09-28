@@ -1,3 +1,11 @@
+/* REFERENCE ONLY — DO NOT USE AS THE AUTHORITATIVE PROD CREATION PATH.
+   This is a captured physical-schema reference.
+   Create/update this Mongoose-owned custom table through the SQL Tables form
+   so application-schema metadata and standard Del/Insert/UpdatePenultimate
+   triggers are generated. If the physical table already exists from raw SQL,
+   use SQL Tables > Update Current Table, then verify the generated triggers.
+*/
+
 /* =============================================================================
    SMK069 Shipment PROD baseline
    Object : dbo.ue_SMK069_shipment_api_config_mst
