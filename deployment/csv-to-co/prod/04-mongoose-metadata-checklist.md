@@ -592,3 +592,23 @@ Mapping view                   = INFO / already exists
 
 No FAIL rows were present. PROD is cleared for
 `02-deploy-canonical-runtime.sql`.
+
+
+## PROD runtime deployment result — 28 Sep 2026
+
+User executed:
+
+```text
+deployment/csv-to-co/prod/02-deploy-canonical-runtime.sql
+```
+
+through SyteLine **Apply Database**.
+
+Observed result:
+
+```text
+Process Completed Successfully
+```
+
+No deployment error was reported. The next gate is
+`03-post-deploy-verify.sql` through **Query Select**.
