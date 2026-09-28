@@ -8,7 +8,7 @@
    - Fresh/current-state PROD deployment. This replaces replaying Patch 01..35.
    - Run deployment/CSV-to-CO PROD preflight first.
    - One executable batch. NO GO.
-   - Does NOT create/replace the SMK-owned mapping view.
+   - Creates/alters the captured final mapping view as part of this runtime.
    - Does NOT create Mongoose UET / IDO / Form metadata.
    - No historical DEV/UAT data backfill is performed.
    ============================================================================= */
@@ -29,13 +29,10 @@ IF COL_LENGTH(N'dbo.ue_SMK069_temp_sales_mst', N'created_co_num') IS NULL
     THROW 520025, N'[PROD-RUNTIME] temp.created_co_num belum tersedia.', 1;
 IF COL_LENGTH(N'dbo.itemcust_mst', N'Uf_SMK069_is_peak_season') IS NULL
     THROW 520026, N'[PROD-RUNTIME] itemcust UET Peak Season belum tersedia.', 1;
-IF NOT EXISTS
-(
-    SELECT 1 FROM sys.columns
-    WHERE object_id = OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view')
-      AND name = N'ValidationStatus'
-)
-    THROW 520027, N'[PROD-RUNTIME] mapping view.ValidationStatus belum tersedia.', 1;
+IF OBJECT_ID(N'dbo.SMK030_UomConvQty2') IS NULL
+    THROW 520027, N'[PROD-RUNTIME] SMK030_UomConvQty2 belum tersedia.', 1;
+IF OBJECT_ID(N'dbo.Getumcf') IS NULL
+    THROW 520028, N'[PROD-RUNTIME] Getumcf belum tersedia.', 1;
 
 
 
@@ -150,6 +147,15 @@ JOIN item it
   ON it.item = ic.item
 WHERE i.SiteRef = CAST(CONTEXT_INFO() AS NVARCHAR(8));';
 EXEC sys.sp_executesql @ProdSql00;
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view')
+      AND name = N'ValidationStatus'
+)
+    THROW 520029, N'[PROD-RUNTIME] mapping view berhasil dibuat tetapi ValidationStatus tidak ditemukan.', 1;
 
 /* ========================================================================== 
    1. CSV helper dbo.SMK069CsvSplitLine
