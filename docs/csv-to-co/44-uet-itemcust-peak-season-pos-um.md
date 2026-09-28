@@ -170,3 +170,37 @@ Setelah deploy ke target environment, buka form **Customer Contracts** dan verif
 [ ] Customer Contracts menampilkan POS U/M
 [ ] Customer Contracts menampilkan checkbox Is Peak Season?
 ```
+
+
+## DEV verification — 28 Sep 2026
+
+Verified from the active DEV UET setup:
+
+```text
+User Field Name : Uf_SMK069_is_peak_season
+User Data Type  : int
+Decimals        : 0
+Initial Value   : <blank in UET metadata>
+
+User Field Name : Uf_SMK069_pos_um
+User Data Type  : UMType
+Physical Type   : nvarchar(3)
+Initial Value   : <blank in UET metadata>
+
+Class Name      : SMK069_CL_itemcust
+Fields:
+  Uf_SMK069_is_peak_season
+  Uf_SMK069_pos_um
+
+Table Name      : itemcust_mst
+Class Name      : SMK069_CL_itemcust
+Active          : 1
+Extend All Records : 1
+```
+
+DEV **UET Impact Schema** completed successfully.
+
+For PROD, migrate the same UET metadata and run UET Impact Schema. The direct
+SQL physical-column helper under
+`deployment/csv-to-co/prod/00e-ensure-itemcust-peak-posum-physical.sql` is a
+fallback only, not the normal migration path.
