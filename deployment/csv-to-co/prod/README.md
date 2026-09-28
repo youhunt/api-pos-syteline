@@ -160,7 +160,7 @@ DEV evidence hash remains recorded for audit. Because the repository deploys a n
 
 SQL deployment does not replace Mongoose metadata migration.
 
-Migrate/export from the verified DEV configuration:
+Migrate/export from the verified TRN configuration:
 
 ```text
 UET/User Fields
@@ -384,7 +384,7 @@ CSV/POS inbound migration scope and are not part of this package.
 
 ## Field-map seed — verified DEV
 
-The DEV rows for:
+The TRN rows for:
 
 ```text
 dbo.ue_SMK069_pos_field_map_mst
@@ -403,12 +403,15 @@ terms, tax, price, exchange rate, due date and SiteRef.
 The seed is idempotent: existing rows are updated by the table primary key
 `source_system + source_field`; missing rows are inserted.
 
-The captured DEV rows use:
+The captured TRN rows used:
 
 ```text
 SiteRef = Default
 source_system = POS
 ```
 
-The active PROD site context must therefore be compatible with the seeded
-SiteRef because Receive Core filters the field map by `m.SiteRef = @Site`.
+The PROD seed does **not** copy the TRN SiteRef or TRN RowPointer values.
+`00c-create-core-physical-tables.sql` resolves the target active site from
+`CONTEXT_INFO()` and generates fresh RowPointers, while preserving the verified
+36 business mappings. Receive Core continues to filter by
+`m.SiteRef = @Site`.
