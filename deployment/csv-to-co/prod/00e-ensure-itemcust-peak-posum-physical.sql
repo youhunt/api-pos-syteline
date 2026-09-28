@@ -2,15 +2,21 @@
    SMK069 PROD - ENSURE ITEMCUST PEAK/POS UOM PHYSICAL COLUMNS
    Scope : CSV / POS inbound -> Blanket Customer Order ONLY
    Date  : 2026-09-28
-   Mode  : Apply Database compatible, ONE BATCH, NO GO
+   Mode  : FALLBACK ONLY / Apply Database compatible, ONE BATCH, NO GO
 
    DEV-proven fields:
    - itemcust_mst.Uf_SMK069_is_peak_season : INT NOT NULL DEFAULT 0
    - itemcust_mst.Uf_SMK069_pos_um         : UMType NULL
 
    IMPORTANT:
-   This establishes the physical DB contract required by the mapping/view/runtime.
-   Mongoose UET metadata/class/form metadata is handled separately.
+   Normal PROD path is:
+     import verified Mongoose UET metadata -> UET Impact Schema.
+
+   DO NOT run this file when UET Impact Schema has already created the columns.
+   Keep it only as a controlled fallback for environments where UET metadata
+   deployment is unavailable but the physical runtime contract must be restored.
+
+   This file does NOT create UET class/field/table metadata.
    ============================================================================= */
 
 SET NOCOUNT ON;
