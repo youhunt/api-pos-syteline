@@ -369,4 +369,108 @@ END
 ELSE
     PRINT N'[SMK069 TABLES] EXISTS dbo.ue_SMK069_pos_field_map_mst';
 
+/* ==========================================================================
+   6. Seed POS external-to-canonical field map
+   Source: verified DEV rows supplied 2026-09-28
+   ========================================================================== */
+MERGE dbo.ue_SMK069_pos_field_map_mst AS tgt
+USING
+(
+    VALUES
+        (N'POS',N'co_line',N'co_line',CAST(1 AS bit),20,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'3A891D55-D4F9-4B5F-AA10-EC0559254BF0'),N'Default'),
+        (N'POS',N'co_num',N'co_num',CAST(1 AS bit),20,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'95008871-B468-4C92-BFA2-C4D34F3EB0CC'),N'Default'),
+        (N'POS',N'coline',N'co_line',CAST(1 AS bit),10,CAST(1 AS bit),N'POS field used in current sample',CONVERT(uniqueidentifier,N'6FD43DCD-109A-4A60-A09B-0110E9552E43'),N'Default'),
+        (N'POS',N'conum',N'co_num',CAST(1 AS bit),10,CAST(1 AS bit),N'POS field used in current sample',CONVERT(uniqueidentifier,N'E345BF35-2E75-4DD1-A010-9758160E5C54'),N'Default'),
+        (N'POS',N'cust_num',N'cust_num',CAST(1 AS bit),20,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'336A03BA-6E84-4A2D-A23B-5C70B6A2CF3F'),N'Default'),
+        (N'POS',N'cust_po',N'cust_po',CAST(0 AS bit),1,CAST(1 AS bit),NULL,CONVERT(uniqueidentifier,N'39FADE78-9E3C-4E93-AA91-B00B230A2580'),N'Default'),
+        (N'POS',N'custnum',N'cust_num',CAST(1 AS bit),10,CAST(1 AS bit),N'POS field used in current sample',CONVERT(uniqueidentifier,N'85DD83C7-542A-4B7F-BA6A-D63CD2AB1DC5'),N'Default'),
+        (N'POS',N'customer',N'cust_num',CAST(1 AS bit),30,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'5CAA448A-9673-4A52-9DFF-D5464330C8F6'),N'Default'),
+        (N'POS',N'customer_no',N'cust_num',CAST(1 AS bit),40,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'925E2023-04FB-4F69-995B-99492A9B4C3A'),N'Default'),
+        (N'POS',N'due_date',N'due_date',CAST(0 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'07402AED-D6E8-4A5F-87DE-3E910A923199'),N'Default'),
+        (N'POS',N'duedate',N'due_date',CAST(0 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'7E9C7BF8-6726-4363-8FFC-918F2108F628'),N'Default'),
+        (N'POS',N'exch_rate',N'exch_rate',CAST(0 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'49F40D33-F3DE-4647-AC45-6B3339B5B231'),N'Default'),
+        (N'POS',N'exchange_rate',N'exch_rate',CAST(0 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'D834E21C-12ED-4ACB-AEC6-67625C3C5AD8'),N'Default'),
+        (N'POS',N'item',N'item',CAST(1 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'B3A1433C-CFAC-44D3-831F-45DDC9D4BA25'),N'Default'),
+        (N'POS',N'item_code',N'item',CAST(1 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'ED955FFA-ED8A-4EE5-978C-EC79EEF5ED5E'),N'Default'),
+        (N'POS',N'line_no',N'co_line',CAST(1 AS bit),30,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'3D11575E-496C-4FB2-B8E4-148938C48128'),N'Default'),
+        (N'POS',N'order_date',N'order_date',CAST(1 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'9B9A0CAC-58D7-42E2-8A4B-1F4878821D36'),N'Default'),
+        (N'POS',N'order_no',N'co_num',CAST(1 AS bit),30,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'AD36D314-71B4-4536-8958-3A91262811D2'),N'Default'),
+        (N'POS',N'orderdate',N'order_date',CAST(1 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'D1F9B859-0F78-4A64-ABC1-42EACC83BAE9'),N'Default'),
+        (N'POS',N'price',N'unit_price',CAST(0 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'90B2D2FF-2D74-4B11-85AA-355AC0AB23E6'),N'Default'),
+        (N'POS',N'qty',N'qty_ordered',CAST(1 AS bit),40,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'236782B5-06C0-48BD-900B-47E8FCA51B3E'),N'Default'),
+        (N'POS',N'qty_order',N'qty_ordered',CAST(1 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'96BC21D7-E715-42E0-841F-3F6C7F354C19'),N'Default'),
+        (N'POS',N'qty_ordered',N'qty_ordered',CAST(1 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'5D78102F-BC07-4393-A00B-430226AEDF03'),N'Default'),
+        (N'POS',N'quantity',N'qty_ordered',CAST(1 AS bit),30,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'7BC3063B-459E-4B95-8FB0-A7DD3E86A0DC'),N'Default'),
+        (N'POS',N'site_ref',N'SiteRef',CAST(0 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'F14D90EF-DF04-4FAE-B5A0-BE70E9DE72CF'),N'Default'),
+        (N'POS',N'siteref',N'SiteRef',CAST(0 AS bit),10,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'B4D9F567-589D-4608-910C-585D8D618405'),N'Default'),
+        (N'POS',N'sku',N'item',CAST(1 AS bit),30,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'EB1A05F1-9DDA-41DA-A2F6-9D68E550B9A0'),N'Default'),
+        (N'POS',N'tax_code',N'tax_code1',CAST(0 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'630DECD7-7B37-4303-A78B-2775694B63C0'),N'Default'),
+        (N'POS',N'tax_code1',N'tax_code1',CAST(0 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'23CDB89D-80C8-45E4-9C90-5E855FFA1CC9'),N'Default'),
+        (N'POS',N'terms',N'terms_code',CAST(0 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'20DE8B7D-D5B9-42E1-B950-A15899A2EA8C'),N'Default'),
+        (N'POS',N'terms_code',N'terms_code',CAST(0 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'3492676A-16EC-4F95-BEB1-CAD937900824'),N'Default'),
+        (N'POS',N'u_m',N'u_m',CAST(0 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'E93980A7-03FC-4108-8D80-0F1C667F6FD2'),N'Default'),
+        (N'POS',N'um',N'u_m',CAST(0 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'6CD01F5D-BF88-4BDB-BA09-284728A4CC6A'),N'Default'),
+        (N'POS',N'unit_price',N'unit_price',CAST(0 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'F682915D-32AA-45B4-BEC1-A5CB3FD2D6E7'),N'Default'),
+        (N'POS',N'warehouse',N'whse',CAST(0 AS bit),20,CAST(1 AS bit),N'Accepted alias',CONVERT(uniqueidentifier,N'FFCE5E52-DAB8-49CB-A32E-4A002D7BAF34'),N'Default'),
+        (N'POS',N'whse',N'whse',CAST(0 AS bit),10,CAST(1 AS bit),N'Canonical field name',CONVERT(uniqueidentifier,N'8F0F9DBB-CAB8-415E-BB24-F9CA009239F6'),N'Default')
+) AS src
+(
+    source_system,
+    source_field,
+    target_field,
+    is_required,
+    priority_no,
+    is_active,
+    description,
+    RowPointer,
+    SiteRef
+)
+ON tgt.source_system = src.source_system
+AND tgt.source_field = src.source_field
+WHEN MATCHED THEN
+    UPDATE SET
+        tgt.target_field = src.target_field,
+        tgt.is_required  = src.is_required,
+        tgt.priority_no  = src.priority_no,
+        tgt.is_active    = src.is_active,
+        tgt.description  = src.description,
+        tgt.SiteRef      = src.SiteRef
+WHEN NOT MATCHED BY TARGET THEN
+    INSERT
+    (
+        source_system,
+        source_field,
+        target_field,
+        is_required,
+        priority_no,
+        is_active,
+        description,
+        RowPointer,
+        SiteRef
+    )
+    VALUES
+    (
+        src.source_system,
+        src.source_field,
+        src.target_field,
+        src.is_required,
+        src.priority_no,
+        src.is_active,
+        src.description,
+        src.RowPointer,
+        src.SiteRef
+    );
+
+IF
+(
+    SELECT COUNT(*)
+    FROM dbo.ue_SMK069_pos_field_map_mst
+    WHERE source_system = N'POS'
+      AND SiteRef = N'Default'
+      AND is_active = 1
+) < 36
+    THROW 521050, N'[SMK069 TABLES] POS field-map seed tidak lengkap.', 1;
+
+PRINT N'[SMK069 TABLES] SEEDED dbo.ue_SMK069_pos_field_map_mst (36 POS rows).';
+
 PRINT N'[SMK069 TABLES] SUCCESS - five core/config physical tables are present.';
