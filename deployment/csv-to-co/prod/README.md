@@ -329,7 +329,7 @@ Production is ready only when all items below pass:
 
 ## Core physical tables — captured from DEV
 
-The four transaction/staging tables are now scripted directly from the DEV
+The five core/config tables are now scripted directly from the DEV
 column/key/index metadata captured on 28 Sep 2026:
 
 ```text
@@ -337,6 +337,7 @@ dbo.ue_SMK069_pos_sales_inbound_mst
 dbo.ue_SMK069_temp_sales_mst
 dbo.ue_SMK069_pos_csv_batch_mst
 dbo.ue_SMK069_pos_csv_upload_mst
+dbo.ue_SMK069_pos_field_map_mst
 ```
 
 Apply:
@@ -379,3 +380,35 @@ UET Impact Schema completed successfully in DEV.
 
 Shipment UET fields/classes shown in the same DEV UET export are outside this
 CSV/POS inbound migration scope and are not part of this package.
+
+
+## Field-map seed — verified DEV
+
+The DEV rows for:
+
+```text
+dbo.ue_SMK069_pos_field_map_mst
+```
+
+have been captured and embedded directly into:
+
+```text
+00c-create-core-physical-tables.sql
+```
+
+The package now seeds 36 active `POS` mappings, including canonical names and
+accepted aliases for customer, order, line, item, quantity, warehouse, U/M,
+terms, tax, price, exchange rate, due date and SiteRef.
+
+The seed is idempotent: existing rows are updated by the table primary key
+`source_system + source_field`; missing rows are inserted.
+
+The captured DEV rows use:
+
+```text
+SiteRef = Default
+source_system = POS
+```
+
+The active PROD site context must therefore be compatible with the seeded
+SiteRef because Receive Core filters the field map by `m.SiteRef = @Site`.
