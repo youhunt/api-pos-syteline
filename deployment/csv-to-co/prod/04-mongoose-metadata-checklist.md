@@ -571,3 +571,24 @@ DEV export -> PROD import -> open/smoke test -> business UAT
 If UAT later proves a functional defect, fix the defect in DEV/source first,
 re-test it there, then migrate that verified change to PROD. Do not create a
 PROD-only form variant during the baseline migration.
+
+
+## PROD preflight result — 28 Sep 2026
+
+User supplied the Query Select result for `01-preflight.sql`.
+
+Result:
+
+```text
+All Required Object rows       = PASS
+All Runtime Prerequisite rows  = PASS
+All Inbound Column rows        = PASS
+All Temp Column rows           = PASS
+All CSV Upload Column rows     = PASS
+Both itemcust UET fields       = PASS
+All target SyteLine columns    = PASS
+Mapping view                   = INFO / already exists
+```
+
+No FAIL rows were present. PROD is cleared for
+`02-deploy-canonical-runtime.sql`.
