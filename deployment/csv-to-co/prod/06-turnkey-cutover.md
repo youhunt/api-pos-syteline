@@ -125,12 +125,13 @@ canonical SQL runtime package.
 
 ```text
 1. Run 00c-create-core-physical-tables.sql
-2. Import verified DEV Mongoose metadata package
-3. Impact/Apply Schema
-4. Run 01-preflight.sql
-5. Run 02-deploy-canonical-runtime.sql in Apply Database
-6. Run 03-post-deploy-verify.sql
-7. Run smoke/UAT checklist
+2. Run 00e-ensure-itemcust-peak-posum-physical.sql
+3. Import verified DEV Mongoose metadata package
+4. Impact/Apply Schema
+5. Run 01-preflight.sql
+6. Run 02-deploy-canonical-runtime.sql in Apply Database
+7. Run 03-post-deploy-verify.sql
+8. Run smoke/UAT checklist
 ```
 
 If speed is critical, steps 3 and 5 are validation gates; they do not create
