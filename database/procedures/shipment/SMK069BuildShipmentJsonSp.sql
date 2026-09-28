@@ -1,6 +1,6 @@
 CREATE   PROCEDURE dbo.SMK069BuildShipmentJsonSp
 (
-    @DN_No       BIGINT,
+    @DN_No       NVARCHAR(10),
     @PayloadJson NVARCHAR(MAX) OUTPUT,
     @Success     INT OUTPUT,
     @Infobar     NVARCHAR(4000) OUTPUT
@@ -103,7 +103,7 @@ BEGIN
                 ' tidak mempunyai DOC_NO/Customer Order.'
             );
 
-        RETURN 0;
+        /* SMK069-DOC-NONBLOCKING-R2: missing DOC_NO is warning only */
     END;
 
     IF @DocCount > 1
@@ -164,7 +164,7 @@ BEGIN
     IF NULLIF(LTRIM(RTRIM(ISNULL(@DocNo, ''))), '') IS NULL
     BEGIN
         SET @Infobar = 'DOC_NO kosong.';
-        RETURN 0;
+        /* SMK069-DOC-NONBLOCKING-R2: blank @DocNo is warning only */
     END;
 
     IF @DeliveryDate IS NULL
@@ -176,7 +176,7 @@ BEGIN
     IF NULLIF(LTRIM(RTRIM(ISNULL(@StoreOrderNo, ''))), '') IS NULL
     BEGIN
         SET @Infobar = 'STORE_ORDER_NO kosong.';
-        RETURN 0;
+        /* SMK069-STORE-ORDER-NONBLOCKING-R1: blank STORE_ORDER_NO is warning only */
     END;
 
     ------------------------------------------------------------
@@ -203,6 +203,23 @@ BEGIN
     END;
 
     ------------------------------------------------------------
+    /* SMK069-PRICE-POSITIVE-R1 */
+IF EXISTS
+(
+    SELECT 1
+    FROM dbo.SMK069_ShipmentAPI_mst AS pv
+    WHERE pv.site_ref = @Site
+      AND pv.DN_No = @DN_No
+      AND ISNULL(pv.Api_post, 0) = 0
+      AND ISNULL(pv.shipment_qty, 0) > 0
+      AND ISNULL(pv.Price, 0) <= 0
+)
+BEGIN
+    SET @Infobar = N'Terdapat detail shipment dengan PRICE kosong atau <= 0. Shipment tidak dikirim ke POS.';
+    RETURN 0;
+END;
+
+------------------------------------------------------------
     -- BUILD JSON
     ------------------------------------------------------------
     SELECT @PayloadJson =
@@ -210,13 +227,13 @@ BEGIN
         SELECT
             @CustCode AS [CUST_CODE],
             @WhseCode AS [WHS_CODE],
-            @DocNo AS [DOC_NO],
+            ISNULL(@DocNo, N'') AS [DOC_NO],
             CONVERT(VARCHAR(30), @DN_No) AS [DN_NO],
 
             CONVERT(CHAR(10), @DeliveryDate, 23)
                 AS [DELIVERY_DATE],
 
-            @StoreOrderNo AS [STORE_ORDER_NO],
+            ISNULL(@StoreOrderNo, N'') AS [STORE_ORDER_NO],
 
             ISNULL(@StoreCode, '')
                 AS [STORE_CODE],
@@ -258,7 +275,7 @@ BEGIN
                     FROM dbo.SMK069_ShipmentAPI_mst d
                     WHERE d.site_ref = @Site
                       AND d.DN_No = @DN_No
-                      AND ISNULL(d.Api_post, 0) = 0
+   AND ISNULL(d.Api_post, 0) = 0
                       AND ISNULL(d.shipment_qty, 0) > 0
 
                     ORDER BY
