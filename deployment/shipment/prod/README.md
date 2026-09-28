@@ -45,6 +45,10 @@ Do not rebuild these from stale historical standalone files.
 
 Use `EXPORT_FROM_UAT_CHECKLIST.md` to capture/import the exact current definitions.
 
+### Mongoose-owned custom tables
+
+Create/migrate `ue_SMK069_*` custom tables through the **SQL Tables** form / Mongoose metadata path, not by raw `CREATE TABLE`, so Mongoose application-schema metadata and the standard `Del`, `Insert`, and `UpdatePenultimate` triggers are present. If a physical table was already created by SQL, use **SQL Tables > Update Current Table** before continuing, then verify the generated triggers. The SQL files under `baseline/` for these tables are schema-reference artifacts only, not the authoritative PROD creation path.
+
 If PROD already has that baseline, run `query-select/001-prod-preflight.sql` first and use the incremental Apply Database files only where needed.
 
 ## Apply Database order
@@ -205,7 +209,7 @@ Schema/config can migrate; UAT runtime history must not.
 1. STOP Shipment scheduler in UAT and keep PROD scheduler OFF.
 2. Export/backup current UAT Form, IDOs, Custom Assembly, Task Definition, and exact baseline DB definitions using `EXPORT_FROM_UAT_CHECKLIST.md`.
 3. Run `query-select/001-prod-preflight.sql`.
-4. Migrate missing baseline Shipment objects.
+4. Migrate missing baseline Shipment objects. For Mongoose-owned custom tables, use **SQL Tables** / metadata tooling and verify standard triggers; do not rely on raw `CREATE TABLE` alone.
 5. Run Apply Database files 010..073 as required, in order.
 6. Import IDOs and register all required methods on `ue_SMK069ShipmentTransport`.
 7. Import/compile the exact current UAT Shipment Custom Assembly.
