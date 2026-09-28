@@ -58,9 +58,11 @@ Each file under `apply-database/` is shaped for the Cloud tenant rule: **one exe
 Run in numeric order:
 
 ```text
-010..017  scheduler config columns + retry table
+010..016  scheduler config columns (skip on clean PROD baseline that already has them)
+017       retry table raw-DDL fallback only; clean PROD uses SQL Tables
 020..022  scheduler policy procedures
-030..038  schedule table + control/runner procedures
+030       schedule table raw-DDL fallback only; clean PROD uses SQL Tables
+031..038  schedule seed + control/runner procedures
 040..041  dashboard/queue views
 050       Prepare DN string contract
 060       DOC_NO non-blocking (skip on clean PROD when exact current Build SP baseline is installed)
@@ -210,7 +212,7 @@ Schema/config can migrate; UAT runtime history must not.
 2. Export/backup current UAT Form, IDOs, Custom Assembly, Task Definition, and exact baseline DB definitions using `EXPORT_FROM_UAT_CHECKLIST.md`.
 3. Run `query-select/001-prod-preflight.sql`.
 4. Migrate missing baseline Shipment objects. For Mongoose-owned custom tables, use **SQL Tables** / metadata tooling and verify standard triggers; do not rely on raw `CREATE TABLE` alone.
-5. Run Apply Database files 010..073 as required, in order. On a clean PROD built from the exact current UAT `SMK069BuildShipmentJsonSp` baseline captured 2026-09-28, do **not** replay 060/071/073 because those rules are already present in the baseline procedure.
+5. For clean PROD, create `ue_SMK069_shipment_retry_mst` and `ue_SMK069_shipment_schedule_mst` through **SQL Tables** and verify Mongoose triggers. Skip raw table files 017 and 030. Then run the remaining Apply Database files as required, in order. On a clean PROD built from the exact current UAT `SMK069BuildShipmentJsonSp` baseline captured 2026-09-28, do **not** replay 060/071/073 because those rules are already present in the baseline procedure.
 6. Import IDOs and register all required methods on `ue_SMK069ShipmentTransport`.
 7. Import/compile the exact current UAT Shipment Custom Assembly.
 8. Confirm the `data is exist` rule is present.
