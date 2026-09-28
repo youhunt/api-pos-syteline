@@ -420,12 +420,12 @@ Before opening PROD to API traffic:
 [ ] ue_SMK069TempSales resynchronized
 [x PROD] public Receive IDO method imported
 [x PROD] IDO methods set Transactional=False (user-confirmed)
-[ ] Error Processing form migrated and opens
+[x PROD] Error Processing form imported / [ ] corrections applied + opens
 [ ] Peak checkbox correct
 [ ] CustSeq/Name correct
 [ ] CSV detail IDO resynchronized
-[ ] CSV console form migrated and opens
-[ ] one-hit file-import event chain verified
+[x PROD] CSV console form imported / [ ] opens
+[x PROD XML] one-hit file-import event chain verified
 [ ] mapping view exact DEV definition migrated
 ```
 
@@ -544,3 +544,40 @@ SMK069ProcessCustomerOrderSp.SourceCoNum length = 100
 The next migration gate is form/event verification:
 `ue_SMK069APISalesErrorProcessing`,
 `ue_SMK069PosCsvBatchConsole`, and the Customer Contracts custom controls.
+
+
+## PROD form import audit — 28 Sep 2026
+
+Imported FormsAndObjects export was reviewed.
+
+Confirmed imported forms:
+
+```text
+ue_SMK069APISalesErrorProcessing
+ue_SMK069PosCsvBatchConsole
+```
+
+CSV one-hit event chain matches the safe FIX2 design and is accepted.
+
+Required corrections before UAT:
+
+```text
+Error Processing / Process-Reprocess:
+  SourceCoNum argument : co_num -> CustPo
+  CustSeq argument     : 0      -> CustSeq
+
+Read-only display:
+  CreatedCoNum = True
+  CustSeq      = True
+  Name         = True
+  IsPeakSeason = True
+
+CSV detail:
+  IsPeakSeason = Read Only
+```
+
+Detailed audit:
+
+```text
+forms/csv-to-co/04-prod-form-import-audit-20260928.md
+```
