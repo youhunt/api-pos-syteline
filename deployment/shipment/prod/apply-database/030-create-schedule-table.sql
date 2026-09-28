@@ -1,3 +1,10 @@
+/* REFERENCE/FALLBACK ONLY FOR CLEAN PROD.
+   Preferred path for this Mongoose-owned ue_SMK069_* table is SQL Tables /
+   Mongoose metadata so standard metadata and table triggers are generated.
+   Do not use this raw CREATE TABLE file for clean PROD unless explicitly
+   using a controlled fallback and then repairing metadata with Update Current Table.
+*/
+
 /* PROD migration split artifact
    Source: database/patches/shipment/2026-09-08-smk069-09-shipment-scheduler-control-center.sql
    Source batch: 3
