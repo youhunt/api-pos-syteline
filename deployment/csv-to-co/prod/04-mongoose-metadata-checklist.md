@@ -418,8 +418,8 @@ Before opening PROD to API traffic:
 [x DEV] Impact Schema completed / [ ] PROD completed
 [ ] generated triggers aligned
 [ ] ue_SMK069TempSales resynchronized
-[ ] public Receive IDO method migrated
-[ ] Transactional=False verified
+[x PROD] public Receive IDO method imported
+[x PROD] IDO methods set Transactional=False (user-confirmed)
 [ ] Error Processing form migrated and opens
 [ ] Peak checkbox correct
 [ ] CustSeq/Name correct
@@ -519,3 +519,28 @@ but do not use it as the primary PROD API path. The final public entry point is
 The supplied Object Studio XML contains IDO definitions only. It does not contain
 the two form definitions/events. If the forms were imported separately, verify
 them in PROD using sections 4 and 8 of this checklist before UAT.
+
+
+## PROD IDO import status — 28 Sep 2026
+
+User confirmed that the IDO metadata has been imported and all custom
+`ue_SMK069TempSales` methods were set to:
+
+```text
+Transactional = NO
+```
+
+This is acceptable for the current CSV/POS inbound workstream. In particular,
+the receive/orchestration and per-order processing methods must remain
+non-transactional at the Mongoose method layer because
+`SMK069ProcessCustomerOrderSp` owns its SQL transaction boundary.
+
+Still verify before form UAT:
+
+```text
+SMK069ProcessCustomerOrderSp.SourceCoNum length = 100
+```
+
+The next migration gate is form/event verification:
+`ue_SMK069APISalesErrorProcessing`,
+`ue_SMK069PosCsvBatchConsole`, and the Customer Contracts custom controls.
