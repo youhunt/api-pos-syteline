@@ -428,3 +428,60 @@ Before opening PROD to API traffic:
 [ ] one-hit file-import event chain verified
 [ ] mapping view exact DEV definition migrated
 ```
+
+
+## Imported IDO XML audit — 28 Sep 2026
+
+Imported Object Studio XML contains the CSV/POS IDOs:
+
+```text
+ue_SMK069PosCsvBatch
+ue_SMK069PosCsvUpload
+ue_SMK069PosSalesInbound
+ue_SMK069TempSales
+```
+
+The `ue_SMK069TempSales` properties required by the latest Error Processing
+design are present:
+
+```text
+CreatedCoNum -> created_co_num
+CustPo       -> cust_po
+IsPeakSeason -> is_peak_season (read-only)
+CustSeq      -> derived from mapping view by SiteRef + CustPo
+Name         -> derived from mapping view + custaddr by SiteRef + CustPo
+```
+
+### Required correction before PROD UAT
+
+The imported XML currently defines:
+
+```text
+SMK069ReceivePosSalesJsonSp
+Transactional = YES
+```
+
+This must be changed to:
+
+```text
+Transactional = NO / False
+```
+
+because the canonical receive path calls the per-order processor that owns its
+own transaction boundary.
+
+The imported method exposes the original 10 public parameters. This remains
+backward-compatible because canonical parameters 11-14 are appended/defaulted,
+but for the full current metadata contract the preferred definition exposes:
+
+```text
+11 ProcessedOrders OUT
+12 ProcessErrors OUT
+13 CreatedCoNums OUT
+14 ThrowOnBusinessError IN
+```
+
+The XML also still contains the legacy
+`SMK069ReceiveAndProcessPosSalesJsonSp` method. Do not use it as the primary
+PROD API path; the canonical public entry point is
+`SMK069ReceivePosSalesJsonSp`.
