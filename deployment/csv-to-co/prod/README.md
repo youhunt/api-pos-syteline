@@ -192,8 +192,10 @@ See `04-mongoose-metadata-checklist.md`.
    `00f-verify-itemcust-uet-physical.sql`.
 6. Import remaining IDO/Form metadata.
 7. Refresh metadata/cache.
-8. Run `01-preflight.sql`.
-9. The canonical mapping view is created/altered by
+8. Run `01-preflight.sql` in **Apply Database**. It is read-only, but it is a
+   multi-statement validation batch and therefore is not suitable for the tenant
+   Query Select screen.
+9. The final mapping view is created/altered by
    `02-deploy-canonical-runtime.sql`.
 
 `00e-ensure-itemcust-peak-posum-physical.sql` is **fallback only** and is not
@@ -217,7 +219,8 @@ Do not separately apply numbered DEV patches 14–35 after this consolidated run
 
 ### D. Verification
 
-1. Run `03-post-deploy-verify.sql` in Query Select.
+1. Run `03-post-deploy-verify.sql` in Query Select. The file is intentionally
+   exactly **one SELECT statement** and returns one consolidated verification grid.
 2. Verify IDO methods/forms manually.
 3. Execute `05-prod-uat-checklist.md`.
 
