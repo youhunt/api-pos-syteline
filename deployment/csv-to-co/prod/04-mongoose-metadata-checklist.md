@@ -612,3 +612,22 @@ Process Completed Successfully
 
 No deployment error was reported. The next gate is
 `03-post-deploy-verify.sql` through **Query Select**.
+
+
+## PROD post-deploy verification query fix — 28 Sep 2026
+
+The first `03-post-deploy-verify.sql` execution reached Query Select but failed
+while composing the verification grid because tenant catalog/database collations
+differed inside a `UNION ALL` text column:
+
+```text
+SQL_Latin1_General_CP1_CI_AS
+vs
+Latin1_General_CI_AS_KS_WS
+```
+
+This is a verification-query collation issue only; it does not indicate failure
+of the already successful `02-deploy-canonical-runtime.sql` deployment.
+
+The verification query now normalizes catalog-derived text using
+`COLLATE DATABASE_DEFAULT` while remaining exactly one SELECT statement.
