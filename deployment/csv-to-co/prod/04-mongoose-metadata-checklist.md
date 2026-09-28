@@ -422,13 +422,14 @@ Before opening PROD to API traffic:
 [ ] ue_SMK069TempSales resynchronized
 [x PROD] public Receive IDO method imported
 [x PROD] IDO methods set Transactional=False (user-confirmed)
+[x PROD] 03-post-deploy verification PASS (no FAIL rows; temp trigger WARN only)
 [x PROD] Error Processing form imported from verified DEV export / [ ] opens
 [ ] Peak checkbox correct
 [ ] CustSeq/Name correct
 [ ] CSV detail IDO resynchronized
 [x PROD] CSV console form imported from verified DEV export / [ ] opens
 [x PROD XML] one-hit file-import event chain verified
-[ ] mapping view exact DEV definition migrated
+[x PROD] mapping view final runtime deployed + contract verified
 ```
 
 
@@ -631,3 +632,30 @@ of the already successful `02-deploy-canonical-runtime.sql` deployment.
 
 The verification query now normalizes catalog-derived text using
 `COLLATE DATABASE_DEFAULT` while remaining exactly one SELECT statement.
+
+
+## PROD post-deploy verification result — 28 Sep 2026
+
+User supplied the successful Query Select result from
+`03-post-deploy-verify.sql`.
+
+Summary:
+
+```text
+Runtime objects                         PASS (8/8)
+Final runtime markers                   PASS (8/8)
+Public Receive SQL parameters           PASS (14/14)
+Mapping view columns                    PASS (30/30)
+Peak/UET physical fields                PASS (5/5)
+Mongoose temp trigger                   WARN: no trigger found
+Mapping view SHA-256                    INFO
+  4D5C78F5D8BFA517652C41C9A378311774998A622AE18FC78FD5266899630973
+```
+
+There were no FAIL rows.
+
+The temp-table trigger warning is not treated as a runtime deployment failure:
+the final receive/process path writes staging through SQL procedures and the
+imported IDO uses the custom table as its primary table. Keep this warning as a
+metadata/UAT observation; verify the Error Processing form can load/update the
+intended rows during UAT before sign-off.
