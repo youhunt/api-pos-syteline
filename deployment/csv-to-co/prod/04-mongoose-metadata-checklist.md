@@ -382,15 +382,17 @@ Object:
 dbo.ue_SMK069_pos_sales_inbound_mapping_view
 ```
 
-Ownership:
+The working source definition has been captured in the repository and is part
+of the final PROD runtime package:
 
 ```text
-Eva / SMK
+database/views/csv-to-co/ue_SMK069_pos_sales_inbound_mapping_view.sql
+deployment/csv-to-co/prod/02-deploy-canonical-runtime.sql
 ```
 
-Do not create a competing repository-owned view.
-
-Production migration must use the exact current DEV definition.
+There is no separate manual mapping-view creation step during PROD cutover.
+The runtime package uses `CREATE OR ALTER VIEW` so it can bootstrap a fresh
+target or align an existing target to the captured final definition.
 
 It must support:
 
