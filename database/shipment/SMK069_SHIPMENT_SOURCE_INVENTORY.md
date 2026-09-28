@@ -1,6 +1,6 @@
 # SMK069 Shipment Database Source Inventory
 
-Updated: 2026-09-09
+Updated: 2026-09-28
 
 Purpose: ensure tenant Shipment runtime objects are preserved as exact standalone source-of-truth files in Git.
 
@@ -8,7 +8,7 @@ Purpose: ensure tenant Shipment runtime objects are preserved as exact standalon
 
 | Tenant object | Runtime / tenant evidence | Standalone Git source |
 |---|---|---|
-| `dbo.SMK069_ShipmentAPI_mst` | Runtime emits prefixed string DN values. Current tenant evidence: `CAST(CONCAT(IIF(sh.whse = 'PLG', 'P963', 'R975'), sh.shipment_id) AS nvarchar(10)) AS DN_No` | ⚠️ historical standalone `database/views/shipment/SMK069_ShipmentAPI_mst.sql` is stale and still needs exact current tenant recapture |
+| `dbo.SMK069_ShipmentAPI_mst` | Exact current UAT definition recaptured 2026-09-28. Uses prefixed string DN, POS UOM mapping, converted qty/price, and `Batch`/`Expiry_date` as NULL. | ✅ authoritative current UAT capture: `database/views/shipment/SMK069_ShipmentAPI_mst.sql`; PROD baseline artifact: `deployment/shipment/prod/baseline/010-create-SMK069_ShipmentAPI_mst.sql` |
 | `dbo.SMK069BuildShipmentJsonSp` | Patch 11 tenant `sys.parameters` evidence says `@DN_No` is `nvarchar`; Patch 14 Rev.2 verified `DocNoNonBlocking=PASS` and `EmptyStringJson=PASS` | ⚠️ historical standalone source is stale; current tenant definition still needs recapture |
 | `dbo.SMK069PrepareShipmentSendSp` | Patch 11 changed only `@DN_No` from `BIGINT` to `NVARCHAR(40)` while preserving the installed body | ⚠️ exact current tenant SQL source not yet captured as standalone file |
 | `dbo.SMK069CompleteShipmentSendSp` | Exact pre-fix tenant source captured; root cause proven: local `@ShipmentId BIGINT` receives text DN such as `P96330`. Patch 15 maps outbound DN text back to standard numeric shipment key using current View contract | ✅ pre-fix capture: `SMK069CompleteShipmentSendSp.tenant-2026-09-09.sql`; ✅ fixed canonical source: `SMK069CompleteShipmentSendSp.sql`; apply patch: `2026-09-09-smk069-15-fix-complete-shipment-dn-string.sql` |
