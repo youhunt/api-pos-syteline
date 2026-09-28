@@ -9,17 +9,22 @@ Prefer exporting/importing the **verified working DEV metadata** rather than reb
 
 ## 1. UET — Customer Contracts / itemcust_mst
 
-Required user fields:
+DEV-verified user fields — 28 Sep 2026:
 
 ```text
 Uf_SMK069_is_peak_season
-  Data Type     : int
-  Initial Value : 0
+  User Data Type : int
+  Decimals       : 0
+  Initial Value  : <blank in UET metadata>
 
 Uf_SMK069_pos_um
-  User Data Type: UMType
-  Physical      : nvarchar(3)
+  User Data Type : UMType
+  Physical Type  : nvarchar(3)
+  Initial Value  : <blank in UET metadata>
 ```
+
+The DEV UET Impact Schema completed successfully. For the CSV/POS workstream,
+the relevant class/table relationship is the item-customer extension below.
 
 Required UET class:
 
@@ -46,7 +51,16 @@ POS U/M
 [ ] Is Peak Season?
 ```
 
-After migration, confirm values can be saved and are visible physically on `itemcust_mst`.
+DEV evidence confirms the UET relationship is active and Impact Schema completed successfully.
+
+For PROD:
+1. migrate/import this verified UET metadata;
+2. run UET Impact Schema;
+3. confirm the two physical columns on `itemcust_mst` using
+   `00f-verify-itemcust-uet-physical.sql`.
+
+Do not use the direct physical-column script `00e-ensure-itemcust-peak-posum-physical.sql`
+in the normal path; it is retained only as a fallback.
 
 ## 2. POS inbound table
 
@@ -397,11 +411,11 @@ ValidationStatus
 Before opening PROD to API traffic:
 
 ```text
-[ ] UET user fields migrated
-[ ] UET class migrated
-[ ] itemcust extension active
+[x DEV] UET user fields verified / [ ] PROD migrated
+[x DEV] UET class verified / [ ] PROD migrated
+[x DEV] itemcust extension active / [ ] PROD migrated
 [ ] custom table metadata migrated
-[ ] Impact Schema completed
+[x DEV] Impact Schema completed / [ ] PROD completed
 [ ] generated triggers aligned
 [ ] ue_SMK069TempSales resynchronized
 [ ] public Receive IDO method migrated
