@@ -192,9 +192,8 @@ See `04-mongoose-metadata-checklist.md`.
    `00f-verify-itemcust-uet-physical.sql`.
 6. Import remaining IDO/Form metadata.
 7. Refresh metadata/cache.
-8. Run `01-preflight.sql` in **Apply Database**. It is read-only, but it is a
-   multi-statement validation batch and therefore is not suitable for the tenant
-   Query Select screen.
+8. Run `01-preflight.sql` in **Query Select**. It is exactly one SELECT
+   statement and returns the full preflight PASS/FAIL grid.
 9. The final mapping view is created/altered by
    `02-deploy-canonical-runtime.sql`.
 
@@ -315,7 +314,7 @@ Production is ready only when all items below pass:
 [ ] IDOs and methods migrated
 [ ] forms/events migrated
 [ ] public Receive method Transactional=False
-[ ] 01-preflight.sql PASS
+[ ] 01-preflight.sql Query Select: no FAIL rows
 [ ] 02 canonical deployment SUCCESS
 [ ] 03 post-deploy verification PASS
 [ ] normal order UAT PASS
