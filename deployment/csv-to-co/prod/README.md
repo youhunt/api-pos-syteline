@@ -186,7 +186,8 @@ See `04-mongoose-metadata-checklist.md`.
 
 1. Ensure standard SyteLine UDTs exist.
 2. Run `00c-create-core-physical-tables.sql` in Apply Database.
-3. Import remaining UET/IDO/Form metadata as needed.
+3. Run `00e-ensure-itemcust-peak-posum-physical.sql` in Apply Database.
+4. Import remaining UET/IDO/Form metadata as needed.
 4. Apply/Impact Schema where required.
 5. Refresh metadata/cache.
 6. Run `01-preflight.sql`.
