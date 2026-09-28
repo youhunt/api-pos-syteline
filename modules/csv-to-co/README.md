@@ -152,7 +152,10 @@ SMK POS CSV TO BLANKET CO
   read-only checkbox beside CustPo
 ```
 
-The tenant mapping view `ue_SMK069_pos_sales_inbound_mapping_view` will be updated by Eva / SMK. This repository must not create a competing view patch unless ownership changes explicitly.
+The working DEV definition of `ue_SMK069_pos_sales_inbound_mapping_view` has
+now been captured canonically in this repository and is included in the PROD
+runtime deployment. Historical ownership/context remains documented, but PROD
+no longer requires manual reconstruction of the view.
 
 Patch 27 does **not** yet replace the POS-108 quantity rule with the new Peak/Normal multiple rule. The mapping/conversion view must be audited first.
 
@@ -611,19 +614,45 @@ Files:
 
 ```text
 00-capture-dev-baseline.sql
+00b-capture-table-keys-and-indexes.sql
+00c-create-core-physical-tables.sql
+00e-ensure-itemcust-peak-posum-physical.sql   (fallback only)
+00f-verify-itemcust-uet-physical.sql
 01-preflight.sql
 02-deploy-canonical-runtime.sql
 03-post-deploy-verify.sql
 04-mongoose-metadata-checklist.md
 05-prod-uat-checklist.md
+06-turnkey-cutover.md
 ```
 
-External dependencies that must be migrated separately:
+External metadata still migrated separately:
 
 ```text
-- exact SMK/Eva-owned ue_SMK069_pos_sales_inbound_mapping_view
-- Mongoose UET/table/IDO/form metadata
+- Mongoose UET metadata (verified DEV itemcust setup)
+- IDO/form/event metadata
 - public Receive IDO method with Transactional=False
 ```
 
+The mapping view is now part of the canonical SQL deployment.
+
 Patch 32 remains withdrawn and is not part of production deployment.
+
+
+## DEV UET Impact Schema verified — 28 Sep 2026
+
+For this workstream the verified UET relationship is:
+
+```text
+SMK069_CL_itemcust
+  -> Uf_SMK069_is_peak_season
+  -> Uf_SMK069_pos_um
+
+itemcust_mst
+  -> SMK069_CL_itemcust
+  Active = 1
+  Extend All Records = 1
+```
+
+UET Impact Schema completed successfully in DEV. Use the same UET metadata +
+Impact Schema flow in PROD. Direct physical-column SQL is fallback only.
