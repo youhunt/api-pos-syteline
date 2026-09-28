@@ -663,7 +663,7 @@ Impact Schema flow in PROD. Direct physical-column SQL is fallback only.
 The external JSON-to-canonical field map is still required by
 `SMK069ReceivePosSalesJsonCoreSp` before the business mapping view is read.
 
-Verified DEV configuration:
+Verified TRN reference:
 
 ```text
 source_system = POS
@@ -671,7 +671,10 @@ SiteRef       = Default
 active rows   = 36
 ```
 
-The exact configuration has been embedded as an idempotent seed in:
+For PROD, only the mapping definitions are reused. SiteRef is resolved from the
+target environment active-site context and RowPointers are generated fresh.
+
+The mapping configuration has been embedded as an idempotent seed in:
 
 ```text
 deployment/csv-to-co/prod/00c-create-core-physical-tables.sql
