@@ -63,12 +63,12 @@ Run in numeric order:
 030..038  schedule table + control/runner procedures
 040..041  dashboard/queue views
 050       Prepare DN string contract
-060       DOC_NO non-blocking
+060       DOC_NO non-blocking (skip on clean PROD when exact current Build SP baseline is installed)
 061       Complete prefixed-DN mapping
 070       RUN ONCE independent of scheduler switches
-071       STORE_ORDER_NO non-blocking
+071       STORE_ORDER_NO non-blocking (skip on clean PROD when exact current Build SP baseline is installed)
 072       fixed 1-minute retry, max 1440
-073       block PRICE NULL/0/negative before HTTP
+073       block PRICE NULL/0/negative before HTTP (skip on clean PROD when exact current Build SP baseline is installed)
 080       PROD URL/config template, safe OFF state
 090       emergency business-gate stop; use only when needed
 ```
@@ -210,7 +210,7 @@ Schema/config can migrate; UAT runtime history must not.
 2. Export/backup current UAT Form, IDOs, Custom Assembly, Task Definition, and exact baseline DB definitions using `EXPORT_FROM_UAT_CHECKLIST.md`.
 3. Run `query-select/001-prod-preflight.sql`.
 4. Migrate missing baseline Shipment objects. For Mongoose-owned custom tables, use **SQL Tables** / metadata tooling and verify standard triggers; do not rely on raw `CREATE TABLE` alone.
-5. Run Apply Database files 010..073 as required, in order.
+5. Run Apply Database files 010..073 as required, in order. On a clean PROD built from the exact current UAT `SMK069BuildShipmentJsonSp` baseline captured 2026-09-28, do **not** replay 060/071/073 because those rules are already present in the baseline procedure.
 6. Import IDOs and register all required methods on `ue_SMK069ShipmentTransport`.
 7. Import/compile the exact current UAT Shipment Custom Assembly.
 8. Confirm the `data is exist` rule is present.
