@@ -420,11 +420,11 @@ Before opening PROD to API traffic:
 [ ] ue_SMK069TempSales resynchronized
 [x PROD] public Receive IDO method imported
 [x PROD] IDO methods set Transactional=False (user-confirmed)
-[x PROD] Error Processing form imported / [ ] corrections applied + opens
+[x PROD] Error Processing form imported from verified DEV export / [ ] opens
 [ ] Peak checkbox correct
 [ ] CustSeq/Name correct
 [ ] CSV detail IDO resynchronized
-[x PROD] CSV console form imported / [ ] opens
+[x PROD] CSV console form imported from verified DEV export / [ ] opens
 [x PROD XML] one-hit file-import event chain verified
 [ ] mapping view exact DEV definition migrated
 ```
@@ -546,38 +546,26 @@ The next migration gate is form/event verification:
 `ue_SMK069PosCsvBatchConsole`, and the Customer Contracts custom controls.
 
 
-## PROD form import audit — 28 Sep 2026
+## Form migration parity rule — 28 Sep 2026
 
-Imported FormsAndObjects export was reviewed.
+The supplied FormsAndObjects export is the verified DEV form source used for the
+PROD migration. Import it **as-is**. Do not rewrite bindings, event arguments,
+read-only flags, or event chains merely to make them match later repository
+design notes.
 
-Confirmed imported forms:
+Confirmed DEV form export contains:
 
 ```text
 ue_SMK069APISalesErrorProcessing
 ue_SMK069PosCsvBatchConsole
 ```
 
-CSV one-hit event chain matches the safe FIX2 design and is accepted.
-
-Required corrections before UAT:
+For migration, DEV parity is the gate:
 
 ```text
-Error Processing / Process-Reprocess:
-  SourceCoNum argument : co_num -> CustPo
-  CustSeq argument     : 0      -> CustSeq
-
-Read-only display:
-  CreatedCoNum = True
-  CustSeq      = True
-  Name         = True
-  IsPeakSeason = True
-
-CSV detail:
-  IsPeakSeason = Read Only
+DEV export -> PROD import -> open/smoke test -> business UAT
 ```
 
-Detailed audit:
-
-```text
-forms/csv-to-co/04-prod-form-import-audit-20260928.md
-```
+If UAT later proves a functional defect, fix the defect in DEV/source first,
+re-test it there, then migrate that verified change to PROD. Do not create a
+PROD-only form variant during the baseline migration.
