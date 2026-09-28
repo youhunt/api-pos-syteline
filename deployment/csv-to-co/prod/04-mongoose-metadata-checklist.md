@@ -659,3 +659,28 @@ the final receive/process path writes staging through SQL procedures and the
 imported IDO uses the custom table as its primary table. Keep this warning as a
 metadata/UAT observation; verify the Error Processing form can load/update the
 intended rows during UAT before sign-off.
+
+
+## PROD smoke UI result — 28 Sep 2026
+
+User opened all three migrated UI surfaces successfully:
+
+```text
+SMK API SALES ERROR PROCESSING
+SMK POS CSV TO BLANKET CO
+SMK Customer Contracts
+```
+
+Customer Contracts visibly contains:
+
+```text
+POS U/M
+Is Peak Season?
+```
+
+No UI/opening error occurred. The Error Processing and CSV grids are empty
+because no PROD UAT transaction has been submitted yet; this is expected and
+does not by itself validate processing behavior.
+
+Next gate: create an approved PROD-safe Normal/non-Peak UAT transaction, then
+verify inbound -> temp -> Blanket CO -> form traceability.
