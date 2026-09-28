@@ -24,11 +24,13 @@ FROM
         N'Runtime Object' AS check_group,
         x.name AS check_name,
         CASE WHEN o.object_id IS NULL THEN N'FAIL' ELSE N'PASS' END AS result,
-        CASE
-            WHEN o.object_id IS NULL THEN N'MISSING'
-            ELSE o.type_desc + N' | modified='
-                 + CONVERT(NVARCHAR(30), o.modify_date, 126)
-        END AS detail
+        (
+            CASE
+                WHEN o.object_id IS NULL THEN N'MISSING'
+                ELSE (o.type_desc COLLATE DATABASE_DEFAULT) + N' | modified='
+                     + CONVERT(NVARCHAR(30), o.modify_date, 126)
+            END
+        ) COLLATE DATABASE_DEFAULT AS detail
     FROM
     (
         VALUES
@@ -122,17 +124,19 @@ FROM
         30,
         e.parameter_id,
         N'Public Receive Parameter',
-        CONVERT(NVARCHAR(10), e.parameter_id) + N' ' + e.parameter_name,
+        (CONVERT(NVARCHAR(10), e.parameter_id) + N' ' + (e.parameter_name COLLATE DATABASE_DEFAULT)) COLLATE DATABASE_DEFAULT,
         CASE
             WHEN p.parameter_id IS NULL THEN N'FAIL'
             WHEN p.name <> e.parameter_name THEN N'FAIL'
             WHEN p.is_output <> e.is_output THEN N'FAIL'
             ELSE N'PASS'
         END,
-        N'actual=' + COALESCE(p.name,N'<missing>')
-        + N' | type=' + COALESCE(TYPE_NAME(p.user_type_id),N'<missing>')
-        + N' | max_length=' + COALESCE(CONVERT(NVARCHAR(20),p.max_length),N'<null>')
-        + N' | output=' + COALESCE(CONVERT(NVARCHAR(1),p.is_output),N'<null>')
+        (
+            N'actual=' + COALESCE(p.name COLLATE DATABASE_DEFAULT,N'<missing>')
+            + N' | type=' + COALESCE(TYPE_NAME(p.user_type_id) COLLATE DATABASE_DEFAULT,N'<missing>')
+            + N' | max_length=' + COALESCE(CONVERT(NVARCHAR(20),p.max_length),N'<null>')
+            + N' | output=' + COALESCE(CONVERT(NVARCHAR(1),p.is_output),N'<null>')
+        ) COLLATE DATABASE_DEFAULT
     FROM
     (
         VALUES
@@ -164,15 +168,17 @@ FROM
         40,
         e.column_id,
         N'Mapping View Column',
-        e.column_name,
+        e.column_name COLLATE DATABASE_DEFAULT,
         CASE WHEN c.column_id IS NULL THEN N'FAIL' ELSE N'PASS' END,
-        CASE
-            WHEN c.column_id IS NULL THEN N'MISSING'
-            ELSE N'type=' + TYPE_NAME(c.user_type_id)
-                 + N' | max_length=' + CONVERT(NVARCHAR(20),c.max_length)
-                 + N' | precision=' + CONVERT(NVARCHAR(20),c.precision)
-                 + N' | scale=' + CONVERT(NVARCHAR(20),c.scale)
-        END
+        (
+            CASE
+                WHEN c.column_id IS NULL THEN N'MISSING'
+                ELSE N'type=' + (TYPE_NAME(c.user_type_id) COLLATE DATABASE_DEFAULT)
+                     + N' | max_length=' + CONVERT(NVARCHAR(20),c.max_length)
+                     + N' | precision=' + CONVERT(NVARCHAR(20),c.precision)
+                     + N' | scale=' + CONVERT(NVARCHAR(20),c.scale)
+            END
+        ) COLLATE DATABASE_DEFAULT
     FROM
     (
         VALUES
@@ -275,17 +281,19 @@ FROM
         N'Audit',
         N'Mapping view SHA-256',
         N'INFO',
-        CONVERT(VARCHAR(64),
-            HASHBYTES(
-                'SHA2_256',
-                CONVERT(VARBINARY(MAX),
-                    COALESCE(
-                        OBJECT_DEFINITION(OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view')),
-                        N''
+        CONVERT(NVARCHAR(64),
+            CONVERT(VARCHAR(64),
+                HASHBYTES(
+                    'SHA2_256',
+                    CONVERT(VARBINARY(MAX),
+                        COALESCE(
+                            OBJECT_DEFINITION(OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view')),
+                            N''
+                        )
                     )
-                )
-            ),
-            2
-        )
+                ),
+                2
+            )
+        ) COLLATE DATABASE_DEFAULT
 ) AS q(sort_group,sort_item,check_group,check_name,result,detail)
 ORDER BY q.sort_group, q.sort_item;
