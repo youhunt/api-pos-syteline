@@ -3,9 +3,13 @@
    Scope : CSV / POS inbound -> Blanket Customer Order ONLY
    Date  : 2026-09-24
    Mode  : READ-ONLY validation. One executable batch. NO GO.
+   Tool  : Apply Database (NOT Query Select; this script intentionally uses
+           DECLARE/IF/THROW and multiple statements).
 
-   Run this AFTER Mongoose/UET/table/view metadata has been migrated to PROD,
-   and BEFORE deploying the canonical runtime SQL package.
+   Run this AFTER physical tables + UET prerequisites are present in PROD,
+   and BEFORE deploying the final runtime SQL package.
+   The mapping view may already exist, but it is not required at preflight:
+   02-deploy-canonical-runtime.sql creates/alters the captured final definition.
    ============================================================================= */
 
 SET NOCOUNT ON;
