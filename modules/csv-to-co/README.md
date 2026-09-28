@@ -656,3 +656,25 @@ itemcust_mst
 
 UET Impact Schema completed successfully in DEV. Use the same UET metadata +
 Impact Schema flow in PROD. Direct physical-column SQL is fallback only.
+
+
+## Field-map seed captured — 28 Sep 2026
+
+The external JSON-to-canonical field map is still required by
+`SMK069ReceivePosSalesJsonCoreSp` before the business mapping view is read.
+
+Verified DEV configuration:
+
+```text
+source_system = POS
+SiteRef       = Default
+active rows   = 36
+```
+
+The exact configuration has been embedded as an idempotent seed in:
+
+```text
+deployment/csv-to-co/prod/00c-create-core-physical-tables.sql
+```
+
+Therefore PROD no longer requires a manual field-map data entry step.
