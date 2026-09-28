@@ -186,12 +186,18 @@ See `04-mongoose-metadata-checklist.md`.
 
 1. Ensure standard SyteLine UDTs exist.
 2. Run `00c-create-core-physical-tables.sql` in Apply Database.
-3. Run `00e-ensure-itemcust-peak-posum-physical.sql` in Apply Database.
-4. Import remaining UET/IDO/Form metadata as needed.
-4. Apply/Impact Schema where required.
-5. Refresh metadata/cache.
-6. Run `01-preflight.sql`.
-7. The canonical mapping view is created/altered by `02-deploy-canonical-runtime.sql`.
+3. Import the verified UET metadata for `SMK069_CL_itemcust`.
+4. Run **UET Impact Schema**.
+5. Optionally verify the two physical itemcust fields with
+   `00f-verify-itemcust-uet-physical.sql`.
+6. Import remaining IDO/Form metadata.
+7. Refresh metadata/cache.
+8. Run `01-preflight.sql`.
+9. The canonical mapping view is created/altered by
+   `02-deploy-canonical-runtime.sql`.
+
+`00e-ensure-itemcust-peak-posum-physical.sql` is **fallback only** and is not
+part of the normal PROD cutover when UET Impact Schema is available.
 
 Do not continue when preflight fails.
 
@@ -342,3 +348,34 @@ deployment/csv-to-co/prod/00c-create-core-physical-tables.sql
 This script is one executable batch with no `GO`, includes captured
 identity/PK/unique/index/FK definitions, and is safe to rerun because existing
 tables are left unchanged.
+
+
+## DEV UET verification — 28 Sep 2026
+
+Verified in DEV:
+
+```text
+User Field: Uf_SMK069_is_peak_season
+  User Data Type = int
+  Decimals       = 0
+  Initial Value  = blank in UET metadata
+
+User Field: Uf_SMK069_pos_um
+  User Data Type = UMType
+  Physical Type  = nvarchar(3)
+  Initial Value  = blank in UET metadata
+
+Class: SMK069_CL_itemcust
+  Uf_SMK069_is_peak_season
+  Uf_SMK069_pos_um
+
+Table/Class:
+  itemcust_mst -> SMK069_CL_itemcust
+  Active = 1
+  Extend All Records = 1
+```
+
+UET Impact Schema completed successfully in DEV.
+
+Shipment UET fields/classes shown in the same DEV UET export are outside this
+CSV/POS inbound migration scope and are not part of this package.
