@@ -47,8 +47,6 @@ Reason:
 040-dashboard-view.sql
 041-queue-view.sql
 
-070a-request-run-now-direct.sql
-070b-claim-due-schedule-direct.sql
 ```
 
 Do not run 080 until the real PROD LoginUrl and Shipment EndpointUrl have been
@@ -57,13 +55,11 @@ confirmed and substituted.
 Do not START scheduler or RUN ONCE during this stage.
 
 
-## Clean PROD Run Once note
+## Run Once baseline note
 
-For clean PROD, use the direct full procedure definitions:
+Current TRN verification on 2026-09-29 shows the same baseline behavior as PROD:
+the Patch 19 Run Once bypass markers are not present in
+SMK069RequestShipmentRunNowSp or SMK069ClaimDueShipmentScheduleSp.
 
-```text
-070a-request-run-now-direct.sql
-070b-claim-due-schedule-direct.sql
-```
-
-Do not use the tenant-surgery `070-run-once-bypass.sql` on this clean baseline.
+For an exact TRN -> PROD migration, do not apply 070/070a/070b. Keep the
+current TRN-equivalent procedures installed by 035 and 037.
