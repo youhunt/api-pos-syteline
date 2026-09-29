@@ -1,7 +1,7 @@
 /* PROD clean-baseline direct definition
    Apply Database: ONE executable batch, NO GO.
 */
-CREATE OR ALTER PROCEDURE dbo.SMK069ClaimDueShipmentScheduleSp
+ALTER PROCEDURE dbo.SMK069ClaimDueShipmentScheduleSp
     @ScheduleCode NVARCHAR(30) OUTPUT,
     @MaxShipments INT OUTPUT,
     @HasWork INT OUTPUT,
