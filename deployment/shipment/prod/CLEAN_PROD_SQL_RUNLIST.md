@@ -47,10 +47,23 @@ Reason:
 040-dashboard-view.sql
 041-queue-view.sql
 
-070-run-once-bypass.sql
+070a-request-run-now-direct.sql
+070b-claim-due-schedule-direct.sql
 ```
 
 Do not run 080 until the real PROD LoginUrl and Shipment EndpointUrl have been
 confirmed and substituted.
 
 Do not START scheduler or RUN ONCE during this stage.
+
+
+## Clean PROD Run Once note
+
+For clean PROD, use the direct full procedure definitions:
+
+```text
+070a-request-run-now-direct.sql
+070b-claim-due-schedule-direct.sql
+```
+
+Do not use the tenant-surgery `070-run-once-bypass.sql` on this clean baseline.
