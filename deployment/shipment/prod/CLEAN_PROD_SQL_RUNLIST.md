@@ -63,3 +63,12 @@ SMK069RequestShipmentRunNowSp or SMK069ClaimDueShipmentScheduleSp.
 
 For an exact TRN -> PROD migration, do not apply 070/070a/070b. Keep the
 current TRN-equivalent procedures installed by 035 and 037.
+
+
+## Run Once baseline note
+
+Current TRN verification on 2026-09-29 shows the same baseline behavior as PROD:
+Patch 19 Run Once bypass is not present in the verified TRN procedures.
+
+For exact TRN -> PROD migration, do not apply 070, 070a, or 070b. Keep the
+TRN-equivalent procedures installed by 035 and 037.
