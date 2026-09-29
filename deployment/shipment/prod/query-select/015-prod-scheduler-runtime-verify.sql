@@ -1,5 +1,6 @@
 /* SMK Query Select Execution - PROD scheduler SQL runtime verification
-   Run after 020-022, 032-038, 040-041 and 070.
+   Exact current TRN baseline: verify runtime objects only.
+   Patch 19 Run Once bypass is NOT part of the verified TRN baseline.
    Pure SELECT only. No trailing semicolon.
 */
 SELECT
@@ -14,10 +15,4 @@ SELECT
     CASE WHEN OBJECT_ID(N'dbo.SMK069ClaimDueShipmentScheduleSp', N'P') IS NOT NULL THEN N'PASS' ELSE N'FAIL' END AS ClaimScheduleSp,
     CASE WHEN OBJECT_ID(N'dbo.SMK069CompleteShipmentScheduleSp', N'P') IS NOT NULL THEN N'PASS' ELSE N'FAIL' END AS CompleteScheduleSp,
     CASE WHEN OBJECT_ID(N'dbo.SMK069_ShipmentSchedulerDashboard_vw', N'V') IS NOT NULL THEN N'PASS' ELSE N'FAIL' END AS DashboardView,
-    CASE WHEN OBJECT_ID(N'dbo.SMK069_ShipmentSchedulerQueue_vw', N'V') IS NOT NULL THEN N'PASS' ELSE N'FAIL' END AS QueueView,
-    CASE WHEN CHARINDEX(N'SMK069-RUNONCE-BYPASS-MASTER-R1',
-        ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069RequestShipmentRunNowSp')), N'')) > 0
-        THEN N'PASS' ELSE N'FAIL' END AS RunOnceBypass,
-    CASE WHEN CHARINDEX(N'SMK069-RUNONCE-CLAIM-MANUAL-R1',
-        ISNULL(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ClaimDueShipmentScheduleSp')), N'')) > 0
-        THEN N'PASS' ELSE N'FAIL' END AS ManualClaimBypass
+    CASE WHEN OBJECT_ID(N'dbo.SMK069_ShipmentSchedulerQueue_vw', N'V') IS NOT NULL THEN N'PASS' ELSE N'FAIL' END AS QueueView
