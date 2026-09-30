@@ -1,3 +1,8 @@
+/* OPTIONAL Patch 19 verifier ONLY.
+   NOT a current TRN -> PROD baseline readiness gate.
+   Current verified TRN baseline does not contain these Patch 19 markers.
+   Run this only when Patch 19 / 070 is intentionally being tested.
+*/
 /* SMK Query Select Execution - PROD Patch 19 / Run Once verification
    Pure SELECT only. No trailing semicolon.
 */
