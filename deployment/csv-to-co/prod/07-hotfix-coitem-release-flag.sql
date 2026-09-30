@@ -1,5 +1,5 @@
 /* PROD HOTFIX 2026-09-30
-   Fix: Auto Blanket CO coitem_mst.[release] must be 1.
+   Fix: Auto Blanket CO coitem_mst.co_release must be 1.
    Apply Database: one batch, no GO.
 */
 /* =============================================================================
@@ -18,7 +18,7 @@
    - After success, ue_SMK069_temp_sales_mst.co_num = actual SyteLine CO number.
    - created_co_num stores the same actual CO for Error Processing display.
    - co_mst.type = B and consolidate = 1.
-   - coitem_mst.stat = O, consolidate = 1, [release] = 1, release_date = order_date.
+   - coitem_mst.stat = O, consolidate = 1, co_release = 1, release_date = order_date.
    - co_bln_mst is created for every line, stat = O, allow_on_pick_list = 0.
    - Idempotency is customer + business cust_po.
    ============================================================================= */
@@ -464,7 +464,7 @@ BEGIN
             /* Released flag/date must match the Auto CO business contract. */
             UPDATE ci
             SET
-                ci.[release] = 1,
+                ci.co_release = 1,
                 ci.release_date = c.order_date
             FROM dbo.coitem_mst AS ci
             INNER JOIN dbo.co_mst AS c
@@ -474,7 +474,7 @@ BEGIN
               AND ci.co_num = @ExistingCoNum
               AND
               (
-                  ISNULL(ci.[release], 0) <> 1
+                  ISNULL(ci.co_release, 0) <> 1
                   OR ci.release_date IS NULL
                   OR ci.release_date <> c.order_date
               );
@@ -674,7 +674,7 @@ BEGIN
             u_m,
             due_date,
             release_date,
-            [release],
+            co_release,
             price,
             site_ref,
             whse,
