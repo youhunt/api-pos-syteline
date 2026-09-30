@@ -129,6 +129,7 @@ SELECT
     qty_ordered,
     u_m,
     price,
+    [release],
     release_date,
     stat,
     consolidate
@@ -161,6 +162,7 @@ Expected:
 coitem.item/qty/u_m/price = temp snapshot
 co_bln.item/qty/u_m/price = temp snapshot
 coitem.stat = O
+coitem.release = 1
 coitem.consolidate = 1
 co_bln.stat = O
 co_bln.allow_on_pick_list = 0
@@ -192,11 +194,12 @@ cust_po     = business CustPO
 consolidate = 1
 ```
 
-## UAT 5 — Release Date
+## UAT 5 — Release flag and Release Date
 
 For every line:
 
 ```text
+coitem_mst.release = 1
 coitem_mst.release_date = co_mst.order_date
 ```
 
@@ -207,6 +210,7 @@ SELECT
     c.co_num,
     c.order_date,
     i.co_line,
+    i.[release],
     i.release_date
 FROM dbo.co_mst AS c
 INNER JOIN dbo.coitem_mst AS i
