@@ -84,17 +84,17 @@ FROM
            N'Blanket line creation'
 
     UNION ALL
-    SELECT 20, 45, N'Runtime Marker', N'Per-order coitem release flag',
+    SELECT 20, 45, N'Runtime Marker', N'Per-order coitem co_release',
            CASE WHEN CHARINDEX(
-               N'[release]',
+               N'co_release',
                COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ProcessCustomerOrderSp')), N'')
            ) > 0
            AND CHARINDEX(
-               N'ci.[release] = 1',
+               N'ci.co_release = 1',
                COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ProcessCustomerOrderSp')), N'')
            ) > 0
            THEN N'PASS' ELSE N'FAIL' END,
-           N'Auto Blanket CO line must set coitem_mst.release = 1'
+           N'Auto Blanket CO line must set coitem_mst.co_release = 1'
 
     UNION ALL
     SELECT 20, 5, N'Runtime Marker', N'Per-order created_co_num persistence',
