@@ -33,7 +33,7 @@ Runtime truth : built-in ActiveBGTasks
 Patch 14 Rev.2  DOC_NO blank non-blocking            VERIFIED
 Patch 15        Complete prefixed DN mapping          VERIFIED
 Patch 18        SQL ActiveBGTasks runtime view         WITHDRAWN / NO-OP
-Patch 19        RUN ONCE bypass scheduler switches    ACTIVE
+Patch 19        RUN ONCE bypass scheduler switches    NOT PRESENT in current verified TRN baseline
 Patch 20        STORE_ORDER_NO blank non-blocking     ACTIVE
 Patch 21        retry 1 minute / max 1440             VERIFIED PASS
 Patch 22        PRICE NULL/0/negative local blocker   CREATED; PROD GO requires target/UAT verification
@@ -183,10 +183,9 @@ STOP:
   -> remove matching WAITING recurring instance
   -> if READY/RUNNING, let in-flight execution finish and STOP again when WAITING
 
-RUN ONCE (AUTO SAVE):
-  -> saves schedule fields first
-  -> requests one manual run
-  -> can run while recurring master/business switches are OFF
+RUN ONCE (current verified TRN baseline):
+  -> current TRN does not contain the Patch 19 master/business-switch bypass
+  -> do not assume manual Run Once works while recurring master/business switches are OFF
 ```
 
 A recurring TaskMan captures credentials/recurrence when it is created. Changing credentials or heartbeat in the form does **not** rewrite an existing recurring task; STOP until NOT REGISTERED, then START to recreate it.
