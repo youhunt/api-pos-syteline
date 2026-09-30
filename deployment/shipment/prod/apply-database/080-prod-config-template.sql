@@ -35,7 +35,7 @@ BEGIN TRY
     SET @LoginUrl = N'https://api-prod.pizzahut.co.id/service-auth/login-once';
     SET @EndpointUrl = N'https://api-prod.pizzahut.co.id/inventory-phi/v1/infor_dn';
 
-    IF @LoginUrl LIKE N'%__PROD_%' OR @EndpointUrl LIKE N'%__PROD_%'
+    IF CHARINDEX(N'__PROD_', @LoginUrl) > 0 OR CHARINDEX(N'__PROD_', @EndpointUrl) > 0
         RAISERROR('Ganti placeholder PROD LoginUrl dan EndpointUrl sebelum Apply Database.', 16, 1);
 
     IF @LoginUrl LIKE N'%api-uat%' OR @EndpointUrl LIKE N'%api-uat%'
