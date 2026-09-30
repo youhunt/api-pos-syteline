@@ -14,7 +14,7 @@
    - After success, ue_SMK069_temp_sales_mst.co_num = actual SyteLine CO number.
    - created_co_num stores the same actual CO for Error Processing display.
    - co_mst.type = B and consolidate = 1.
-   - coitem_mst.stat = O, consolidate = 1, release_date = order_date.
+   - coitem_mst.stat = O, consolidate = 1, [release] = 1, release_date = order_date.
    - co_bln_mst is created for every line, stat = O, allow_on_pick_list = 0.
    - Idempotency is customer + business cust_po.
    ============================================================================= */
@@ -457,16 +457,23 @@ BEGIN
             )
                 THROW 50034, N'Existing Blanket Order detail berbeda dengan staging/target Auto CO.', 1;
 
-            /* Released Date must equal actual CO header Order Date. */
+            /* Released flag/date must match the Auto CO business contract. */
             UPDATE ci
-            SET ci.release_date = c.order_date
+            SET
+                ci.[release] = 1,
+                ci.release_date = c.order_date
             FROM dbo.coitem_mst AS ci
             INNER JOIN dbo.co_mst AS c
                 ON c.site_ref = ci.site_ref
                AND c.co_num = ci.co_num
             WHERE ci.site_ref = @SiteRef
               AND ci.co_num = @ExistingCoNum
-              AND (ci.release_date IS NULL OR ci.release_date <> c.order_date);
+              AND
+              (
+                  ISNULL(ci.[release], 0) <> 1
+                  OR ci.release_date IS NULL
+                  OR ci.release_date <> c.order_date
+              );
 
             IF EXISTS
             (
@@ -663,6 +670,7 @@ BEGIN
             u_m,
             due_date,
             release_date,
+            [release],
             price,
             site_ref,
             whse,
@@ -689,6 +697,7 @@ BEGIN
             COALESCE(NULLIF(LTRIM(RTRIM(s.u_m)), N''), i.u_m),
             COALESCE(s.due_date, @OrderDate),
             @OrderDate,
+            1,
             s.unit_price,
             @SiteRef,
             @Whse,
