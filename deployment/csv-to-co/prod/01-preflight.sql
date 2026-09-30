@@ -68,6 +68,24 @@ FROM
            CASE WHEN OBJECT_ID(N'dbo.SetSiteSp',N'P') IS NULL THEN N'standard site context procedure tidak ditemukan' ELSE N'OK' END
 
     /* ----------------------------------------------------------------------
+       2b. Form / IDO helper stored procedures imported from DEV metadata
+       ---------------------------------------------------------------------- */
+    UNION ALL
+    SELECT 25,1,N'Form/IDO Runtime Dependency',N'dbo.SMK069InitializeCsvTestBatchSp',
+           CASE WHEN OBJECT_ID(N'dbo.SMK069InitializeCsvTestBatchSp',N'P') IS NULL THEN N'FAIL' ELSE N'PASS' END,
+           CASE WHEN OBJECT_ID(N'dbo.SMK069InitializeCsvTestBatchSp',N'P') IS NULL THEN N'New Batch helper tidak ditemukan' ELSE N'OK' END
+
+    UNION ALL
+    SELECT 25,2,N'Form/IDO Runtime Dependency',N'dbo.SMK069ConfirmCsvUploadSp',
+           CASE WHEN OBJECT_ID(N'dbo.SMK069ConfirmCsvUploadSp',N'P') IS NULL THEN N'FAIL' ELSE N'PASS' END,
+           CASE WHEN OBJECT_ID(N'dbo.SMK069ConfirmCsvUploadSp',N'P') IS NULL THEN N'CSV upload confirmation helper tidak ditemukan' ELSE N'OK' END
+
+    UNION ALL
+    SELECT 25,3,N'Form/IDO Runtime Dependency',N'dbo.SMK069ValidateFilteredStagingSp',
+           CASE WHEN OBJECT_ID(N'dbo.SMK069ValidateFilteredStagingSp',N'P') IS NULL THEN N'FAIL' ELSE N'PASS' END,
+           CASE WHEN OBJECT_ID(N'dbo.SMK069ValidateFilteredStagingSp',N'P') IS NULL THEN N'Error Processing Validate helper tidak ditemukan' ELSE N'OK' END
+
+    /* ----------------------------------------------------------------------
        3. Inbound required columns
        ---------------------------------------------------------------------- */
     UNION ALL
