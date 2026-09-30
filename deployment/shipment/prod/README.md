@@ -67,7 +67,7 @@ Run in numeric order:
 050       Prepare DN string contract
 060       DOC_NO non-blocking (skip on clean PROD when exact current Build SP baseline is installed)
 061       Complete prefixed-DN mapping
-070       RUN ONCE independent of scheduler switches
+070       OPTIONAL Patch 19 only; NOT part of current verified TRN baseline
 071       STORE_ORDER_NO non-blocking (skip on clean PROD when exact current Build SP baseline is installed)
 072       fixed 1-minute retry, max 1440
 073       block PRICE NULL/0/negative before HTTP (skip on clean PROD when exact current Build SP baseline is installed)
@@ -222,7 +222,7 @@ Schema/config can migrate; UAT runtime history must not.
 12. Run `query-select/002-prod-postdeploy-config.sql`; all rule/config columns should PASS.
 13. Open form and confirm Actual TaskMan is NOT REGISTERED before first START.
 14. Keep Shipments / Run = 1.
-15. Run one controlled **RUN ONCE (AUTO SAVE)** while recurring business schedule is still OFF.
+15. Run one controlled Shipment smoke test only after PROD form/IDO/extension behavior is verified against current TRN. Do not assume Patch 19 Run Once bypass is present.
 16. Replace `__PROD_DN__` in queries 003/004/005 and verify one real PROD DN end-to-end.
 17. Verify API history, retry state, source `Api_post`, and `shipment_mst.SMK069_Uf_api_post`.
 18. Verify duplicate response behavior if a safe known duplicate test is available.
