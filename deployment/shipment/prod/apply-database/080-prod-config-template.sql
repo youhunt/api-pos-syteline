@@ -4,9 +4,9 @@
 
    REQUIRED BEFORE EXECUTION
    -------------------------
-   Replace:
-     __PROD_LOGIN_URL__
-     __PROD_SHIPMENT_URL__
+   Confirmed PROD URLs:
+     LoginUrl    = https://api-prod.pizzahut.co.id/service-auth/login-once
+     EndpointUrl = https://api-prod.pizzahut.co.id/inventory-phi/v1/infor_dn
 
    Do NOT place username/password in this script or GitHub.
 
@@ -32,8 +32,8 @@ BEGIN TRY
         @ActiveCount INT;
 
     SELECT @Site = RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0));
-    SET @LoginUrl = N'__PROD_LOGIN_URL__';
-    SET @EndpointUrl = N'__PROD_SHIPMENT_URL__';
+    SET @LoginUrl = N'https://api-prod.pizzahut.co.id/service-auth/login-once';
+    SET @EndpointUrl = N'https://api-prod.pizzahut.co.id/inventory-phi/v1/infor_dn';
 
     IF @LoginUrl LIKE N'%__PROD_%' OR @EndpointUrl LIKE N'%__PROD_%'
         RAISERROR('Ganti placeholder PROD LoginUrl dan EndpointUrl sebelum Apply Database.', 16, 1);
