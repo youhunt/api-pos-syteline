@@ -76,6 +76,7 @@ co_mst.type               = B
 co_mst.cust_po            = business CustPO
 co_mst.consolidate        = 1
 coitem_mst.stat           = O
+coitem_mst.release        = 1
 coitem_mst.consolidate    = 1
 coitem_mst.release_date   = co_mst.order_date
 co_bln_mst.stat           = O
