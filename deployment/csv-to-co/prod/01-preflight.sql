@@ -189,6 +189,11 @@ FROM
            CASE WHEN COL_LENGTH(N'dbo.coitem_mst',N'consolidate') IS NULL THEN N'column tidak ditemukan' ELSE N'OK' END
 
     UNION ALL
+    SELECT 70,25,N'Target Column',N'coitem_mst.co_release',
+           CASE WHEN COL_LENGTH(N'dbo.coitem_mst',N'co_release') IS NULL THEN N'FAIL' ELSE N'PASS' END,
+           CASE WHEN COL_LENGTH(N'dbo.coitem_mst',N'co_release') IS NULL THEN N'column tidak ditemukan' ELSE N'OK' END
+
+    UNION ALL
     SELECT 70,3,N'Target Column',N'coitem_mst.release_date',
            CASE WHEN COL_LENGTH(N'dbo.coitem_mst',N'release_date') IS NULL THEN N'FAIL' ELSE N'PASS' END,
            CASE WHEN COL_LENGTH(N'dbo.coitem_mst',N'release_date') IS NULL THEN N'column tidak ditemukan' ELSE N'OK' END
