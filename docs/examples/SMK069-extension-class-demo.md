@@ -5,10 +5,10 @@ Contoh kecil dan terisolasi untuk belajar IDO Extension Class di Infor SyteLine 
 Jangan pasang contoh ini pada `ue_SMK069ShipmentTransport`. Gunakan IDO demo terpisah:
 
 ```text
-IDO       : ue_SMK069ExtensionDemo
-Assembly  : ue_SMK069DemoExtensions
-Namespace : SMK069Demo
-Class     : SMK069ExtensionDemo
+IDO       : ue_SMK069Test
+Assembly  : ue_SMK069TestExtensions
+Namespace : SMK069Test
+Class     : SMK069TestExtension
 ```
 
 ## Empat pola yang dicontohkan
@@ -25,8 +25,8 @@ Class     : SMK069ExtensionDemo
 Apply satu per satu:
 
 ```text
-database/procedures/examples/SMK069DemoSimpleSp.sql
-database/procedures/examples/SMK069DemoAddNumbersSp.sql
+database/procedures/examples/SMK069TestSimpleSp.sql
+database/procedures/examples/SMK069TestAddNumbersSp.sql
 ```
 
 ## 2. Buat IDO demo
@@ -34,27 +34,27 @@ database/procedures/examples/SMK069DemoAddNumbersSp.sql
 Buat IDO terpisah:
 
 ```text
-IDO Name : ue_SMK069ExtensionDemo
+IDO Name : ue_SMK069Test
 ```
 
 Jika tenant mewajibkan Primary Base Table untuk IDO baru, gunakan sebuah tabel demo kecil yang dibuat melalui **SQL Tables**. Jangan memakai Shipment table hanya untuk demo ini.
 
 ## 3. Register Stored Procedure methods pada IDO
 
-### SMK069DemoSimpleSp
+### SMK069TestSimpleSp
 
 ```text
 Method Type      : Stored Procedure - Standard Method
-Stored Procedure : SMK069DemoSimpleSp
+Stored Procedure : SMK069TestSimpleSp
 Transactional    : unchecked
 Parameters       : tidak ada
 ```
 
-### SMK069DemoAddNumbersSp
+### SMK069TestAddNumbersSp
 
 ```text
 Method Type      : Stored Procedure - Standard Method
-Stored Procedure : SMK069DemoAddNumbersSp
+Stored Procedure : SMK069TestAddNumbersSp
 Transactional    : unchecked
 ```
 
@@ -72,7 +72,7 @@ Setelah membuat method, gunakan **Resync Parameters** bila perlu.
 ## 4. Buat assembly
 
 ```text
-Assembly Name : ue_SMK069DemoExtensions
+Assembly Name : ue_SMK069TestExtensions
 Assembly Type : Build From Source
 Language      : C#
 ```
@@ -80,7 +80,7 @@ Language      : C#
 Masukkan source:
 
 ```text
-extension-classes/examples/SMK069ExtensionDemo.cs
+extension-classes/examples/SMK069TestExtension.cs
 ```
 
 Build sampai muncul:
@@ -94,9 +94,9 @@ Assembly compiled and updated successfully.
 Pilih:
 
 ```text
-Assembly  : ue_SMK069DemoExtensions
-Namespace : SMK069Demo
-Class     : SMK069ExtensionDemo
+Assembly  : ue_SMK069TestExtensions
+Namespace : SMK069Test
+Class     : SMK069TestExtension
 ```
 
 Daftarkan:
@@ -151,7 +151,7 @@ Expected:
 
 ```text
 ReturnValue = 0
-Infobar = SMK069DemoSimpleSp berhasil dipanggil dari Extension Class.
+Infobar = SMK069TestSimpleSp berhasil dipanggil dari Extension Class.
 ```
 
 Alurnya:
@@ -160,8 +160,8 @@ Alurnya:
 IDO method DemoCallSp
   -> C# Extension Class
      -> Context.Commands.Invoke
-        -> IDO stored-procedure method SMK069DemoSimpleSp
-           -> dbo.SMK069DemoSimpleSp
+        -> IDO stored-procedure method SMK069TestSimpleSp
+           -> dbo.SMK069TestSimpleSp
 ```
 
 ### DemoCallSpGetValue
@@ -177,7 +177,7 @@ Expected:
 
 ```text
 Total   = 30
-Infobar = SMK069DemoAddNumbersSp berhasil. 10 + 20 = 30
+Infobar = SMK069TestAddNumbersSp berhasil. 10 + 20 = 30
 ```
 
 Alurnya:
@@ -186,8 +186,8 @@ Alurnya:
 IDO method DemoCallSpGetValue
   -> C# Extension Class
      -> Context.Commands.Invoke
-        -> IDO stored-procedure method SMK069DemoAddNumbersSp
-           -> dbo.SMK069DemoAddNumbersSp
+        -> IDO stored-procedure method SMK069TestAddNumbersSp
+           -> dbo.SMK069TestAddNumbersSp
            -> Total OUTPUT
         <- response.Parameters[2]
   <- Total = 30
