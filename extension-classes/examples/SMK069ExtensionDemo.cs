@@ -2,13 +2,13 @@ using System;
 using Mongoose.IDO;
 using Mongoose.IDO.Protocol;
 
-namespace SMK069Demo
+namespace SMK069Test
 {
     /// <summary>
     /// Contoh Extension Class sederhana untuk belajar/testing.
     ///
     /// IDO target:
-    ///   ue_SMK069ExtensionDemo
+    ///   ue_SMK069Test
     ///
     /// Tujuan:
     ///   1. Method dipanggil langsung.
@@ -19,8 +19,8 @@ namespace SMK069Demo
     /// Tidak menggunakan System.Data.
     /// Pemanggilan SP dilakukan melalui Context.Commands.Invoke ke IDO method.
     /// </summary>
-    [IDOExtensionClass("ue_SMK069ExtensionDemo")]
-    public class SMK069ExtensionDemo : IDOExtensionClass
+    [IDOExtensionClass("ue_SMK069Test")]
+    public class SMK069TestExtension : IDOExtensionClass
     {
         /// <summary>
         /// Contoh 1:
@@ -75,7 +75,7 @@ namespace SMK069Demo
             try
             {
                 InvokeResponseData response = this.Context.Commands.Invoke(
-                    "ue_SMK069ExtensionDemo",
+                    "ue_SMK069Test",
                     "SMK069DemoSimpleSp");
 
                 if (response == null)
@@ -128,7 +128,7 @@ namespace SMK069Demo
             try
             {
                 InvokeResponseData response = this.Context.Commands.Invoke(
-                    "ue_SMK069ExtensionDemo",
+                    "ue_SMK069Test",
                     "SMK069DemoAddNumbersSp",
                     A,
                     B,
