@@ -380,13 +380,20 @@ namespace SMK069Test
 
         private static string ReadResponseBody(HttpWebResponse Response)
         {
-            if (Response == null || Response.GetResponseStream() == null)
+            if (Response == null)
             {
                 return null;
             }
 
+            Stream responseStream = Response.GetResponseStream();
+            if (responseStream == null)
+            {
+                return null;
+            }
+
+            using (responseStream)
             using (StreamReader reader = new StreamReader(
-                Response.GetResponseStream(),
+                responseStream,
                 Encoding.UTF8))
             {
                 return reader.ReadToEnd();
