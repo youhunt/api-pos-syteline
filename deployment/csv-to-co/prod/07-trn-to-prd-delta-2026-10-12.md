@@ -150,7 +150,7 @@ UNION ALL
 current inbound E rows as CURRENT_ERROR
 ~~~
 
-Current repository status on 12 Oct 2026: MISSING.
+Current repository status on 12 Oct 2026: **ADDED TO REPO** (canonical history table + history view).
 
 ### C. Mongoose IDO — ADD
 
@@ -381,7 +381,7 @@ TRN form export          : READY
 PRD form baseline        : OLD (no History)
 Repo canonical Core SP   : NEEDS SYNC
 Repo canonical Receive SP: NEEDS SYNC
-Repo history table/view  : MISSING
+Repo history table/view  : ADDED / READY FOR REVIEW
 Repo History IDO export  : MISSING
 PROD package             : NEEDS REGENERATION
 ~~~
@@ -389,3 +389,42 @@ PROD package             : NEEDS REGENERATION
 Therefore:
 
 > **NO-GO for PRD deployment from the repository package until the canonical SQL + History objects + IDO/form artifacts above are synchronized.**
+
+
+## 7. Repository progress update — History table/view
+
+Completed in repository:
+
+~~~
+database/tables/csv-to-co/ue_SMK069_pos_sales_inbound_hist.sql
+database/views/csv-to-co/ue_SMK069_pos_sales_inbound_history_v.sql
+deployment/csv-to-co/prod/00c-create-core-physical-tables.sql
+  -> now includes the history table
+~~~
+
+The history table creation intentionally clones the target tenant's inbound column
+types from dbo.ue_SMK069_pos_sales_inbound_mst before adding:
+
+~~~
+history_id
+original_inbound_id
+attempt_no
+archived_date
+archive_reason
+~~~
+
+This avoids silently forcing an old repository validation_msg length onto a newer
+tenant schema.
+
+The history view exposes:
+
+~~~
+archived attempts -> archive_reason from history (e.g. RETRY_SAME_BATCH)
+current E         -> CURRENT_ERROR
+current T         -> SUCCESS
+~~~
+
+Do not regenerate/run the consolidated 02-deploy-canonical-runtime.sql yet from
+the repository until the latest TRN Core/Receive procedure bodies are also
+synchronized into canonical source. Running an older consolidated runtime after
+the October database changes could overwrite the newer procedures.
