@@ -50,6 +50,22 @@ FROM
     UNION ALL
 
     /* ----------------------------------------------------------------------
+       1B. Retry/history runtime objects
+       ---------------------------------------------------------------------- */
+    SELECT 15, 1, N'History Object', N'ue_SMK069_pos_sales_inbound_hist',
+           CASE WHEN OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_hist', N'U') IS NULL
+                THEN N'FAIL' ELSE N'PASS' END,
+           N'Failed-attempt archive table'
+
+    UNION ALL
+    SELECT 15, 2, N'History Object', N'ue_SMK069_pos_sales_inbound_history_v',
+           CASE WHEN OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_history_v', N'V') IS NULL
+                THEN N'FAIL' ELSE N'PASS' END,
+           N'History tab read model'
+
+    UNION ALL
+
+    /* ----------------------------------------------------------------------
        2. Final-source behavior markers
        ---------------------------------------------------------------------- */
     SELECT 20, 1, N'Runtime Marker', N'Core Peak before mapping',
@@ -127,6 +143,32 @@ FROM
                COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ImportCsvFileSp')), N'')
            ) > 0 THEN N'PASS' ELSE N'FAIL' END,
            N'CSV parser retains accepted legacy Peak alias'
+
+    UNION ALL
+    SELECT 20, 9, N'Runtime Marker', N'Core same-Batch failed retry',
+           CASE WHEN CHARINDEX(
+               N'RETRY_SAME_BATCH',
+               COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ReceivePosSalesJsonCoreSp')), N'')
+           ) > 0
+           AND CHARINDEX(
+               N'@RetryFailedBatch',
+               COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ReceivePosSalesJsonCoreSp')), N'')
+           ) > 0
+           THEN N'PASS' ELSE N'FAIL' END,
+           N'Failed E-only batch may archive and retry using the same BatchId'
+
+    UNION ALL
+    SELECT 20, 10, N'Runtime Marker', N'Public Receive friendly POS-108',
+           CASE WHEN CHARINDEX(
+               N'qty_hasil_konversi',
+               COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ReceivePosSalesJsonSp')), N'')
+           ) > 0
+           AND CHARINDEX(
+               N'Quantity tidak sesuai kelipatan U/M',
+               COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.SMK069ReceivePosSalesJsonSp')), N'')
+           ) > 0
+           THEN N'PASS' ELSE N'FAIL' END,
+           N'Quantity-multiple ValidationStatus rejection must be exposed as business POS-108'
 
     UNION ALL
 
@@ -207,6 +249,44 @@ FROM
     ) AS e(column_id,column_name)
     LEFT JOIN sys.columns AS c
       ON c.object_id = OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_mapping_view')
+     AND c.name = e.column_name
+
+    UNION ALL
+
+    /* ----------------------------------------------------------------------
+       4B. History view contract
+       ---------------------------------------------------------------------- */
+    SELECT
+        45,
+        e.column_id,
+        N'History View Column',
+        e.column_name COLLATE DATABASE_DEFAULT,
+        CASE WHEN c.column_id IS NULL THEN N'FAIL' ELSE N'PASS' END,
+        (
+            CASE
+                WHEN c.column_id IS NULL THEN N'MISSING'
+                ELSE N'type=' + (TYPE_NAME(c.user_type_id) COLLATE DATABASE_DEFAULT)
+                     + N' | max_length=' + CONVERT(NVARCHAR(20),c.max_length)
+            END
+        ) COLLATE DATABASE_DEFAULT
+    FROM
+    (
+        VALUES
+          (1,N'history_key'),
+          (2,N'history_id'),
+          (3,N'inbound_id'),
+          (4,N'batch_id'),
+          (5,N'cust_po'),
+          (6,N'row_no'),
+          (7,N'inbound_status'),
+          (8,N'validation_msg'),
+          (9,N'attempt_no'),
+          (10,N'archived_date'),
+          (11,N'archive_reason'),
+          (12,N'is_current')
+    ) AS e(column_id,column_name)
+    LEFT JOIN sys.columns AS c
+      ON c.object_id = OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_history_v')
      AND c.name = e.column_name
 
     UNION ALL
