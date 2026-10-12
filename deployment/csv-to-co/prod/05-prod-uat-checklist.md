@@ -428,6 +428,180 @@ Peak mapping used
 CO uses Peak mapped snapshot
 ```
 
+## UAT 13 — Error History
+
+Open:
+
+~~~text
+SMK API SALES ERROR PROCESSING
+→ History
+~~~
+
+Expected:
+
+~~~text
+History tab loads without SQL/IDO error
+current failed inbound rows appear as CURRENT_ERROR
+archived retry attempts appear as RETRY_SAME_BATCH
+current transferred/success rows may appear as SUCCESS
+Refresh reloads the History collection
+~~~
+
+Verify directly:
+
+~~~sql
+SELECT TOP (100)
+    history_key,
+    archived_date,
+    attempt_no,
+    batch_id,
+    cust_po,
+    row_no,
+    item,
+    qty_ordered,
+    u_m,
+    inbound_status,
+    validation_msg,
+    archive_reason,
+    is_current
+FROM dbo.ue_SMK069_pos_sales_inbound_history_v
+ORDER BY archived_date DESC, attempt_no DESC, row_no;
+~~~
+
+The form grid and SQL view must show the same latest attempt state.
+
+## UAT 14 — Corrected retry using SAME failed BatchId
+
+This test is intentionally different from UAT 7.
+
+Step 1:
+
+~~~text
+new BatchId
+new CustPO
+submit payload with a proven validation failure
+~~~
+
+Expected after first request:
+
+~~~text
+no CO
+current inbound = E
+History = attempt 1 / CURRENT_ERROR
+~~~
+
+Step 2:
+
+Correct the payload but send it again using the **same BatchId** and the same
+business CustPO.
+
+Expected:
+
+~~~text
+previous E rows copied to ue_SMK069_pos_sales_inbound_hist
+previous attempt shown as RETRY_SAME_BATCH
+corrected payload becomes the current attempt
+attempt number increments
+the old payload is not reused for validation
+~~~
+
+If the corrected payload is valid:
+
+~~~text
+one CO only
+current inbound becomes T
+History shows old failed attempt + current SUCCESS
+~~~
+
+If the corrected payload is still invalid:
+
+~~~text
+old failed attempt = RETRY_SAME_BATCH
+new failed attempt = CURRENT_ERROR
+no CO
+~~~
+
+Verify archive:
+
+~~~sql
+SELECT
+    source_system,
+    batch_id,
+    attempt_no,
+    original_inbound_id,
+    row_no,
+    cust_po,
+    item,
+    qty_ordered,
+    inbound_status,
+    validation_msg,
+    archive_reason,
+    archived_date
+FROM dbo.ue_SMK069_pos_sales_inbound_hist
+WHERE batch_id = N'<SAME_BATCH_ID>'
+ORDER BY attempt_no, row_no;
+~~~
+
+Verify current:
+
+~~~sql
+SELECT
+    inbound_id,
+    source_system,
+    batch_id,
+    row_no,
+    cust_po,
+    item,
+    qty_ordered,
+    inbound_status,
+    validation_msg
+FROM dbo.ue_SMK069_pos_sales_inbound_mst
+WHERE batch_id = N'<SAME_BATCH_ID>'
+ORDER BY row_no;
+~~~
+
+Critical safety acceptance:
+
+~~~text
+[ ] no temp process_status=P row deleted
+[ ] no second CO created
+[ ] old failed attempt preserved
+[ ] corrected payload is actually the payload validated
+~~~
+
+## UAT 15 — Friendly POS-108 parity between API and History
+
+Use a quantity-multiple failure where mapping returns ValidationStatus=N because
+the converted quantity is fractional.
+
+Example pattern:
+
+~~~text
+source item = AC20002B
+qty         = 376 PCS
+mapped qty  = 25.06667 TRY
+~~~
+
+Expected external API:
+
+~~~text
+POS-108
+Quantity tidak sesuai kelipatan U/M
+contains coline/item/qty_ordered/u_m
+contains qty_hasil_konversi/u_m_hasil
+does NOT expose "ValidationStatus mapping"
+counts only the true root invalid line
+~~~
+
+Expected persisted History:
+
+~~~text
+root invalid line = POS-108
+valid sibling line = POS-203
+~~~
+
+The API and History must describe the same business root cause.
+
 ## Final sign-off
 
 ```text
@@ -445,5 +619,9 @@ CO uses Peak mapped snapshot
 [ ] CSV Normal PASS
 [ ] CSV Peak PASS
 [ ] Error Processing form PASS
+[ ] History tab/load/refresh PASS
+[ ] SAME BatchId corrected retry PASS
+[ ] History archive attempt numbering PASS
+[ ] Friendly POS-108 API/History parity PASS
 [ ] Customer Contracts UET PASS
 ```
