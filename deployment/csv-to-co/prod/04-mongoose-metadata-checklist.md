@@ -684,3 +684,35 @@ does not by itself validate processing behavior.
 
 Next gate: create an approved PROD-safe Normal/non-Peak UAT transaction, then
 verify inbound -> temp -> Blanket CO -> form traceability.
+
+
+## October 2026 History / same-Batch retry delta
+
+Additional verified TRN metadata is now required for the latest Error Processing design:
+
+~~~
+IDO:
+  ue_SMK069PosSalesInboundHistory
+  source = dbo.ue_SMK069_pos_sales_inbound_history_v
+  read-only
+
+Form:
+  ue_SMK069APISalesErrorProcessing
+  secondary collection = object2 / History
+  History tab = enabled
+  StdFormInitCompleted -> RefreshHistory()
+  StdFormRefresh       -> RefreshHistory()
+~~~
+
+The public Receive method must remain:
+
+~~~
+SMK069ReceivePosSalesJsonSp
+Transactional = False
+~~~
+
+The latest detailed migration gate is:
+
+~~~
+deployment/csv-to-co/prod/07-trn-to-prd-delta-2026-10-12.md
+~~~
