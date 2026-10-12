@@ -383,7 +383,7 @@ Repo canonical Core SP   : NEEDS SYNC
 Repo canonical Receive SP: NEEDS SYNC
 Repo history table/view  : ADDED / READY FOR REVIEW
 Repo History IDO export  : CONTRACT READY / EXACT TRN XML STILL PENDING
-PROD package             : NEEDS REGENERATION
+PROD package             : VERIFY/UAT UPDATED; RUNTIME 02 + MANIFEST STILL NEED REGENERATION
 ~~~
 
 Therefore:
@@ -454,3 +454,32 @@ ue_SMK069PosSalesInboundHistory
 Until that exact IDO export is captured, use the repository IDO document only as
 the contract/reference; do not hand-build a different PRD-only IDO when the
 verified TRN object can be exported.
+
+
+## 9. Repository progress update — verification/UAT
+
+Completed:
+
+~~~
+deployment/csv-to-co/prod/03-post-deploy-verify.sql
+  -> verifies history table/view
+  -> verifies same-Batch retry markers
+  -> verifies friendly POS-108 markers
+  -> verifies History view columns
+
+deployment/csv-to-co/prod/05-prod-uat-checklist.md
+  -> History tab/load/refresh test
+  -> corrected retry using SAME failed BatchId
+  -> archive/current attempt verification
+  -> friendly POS-108 API/History parity test
+~~~
+
+Still pending before final PRD package is regenerated:
+
+~~~
+1. synchronize exact verified TRN SMK069ReceivePosSalesJsonCoreSp into canonical source
+2. synchronize exact verified TRN SMK069ReceivePosSalesJsonSp into canonical source
+3. capture exact Object Studio XML for ue_SMK069PosSalesInboundHistory
+4. regenerate 02-deploy-canonical-runtime.sql
+5. refresh MANIFEST hashes
+~~~
