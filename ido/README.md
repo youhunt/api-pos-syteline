@@ -4,6 +4,7 @@
 ido/csv-to-co/
   01-SMKRSCPosInbounds.md
   02-SMKRSCPosBatches.md
+  03-ue_SMK069PosSalesInboundHistory.md
 
 ido/shipment/
   03-SMK069ShipmentScheduler.md
