@@ -681,3 +681,24 @@ deployment/csv-to-co/prod/00c-create-core-physical-tables.sql
 ```
 
 Therefore PROD no longer requires a manual field-map data entry step.
+
+
+## TRN → PRD delta — 12 Oct 2026
+
+The working TRN has moved beyond the 24 Sep PROD baseline in three areas:
+
+~~~
+1. failed same-BatchId corrected retry with archived attempts
+2. Error Processing History tab + History IDO/view/table
+3. friendly POS-108 API/history message for quantity-multiple failures
+~~~
+
+Do not deploy the old PROD package as-is for this delta.
+
+Use this checklist first:
+
+~~~
+deployment/csv-to-co/prod/07-trn-to-prd-delta-2026-10-12.md
+~~~
+
+That document records which canonical SQL, Mongoose IDO/form metadata, PROD package files, and UAT cases still need synchronization before PRD cutover.
