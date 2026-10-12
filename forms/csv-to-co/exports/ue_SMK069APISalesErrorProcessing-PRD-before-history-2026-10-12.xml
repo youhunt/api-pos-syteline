@@ -1,0 +1,868 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FormsAndObjectsExport Version="010000">
+   <Forms Type="1">
+      <Form Name="ue_SMK069APISalesErrorProcessing" Scope="1" ScopeName="[NULL]">
+         <Caption>SMK API SALES ERROR PROCESSING</Caption>
+         <Type>1</Type>
+         <StandardOperations>929</StandardOperations>
+         <Flags>1048584</Flags>
+         <Height>21</Height>
+         <LeftPos>0</LeftPos>
+         <TopPos>0</TopPos>
+         <Width>100</Width>
+         <HelpContextID>-1</HelpContextID>
+         <PaneZeroSize>37.049999999999997</PaneZeroSize>
+         <PrimaryDataSource>V(fds_DataSource)</PrimaryDataSource>
+         <MasterDeviceID>0</MasterDeviceID>
+         <LockedBy>sa</LockedBy>
+         <Components>
+            <Component Name="btnPreview">
+               <DeviceID>-1</DeviceID>
+               <Type>8</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>1.88888888888889</TopPos>
+               <LeftPos>47</LeftPos>
+               <Height>1.44444444444444</Height>
+               <ListHeight>0</ListHeight>
+               <Width>16.875</Width>
+               <Caption>Preview</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <Binding>0</Binding>
+               <EventToGenerate>SMK069Preview</EventToGenerate>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+               <EffectiveCaption>Preview</EffectiveCaption>
+            </Component>
+            <Component Name="btnProcessReprocess">
+               <DeviceID>-1</DeviceID>
+               <Type>8</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>1.94444444444444</TopPos>
+               <LeftPos>82.625</LeftPos>
+               <Height>1.44444444444444</Height>
+               <ListHeight>0</ListHeight>
+               <Width>16.875</Width>
+               <Caption>Process/Reprocess</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <Binding>0</Binding>
+               <EventToGenerate>SMK069ProcessReprocess</EventToGenerate>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format>ENABLEDWHEN(Enabled:#C(btnProcessReprocess), #P(process_status) &lt;&gt; P, "True")</Post301Format>
+               <EffectiveCaption>Process/Reprocess</EffectiveCaption>
+            </Component>
+            <Component Name="btnValidate">
+               <DeviceID>-1</DeviceID>
+               <Type>8</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>1.94444444444444</TopPos>
+               <LeftPos>64.875</LeftPos>
+               <Height>1.44444444444444</Height>
+               <ListHeight>0</ListHeight>
+               <Width>16.875</Width>
+               <Caption>Validate</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <Binding>0</Binding>
+               <EventToGenerate>SMK069Validate</EventToGenerate>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+               <EffectiveCaption>Validate</EffectiveCaption>
+            </Component>
+            <Component Name="co_lineGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>4</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Line</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>4</ContainerSequence>
+               <DataSource>object.co_line</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Line</EffectiveCaption>
+            </Component>
+            <Component Name="co_numGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>3</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Source/POS Order No</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>3</ContainerSequence>
+               <DataSource>object.co_num</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Source/POS Order No</EffectiveCaption>
+            </Component>
+            <Component Name="cust_numGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>5</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Customer</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>5</ContainerSequence>
+               <DataSource>object.cust_num</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Customer</EffectiveCaption>
+            </Component>
+            <Component Name="dtOrderDateFrom">
+               <DeviceID>-1</DeviceID>
+               <Type>26</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>0.555555555555556</TopPos>
+               <LeftPos>18.5</LeftPos>
+               <Height>1.16666666666667</Height>
+               <ListHeight>0</ListHeight>
+               <Width>12.625</Width>
+               <Caption>Order Date From</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <DataSource>variables.FilterOrderDate</DataSource>
+               <Binding>6</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301DataType>DATATYPE(DATE)</Post301DataType>
+               <Post301Format />
+               <EffectiveCaption>Order Date From</EffectiveCaption>
+            </Component>
+            <Component Name="dtOrderDateTo">
+               <DeviceID>-1</DeviceID>
+               <Type>26</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>0.5</TopPos>
+               <LeftPos>31.875</LeftPos>
+               <Height>1.16666666666667</Height>
+               <ListHeight>0</ListHeight>
+               <Width>12.625</Width>
+               <Caption>Order Date To</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <DataSource>variables.FilterOrderDateTo</DataSource>
+               <Binding>6</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301DataType>DATATYPE(DATE)</Post301DataType>
+               <Post301Format />
+               <EffectiveCaption>Order Date To</EffectiveCaption>
+            </Component>
+            <Component Name="due_dateGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>11</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Due Date</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>15</ContainerSequence>
+               <DataSource>object.due_date</DataSource>
+               <Binding>1</Binding>
+               <Flags>4194688</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Due Date</EffectiveCaption>
+            </Component>
+            <Component Name="error_msgGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>17</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Error Message</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>21</ContainerSequence>
+               <DataSource>object.error_msg</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>True</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Error Message</EffectiveCaption>
+            </Component>
+            <Component Name="exch_rateGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>14</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Exchange Rate</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>18</ContainerSequence>
+               <DataSource>object.exch_rate</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Exchange Rate</EffectiveCaption>
+            </Component>
+            <Component Name="FormCollectionGrid">
+               <DeviceID>-1</DeviceID>
+               <Type>14</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>4.83333333333333</TopPos>
+               <LeftPos>0.125</LeftPos>
+               <Height>16.2222222222222</Height>
+               <ListHeight>0</ListHeight>
+               <Width>100.125</Width>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <DataSource>objects</DataSource>
+               <Binding>3</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+            </Component>
+            <Component Name="gridColumnCustPo">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>5.88235294117647</Height>
+               <ListHeight>0</ListHeight>
+               <Width>12.5</Width>
+               <Caption>CustPo</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>8</ContainerSequence>
+               <DataSource>object.CustPo</DataSource>
+               <Binding>1</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+               <EffectiveCaption>CustPo</EffectiveCaption>
+            </Component>
+            <Component Name="gridColumnCustSeq">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>5.88235294117647</Height>
+               <ListHeight>0</ListHeight>
+               <Width>12.5</Width>
+               <Caption>CustSeq</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>6</ContainerSequence>
+               <DataSource>object.CustSeq</DataSource>
+               <Binding>1</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+               <EffectiveCaption>CustSeq</EffectiveCaption>
+            </Component>
+            <Component Name="gridColumnIsPeakSeason">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>5.88235294117647</Height>
+               <ListHeight>0</ListHeight>
+               <Width>12.5</Width>
+               <Caption>Is Peak Season</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>9</ContainerSequence>
+               <DataSource>object.IsPeakSeason</DataSource>
+               <Binding>1</Binding>
+               <Flags>8</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+               <EffectiveCaption>Is Peak Season</EffectiveCaption>
+            </Component>
+            <Component Name="gridColumnName">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>5.88235294117647</Height>
+               <ListHeight>0</ListHeight>
+               <Width>12.5</Width>
+               <Caption>Name</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>7</ContainerSequence>
+               <DataSource>object.Name</DataSource>
+               <Binding>1</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+               <EffectiveCaption>Name</EffectiveCaption>
+            </Component>
+            <Component Name="gridColumnSyteLineCONumber">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>5.88235294117647</Height>
+               <ListHeight>0</ListHeight>
+               <Width>12.5</Width>
+               <Caption>SyteLine CO Number</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>2</ContainerSequence>
+               <DataSource>object.CreatedCoNum</DataSource>
+               <Binding>1</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+               <EffectiveCaption>SyteLine CO Number</EffectiveCaption>
+            </Component>
+            <Component Name="itemGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>6</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Item</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>10</ContainerSequence>
+               <DataSource>object.item</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Item</EffectiveCaption>
+            </Component>
+            <Component Name="lblFilterCoNum">
+               <DeviceID>-1</DeviceID>
+               <Type>0</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>2.16666666666667</TopPos>
+               <LeftPos>4.25</LeftPos>
+               <Height>1</Height>
+               <ListHeight>0</ListHeight>
+               <Width>13.5</Width>
+               <Caption>CO Number</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <Binding>0</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format>JUSTIFY(R)</Post301Format>
+               <EffectiveCaption>CO Number</EffectiveCaption>
+            </Component>
+            <Component Name="lblFilterOrderDate">
+               <DeviceID>-1</DeviceID>
+               <Type>0</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>0.777777777777778</TopPos>
+               <LeftPos>4.25</LeftPos>
+               <Height>1</Height>
+               <ListHeight>0</ListHeight>
+               <Width>13.5</Width>
+               <Caption>Order Date</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <Binding>0</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format>JUSTIFY(R)</Post301Format>
+               <EffectiveCaption>Order Date</EffectiveCaption>
+            </Component>
+            <Component Name="order_dateGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>2</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Order Date</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>1</ContainerSequence>
+               <DataSource>object.order_date</DataSource>
+               <Binding>1</Binding>
+               <Flags>4194688</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Order Date</EffectiveCaption>
+            </Component>
+            <Component Name="process_statusGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>15</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Status</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>19</ContainerSequence>
+               <DataSource>object.process_status</DataSource>
+               <Binding>1</Binding>
+               <ComboListSource>INLINE ENTRIES(N\New,V\Valid,E\Error,P\Processed,C\Cancelled) DISPLAY(2) VALUE(1)</ComboListSource>
+               <Flags>384</Flags>
+               <ReadOnly>True</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Status</EffectiveCaption>
+            </Component>
+            <Component Name="processed_byGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>20</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Processed By</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>24</ContainerSequence>
+               <DataSource>object.processed_by</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>True</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Processed By</EffectiveCaption>
+            </Component>
+            <Component Name="processed_dateGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>19</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Processed Date</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>23</ContainerSequence>
+               <DataSource>object.processed_date</DataSource>
+               <Binding>1</Binding>
+               <Flags>4194688</Flags>
+               <ReadOnly>True</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Processed Date</EffectiveCaption>
+            </Component>
+            <Component Name="qty_orderedGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>7</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Quantity</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>11</ContainerSequence>
+               <DataSource>object.qty_ordered</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Quantity</EffectiveCaption>
+            </Component>
+            <Component Name="retry_countGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>18</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Retry Count</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>22</ContainerSequence>
+               <DataSource>object.retry_count</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>True</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Retry Count</EffectiveCaption>
+            </Component>
+            <Component Name="SiteRefGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>1</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Site</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>0</ContainerSequence>
+               <DataSource>object.SiteRef</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Site</EffectiveCaption>
+            </Component>
+            <Component Name="tax_code1GridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>13</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Tax Code</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>17</ContainerSequence>
+               <DataSource>object.tax_code1</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Tax Code</EffectiveCaption>
+            </Component>
+            <Component Name="terms_codeGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>12</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Terms</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>16</ContainerSequence>
+               <DataSource>object.terms_code</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Terms</EffectiveCaption>
+            </Component>
+            <Component Name="txtCoNumFilter">
+               <DeviceID>-1</DeviceID>
+               <Type>1</Type>
+               <TabOrder>0</TabOrder>
+               <TopPos>2.11111111111111</TopPos>
+               <LeftPos>18.625</LeftPos>
+               <Height>1.16666666666667</Height>
+               <ListHeight>0</ListHeight>
+               <Width>25.375</Width>
+               <Caption>CO Number</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName />
+               <ContainerSequence>0</ContainerSequence>
+               <DataSource>variables.FilterCoNum</DataSource>
+               <Binding>6</Binding>
+               <Flags>0</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <Post301Format />
+               <EffectiveCaption>CO Number</EffectiveCaption>
+            </Component>
+            <Component Name="u_mGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>8</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>U/M</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>12</ContainerSequence>
+               <DataSource>object.u_m</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>U/M</EffectiveCaption>
+            </Component>
+            <Component Name="unit_priceGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>9</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Unit Price</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>13</ContainerSequence>
+               <DataSource>object.unit_price</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Unit Price</EffectiveCaption>
+            </Component>
+            <Component Name="validation_msgGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>16</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Validation Message</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>20</ContainerSequence>
+               <DataSource>object.validation_msg</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>True</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Validation Message</EffectiveCaption>
+            </Component>
+            <Component Name="whseGridCol">
+               <DeviceID>-1</DeviceID>
+               <Type>15</Type>
+               <TabOrder>10</TabOrder>
+               <TopPos>0</TopPos>
+               <LeftPos>0</LeftPos>
+               <Height>0</Height>
+               <ListHeight>0</ListHeight>
+               <Width>10</Width>
+               <Caption>Warehouse</Caption>
+               <MaxCharacters>0</MaxCharacters>
+               <ContainerName>FormCollectionGrid</ContainerName>
+               <ContainerSequence>14</ContainerSequence>
+               <DataSource>object.whse</DataSource>
+               <Binding>1</Binding>
+               <Flags>384</Flags>
+               <ReadOnly>False</ReadOnly>
+               <Hidden>False</Hidden>
+               <HelpContextID>0</HelpContextID>
+               <MenuName>StdDefault</MenuName>
+               <Post301Format />
+               <EffectiveCaption>Warehouse</EffectiveCaption>
+            </Component>
+         </Components>
+         <EventHandlers>
+            <EventHandler Name="SMK069Preview" Sequence="0">
+               <ResponseType>22</ResponseType>
+               <Response> SETVARVALUES(AppliedOrderDate=V(FilterOrderDate),AppliedOrderDateTo=V(FilterOrderDateTo),AppliedCoNum=V(FilterCoNum))</Response>
+            </EventHandler>
+            <EventHandler Name="SMK069Preview" Sequence="1">
+               <ResponseType>28</ResponseType>
+               <Response>object</Response>
+            </EventHandler>
+            <EventHandler Name="SMK069ProcessReprocess" Sequence="0">
+               <ResponseType>26</ResponseType>
+               <Response>object</Response>
+            </EventHandler>
+            <EventHandler Name="SMK069ProcessReprocess" Sequence="1">
+               <ResponseType>0</ResponseType>
+               <Response>ue_SMK069TempSales.SMK069ProcessCustomerOrderSp( PARMS(VAR P(SiteRef), VAR P(co_num), VAR 0, VAR, RVAR V(CreatedCoNum), RVAR V(Success), MESSAGE) ERRORMESSAGE(mBackEndMessage) SUCCESSMESSAGE(mBackEndMessage) )</Response>
+            </EventHandler>
+            <EventHandler Name="SMK069ProcessReprocess" Sequence="2">
+               <ResponseType>28</ResponseType>
+               <Response>object</Response>
+            </EventHandler>
+            <EventHandler Name="SMK069Validate" Sequence="0">
+               <ResponseType>0</ResponseType>
+               <Response>ue_SMK069TempSales.SMK069ValidateFilteredStagingSp( PARMS(VAR P(SiteRef), VAR V(AppliedOrderDate), VAR V(AppliedOrderDateTo), VAR V(AppliedCoNum), RVAR V(TotalOrders), RVAR V(ValidOrders), RVAR V(ErrorOrders), MESSAGE) ERRORMESSAGE(mBackEndMessage) SUCCESSMESSAGE(mBackEndMessage) )</Response>
+            </EventHandler>
+            <EventHandler Name="SMK069Validate" Sequence="1">
+               <ResponseType>28</ResponseType>
+               <Response>object</Response>
+            </EventHandler>
+         </EventHandlers>
+         <Variables>
+            <Variable Name="AppliedCoNum">
+               <Value />
+               <Value2 />
+               <Value3 />
+               <Description />
+            </Variable>
+            <Variable Name="AppliedOrderDate">
+               <Value />
+               <Value2 />
+               <Value3 />
+               <Description />
+            </Variable>
+            <Variable Name="AppliedOrderDateTo">
+               <Value />
+               <Value2 />
+               <Value3 />
+               <Description />
+            </Variable>
+            <Variable Name="fds_DataSource">
+               <Value>ue_SMK069TempSales( LOCKMODE(Row) FILTEROPTS(FILTEROPT( PROP(order_date) OPER(&gt;=) VALTYP(V) VAL(AppliedOrderDate) ), FILTEROPT( PROP(order_date) OPER(&lt;=) VALTYP(V) VAL(AppliedOrderDateTo) ), FILTEROPT( PROP(co_num) OPER(=) VALTYP(V) VAL(AppliedCoNum) )) )</Value>
+               <Value2 />
+               <Value3 />
+               <Description />
+            </Variable>
+         </Variables>
+         <Script Language="Visual Basic">
+            <ScriptLines>
+               <ScriptLine>Option Explicit On</ScriptLine>
+               <ScriptLine>Option Strict On</ScriptLine>
+               <ScriptLine />
+               <ScriptLine>Imports System</ScriptLine>
+               <ScriptLine>Imports Microsoft.VisualBasic</ScriptLine>
+               <ScriptLine>Imports Mongoose.IDO.Protocol</ScriptLine>
+               <ScriptLine>Imports Mongoose.Scripting</ScriptLine>
+               <ScriptLine />
+               <ScriptLine />
+               <ScriptLine>Namespace Mongoose.FormScripts</ScriptLine>
+               <ScriptLine>Public Class ue_SMK069APISalesErrorProcessing</ScriptLine>
+               <ScriptLine>Inherits FormScript</ScriptLine>
+               <ScriptLine />
+               <ScriptLine>'</ScriptLine>
+               <ScriptLine>' Methods go here</ScriptLine>
+               <ScriptLine>'</ScriptLine>
+               <ScriptLine />
+               <ScriptLine>End Class</ScriptLine>
+               <ScriptLine>End Namespace</ScriptLine>
+            </ScriptLines>
+         </Script>
+      </Form>
+   </Forms>
+</FormsAndObjectsExport>
