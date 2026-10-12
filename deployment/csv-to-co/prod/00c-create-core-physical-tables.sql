@@ -10,6 +10,7 @@
    3. dbo.ue_SMK069_pos_csv_batch_mst
    4. dbo.ue_SMK069_pos_csv_upload_mst
    5. dbo.ue_SMK069_pos_field_map_mst
+   6. dbo.ue_SMK069_pos_sales_inbound_hist
 
    Notes:
    - Re-runnable: an existing table is left unchanged.
@@ -370,7 +371,76 @@ ELSE
     PRINT N'[SMK069 TABLES] EXISTS dbo.ue_SMK069_pos_field_map_mst';
 
 /* ==========================================================================
-   6. Seed POS external-to-canonical field map
+   6. POS inbound retry history
+   ========================================================================== */
+IF OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_hist', N'U') IS NULL
+BEGIN
+    SELECT TOP (0)
+        CAST(i.inbound_id AS BIGINT) AS original_inbound_id,
+        i.source_system,
+        i.batch_id,
+        i.row_no,
+        i.raw_json,
+        i.SiteRef,
+        i.cust_num,
+        i.order_date,
+        i.co_num,
+        i.co_line,
+        i.item,
+        i.qty_ordered,
+        i.unit_price,
+        i.whse,
+        i.due_date,
+        i.u_m,
+        i.terms_code,
+        i.tax_code1,
+        i.exch_rate,
+        i.inbound_status,
+        i.validation_msg,
+        i.received_date,
+        i.validated_date,
+        i.transferred_date,
+        i.created_by,
+        i.updated_by,
+        i.RowPointer,
+        i.cust_po,
+        i.is_peak_season,
+        CAST(NULL AS INT)           AS attempt_no,
+        CAST(NULL AS DATETIME)      AS archived_date,
+        CAST(NULL AS NVARCHAR(100)) AS archive_reason
+    INTO dbo.ue_SMK069_pos_sales_inbound_hist
+    FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i;
+
+    ALTER TABLE dbo.ue_SMK069_pos_sales_inbound_hist
+        ADD history_id BIGINT IDENTITY(1,1) NOT NULL;
+
+    ALTER TABLE dbo.ue_SMK069_pos_sales_inbound_hist
+        ADD CONSTRAINT PK_SMK069InboundHist
+            PRIMARY KEY CLUSTERED (history_id);
+
+    CREATE NONCLUSTERED INDEX IX_SMK069InboundHist_Batch
+        ON dbo.ue_SMK069_pos_sales_inbound_hist
+        (
+            source_system,
+            batch_id,
+            attempt_no
+        );
+
+    CREATE NONCLUSTERED INDEX IX_SMK069InboundHist_CustPo
+        ON dbo.ue_SMK069_pos_sales_inbound_hist
+        (
+            SiteRef,
+            cust_po,
+            archived_date
+        );
+
+    PRINT N'[SMK069 TABLES] CREATED dbo.ue_SMK069_pos_sales_inbound_hist';
+END
+ELSE
+    PRINT N'[SMK069 TABLES] EXISTS dbo.ue_SMK069_pos_sales_inbound_hist';
+
+/* ==========================================================================
+   7. Seed POS external-to-canonical field map
    Source: verified TRN rows supplied 2026-09-28
 
    Environment-specific values:
@@ -484,4 +554,4 @@ IF
 
 PRINT N'[SMK069 TABLES] SEEDED dbo.ue_SMK069_pos_field_map_mst (36 POS rows) untuk active site.';
 
-PRINT N'[SMK069 TABLES] SUCCESS - five core/config physical tables are present.';
+PRINT N'[SMK069 TABLES] SUCCESS - six core/config physical tables are present.';
