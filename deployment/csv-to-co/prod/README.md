@@ -418,3 +418,16 @@ The PROD seed does **not** copy the TRN SiteRef or TRN RowPointer values.
 `CONTEXT_INFO()` and generates fresh RowPointers, while preserving the verified
 36 business mappings. Receive Core continues to filter by
 `m.SiteRef = @Site`.
+
+
+## October 2026 TRN delta
+
+The current TRN contains newer same-BatchId retry/history and friendly POS-108 behavior that is not yet represented by this September baseline package.
+
+Before any new PRD cutover, read:
+
+~~~
+07-trn-to-prd-delta-2026-10-12.md
+~~~
+
+Treat that file as the current go/no-go checklist. The canonical Core/Receive procedures, History table/view, History IDO/form export, verification/UAT scripts, and MANIFEST must be synchronized before regenerating the production runtime package.
