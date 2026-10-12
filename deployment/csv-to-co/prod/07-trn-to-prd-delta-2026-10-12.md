@@ -195,7 +195,7 @@ IsCurrent
 
 The IDO is read-only.
 
-Current repository status on 12 Oct 2026: MISSING — export verified TRN IDO before PRD import.
+Current repository status on 12 Oct 2026: **IDO contract documented in repo; exact verified TRN Object Studio XML export is still pending before PRD import.**
 
 ### D. Error Processing form — UPDATE FROM VERIFIED TRN EXPORT
 
@@ -243,8 +243,8 @@ The existing Preview / Validate / Process-Reprocess behavior must remain.
 Current repository status on 12 Oct 2026:
 
 ~~~
-FINAL TRN XML EXISTS OUTSIDE REPO
-PRD XML is older and has no History tab
+FINAL TRN XML IS NOW SAVED IN REPO
+PRD pre-History XML is also archived in repo for rollback/diff evidence
 ~~~
 
 Repository artifact still to add:
@@ -377,12 +377,12 @@ As of 12 Oct 2026:
 
 ~~~
 TRN functional behavior : READY / tested
-TRN form export          : READY
+TRN form export          : READY / SAVED IN REPO
 PRD form baseline        : OLD (no History)
 Repo canonical Core SP   : NEEDS SYNC
 Repo canonical Receive SP: NEEDS SYNC
 Repo history table/view  : ADDED / READY FOR REVIEW
-Repo History IDO export  : MISSING
+Repo History IDO export  : CONTRACT READY / EXACT TRN XML STILL PENDING
 PROD package             : NEEDS REGENERATION
 ~~~
 
@@ -428,3 +428,29 @@ Do not regenerate/run the consolidated 02-deploy-canonical-runtime.sql yet from
 the repository until the latest TRN Core/Receive procedure bodies are also
 synchronized into canonical source. Running an older consolidated runtime after
 the October database changes could overwrite the newer procedures.
+
+
+## 8. Repository progress update — IDO/Form
+
+Completed in repository:
+
+~~~
+ido/csv-to-co/03-ue_SMK069PosSalesInboundHistory.md
+forms/csv-to-co/exports/ue_SMK069APISalesErrorProcessing-TRN-2026-10-12.xml
+forms/csv-to-co/exports/ue_SMK069APISalesErrorProcessing-PRD-before-history-2026-10-12.xml
+forms/csv-to-co/exports/README.md
+~~~
+
+The exact working TRN form is now preserved as the PRD migration source, and the
+old PRD form is preserved as rollback/diff evidence.
+
+Remaining Mongoose gap:
+
+~~~
+exact Object Studio XML export of:
+ue_SMK069PosSalesInboundHistory
+~~~
+
+Until that exact IDO export is captured, use the repository IDO document only as
+the contract/reference; do not hand-build a different PRD-only IDO when the
+verified TRN object can be exported.
