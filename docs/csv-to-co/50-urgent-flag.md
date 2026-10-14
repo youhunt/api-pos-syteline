@@ -184,7 +184,7 @@ Urgent Remark   text      → property Uf_SMK069_urgent_remark
 
 Catatan (14 Okt 2026): form **Customer Order Blanket Releases** di tenant ini memakai primary collection `SL.SLCoitems` (tabel `coitem_mst`), bukan `co_bln_mst`. Untuk form itu ikuti bagian "Form Customer Order Blanket Releases — Patch 38" di bawah. Form yang primary collection-nya langsung `co_bln_mst` memakai property UET `co_bln_mst` di atas.
 
-Setelah Impact Schema, property `Uf_*` biasanya sudah muncul di IDO. Bila belum, refresh metadata IDO. Keputusan bisnis (14 Okt 2026): kedua field **read-only dan disabled** (`Enabled = False`), karena nilainya berasal dari POS. User hanya melihat, tidak mengubah.
+Nama property di IDO bisa berawalan prefix tabel (pada `SLCoitems` menjadi `coiUf_SMK069_...`); pilih dari daftar Data Source di Form Editor. Setelah Impact Schema, property `Uf_*` biasanya sudah muncul di IDO. Bila belum, refresh metadata IDO. Keputusan bisnis (14 Okt 2026): kedua field **read-only dan disabled** (`Enabled = False`), karena nilainya berasal dari POS. User hanya melihat, tidak mengubah.
 
 ## UAT
 
@@ -330,14 +330,21 @@ Patch juga menyalin nilai urgent dari `co_bln_mst` ke `coitem_mst` untuk CO yang
 
 ### Langkah 3 — Form (Form Editor)
 
-Pada primary collection `SL.SLCoitems` form Customer Order Blanket Releases:
+Form: **SMK Customer Order Blanket Releases** (`ue_SMK069_BlanketReleases`), primary collection `SL.SLCoitems`. Pada IDO `SLCoitems`, property UET `coitem_mst` diberi awalan `coi`, jadi nama property-nya (bukan nama kolom DB) adalah:
 
 ```text
-Is Urgent?      CheckBox   Data Source: Uf_SMK069_is_urgent       Enabled = False (disabled), Read Only
-Urgent Remark   Edit       Data Source: Uf_SMK069_urgent_remark   Enabled = False (disabled), Read Only
+coiUf_SMK069_is_urgent       (kolom DB: Uf_SMK069_is_urgent)
+coiUf_SMK069_urgent_remark   (kolom DB: Uf_SMK069_urgent_remark)
 ```
 
-Bila property `Uf_SMK069_*` belum muncul di daftar Data Source, refresh metadata IDO `SLCoitems` (tutup-buka form, Ctrl+F5). Keputusan bisnis 14 Okt 2026 berlaku sama: read-only dan disabled.
+Cara paling cepat: import XML siap pakai `forms/csv-to-co/exports/ue_SMK069_BlanketReleases-DEV-urgent-2026-10-14.xml` (panduan: `forms/csv-to-co/05-SMK069BlanketReleases-Urgent.md`). Isinya dua kolom grid read-only tepat setelah kolom `sLine`:
+
+```text
+Is Urgent       IsUrgentGridCol       Data Source: object.coiUf_SMK069_is_urgent       Flags 9 (checkbox), Read Only
+Urgent Remark   UrgentRemarkGridCol   Data Source: object.coiUf_SMK069_urgent_remark   Read Only
+```
+
+Bila menambah manual lewat Form Editor, pilih Data Source `coiUf_SMK069_is_urgent` / `coiUf_SMK069_urgent_remark`, set `Read Only = True`. Keputusan bisnis 14 Okt 2026: kedua field read-only dan disabled. Bila property belum muncul di daftar Data Source, refresh metadata IDO `SLCoitems` (tutup-buka form, Ctrl+F5).
 
 ### UAT form Releases
 

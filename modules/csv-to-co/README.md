@@ -411,7 +411,7 @@ File:
 database/patches/csv-to-co/2026-10-14-smk069-38-urgent-flag-coitem.sql
 ```
 
-Stores the Urgent flag also on the Customer Order line (`coitem_mst` UET `Uf_SMK069_is_urgent` / `Uf_SMK069_urgent_remark`) because the form "Customer Order Blanket Releases" is bound to `SL.SLCoitems`, not `co_bln_mst`. Edits `SMK069ProcessCustomerOrderSp` in place and back-fills existing urgent blanket lines. Requires Patch 36 and the `coitem_mst` UET. See "Form Customer Order Blanket Releases — Patch 38" in `docs/csv-to-co/50-urgent-flag.md`.
+Stores the Urgent flag also on the Customer Order line (`coitem_mst` UET `Uf_SMK069_is_urgent` / `Uf_SMK069_urgent_remark`) because the form "Customer Order Blanket Releases" is bound to `SL.SLCoitems`, not `co_bln_mst`. Edits `SMK069ProcessCustomerOrderSp` in place and back-fills existing urgent blanket lines. Requires Patch 36 and the `coitem_mst` UET. On IDO `SLCoitems` the form Data Source is `coiUf_SMK069_is_urgent` / `coiUf_SMK069_urgent_remark` (`coi` prefix); prepared form XML in `forms/csv-to-co/exports/ue_SMK069_BlanketReleases-DEV-urgent-2026-10-14.xml`. See "Form Customer Order Blanket Releases — Patch 38" in `docs/csv-to-co/50-urgent-flag.md`.
 
 ### Patch 37
 

@@ -37,3 +37,12 @@ ue_SMK069PosCsvBatchConsole-DEV-urgent-2026-10-14.xml          (+ kolom grid Is 
 ~~~
 
 The second file differs from the first only by two new read-only grid columns (`gridColumnIsUrgent`, `gridColumnUrgentRemark`) placed right after Is Peak Season, and `ContainerSequence` +2 for the columns that follow. Import it only after Patch 37 is applied and IDO `ue_SMK069PosCsvUpload` has been resynchronized (properties `IsUrgent`, `UrgentRemark`). See `forms/csv-to-co/04-SMK069PosCsvBatchConsole-Urgent.md`.
+
+## SMK Customer Order Blanket Releases (14 Oct 2026)
+
+~~~text
+ue_SMK069_BlanketReleases-DEV-before-urgent-2026-10-14.xml   (export DEV apa adanya, rollback/diff)
+ue_SMK069_BlanketReleases-DEV-urgent-2026-10-14.xml          (+ kolom grid Is Urgent dan Urgent Remark)
+~~~
+
+The second file differs from the first only by two new read-only grid columns (`IsUrgentGridCol`, `UrgentRemarkGridCol`) placed right after the Line column, and `ContainerSequence` +2 for the 99 columns that follow. They bind to `object.coiUf_SMK069_is_urgent` and `object.coiUf_SMK069_urgent_remark` (IDO `SLCoitems`). Import it only after Patch 38 is applied. See `forms/csv-to-co/05-SMK069BlanketReleases-Urgent.md`.

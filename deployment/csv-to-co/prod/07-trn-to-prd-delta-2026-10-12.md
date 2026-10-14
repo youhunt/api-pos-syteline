@@ -547,7 +547,7 @@ Also to fold into the regenerated PRD package. Reference: `docs/csv-to-co/50-urg
 ~~~
 Patch                : database/patches/csv-to-co/2026-10-14-smk069-38-urgent-flag-coitem.sql   (requires Patch 36 + coitem_mst UET)
 Canonical (repo)     : SMK069ProcessCustomerOrderSp.sql   (PATCH-38: INSERT INTO dbo.coitem_mst carries the two UET fields)
-Mongoose             : UET on coitem_mst (class SMK069_CL_coitem) + Impact Schema; form Customer Order Blanket Releases fields
+Mongoose             : UET on coitem_mst (class SMK069_CL_coitem) + Impact Schema; form Customer Order Blanket Releases fields (IDO SLCoitems properties coiUf_SMK069_is_urgent / coiUf_SMK069_urgent_remark; XML: forms/csv-to-co/exports/ue_SMK069_BlanketReleases-DEV-urgent-2026-10-14.xml)
 ~~~
 
 ~~~

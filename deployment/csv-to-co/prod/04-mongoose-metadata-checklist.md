@@ -764,7 +764,7 @@ IDO `ue_SMK069PosCsvUpload` (table `ue_SMK069_pos_csv_upload_mst`) gains `is_urg
 
 ## Customer Order Blanket Releases — Urgent fields (Patch 38, 14 Oct 2026)
 
-The form uses primary collection `SL.SLCoitems` (`coitem_mst`), so the urgent values are also stored on `coitem_mst` by Patch 38.
+The form uses primary collection `SL.SLCoitems` (`coitem_mst`), so the urgent values are also stored on `coitem_mst` by Patch 38. On the IDO `SLCoitems` the UET properties carry the `coi` prefix: `coiUf_SMK069_is_urgent`, `coiUf_SMK069_urgent_remark` (use these as form Data Source, `object.coiUf_...`). Prepared form XML: `forms/csv-to-co/exports/ue_SMK069_BlanketReleases-DEV-urgent-2026-10-14.xml`; guide: `forms/csv-to-co/05-SMK069BlanketReleases-Urgent.md`.
 
 ~~~
 UET user fields (reuse)  : Uf_SMK069_is_urgent (int), Uf_SMK069_urgent_remark (nvarchar 255)
@@ -775,5 +775,5 @@ Then Impact Schema (large table: run off-hours on PRD).
 [ ] Uf_SMK069_is_urgent exists on coitem_mst (int)
 [ ] Uf_SMK069_urgent_remark exists on coitem_mst (nvarchar 255 or larger)
 [ ] Patch 38 applied (PATCH-38 SUCCESS), backfill row count noted
-[ ] Customer Order Blanket Releases shows Is Urgent? and Urgent Remark bound to SLCoitems, both disabled
+[ ] Customer Order Blanket Releases (ue_SMK069_BlanketReleases) shows grid columns Is Urgent and Urgent Remark bound to coiUf_SMK069_is_urgent / coiUf_SMK069_urgent_remark (SLCoitems), both read-only
 ~~~
