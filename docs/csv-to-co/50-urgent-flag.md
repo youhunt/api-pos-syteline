@@ -81,6 +81,7 @@ Payload JSON  [{ ..., "Is_Urgent": 1, "Urgent Remark": "..." }]
 | `co_bln_mst` (UET) | + `Uf_SMK069_is_urgent`, + `Uf_SMK069_urgent_remark` — **dibuat lewat Mongoose, bukan SQL** |
 | Form Customer Order Blanket Lines | + checkbox dan field teks — **metadata Mongoose** |
 | `ue_SMK069_pos_csv_upload_mst`, `SMK069ImportCsvFileSp`, `SMK069RunCsvTestBatchSp`, form CSV | Jalur CSV — **Patch 37**, lihat bagian "Jalur CSV" di bawah |
+| `coitem_mst` (UET), `SMK069ProcessCustomerOrderSp`, form Customer Order Blanket Releases | Urgent juga disimpan di Customer Order line — **Patch 38**, lihat bagian "Form Customer Order Blanket Releases" di bawah |
 
 Signature procedure tidak berubah, jadi metadata IDO method tidak perlu disentuh.
 
@@ -180,6 +181,8 @@ Metadata Mongoose (tidak ada di repo SQL). Pada Form Editor untuk form Customer 
 Is Urgent?      checkbox  → property Uf_SMK069_is_urgent
 Urgent Remark   text      → property Uf_SMK069_urgent_remark
 ```
+
+Catatan (14 Okt 2026): form **Customer Order Blanket Releases** di tenant ini memakai primary collection `SL.SLCoitems` (tabel `coitem_mst`), bukan `co_bln_mst`. Untuk form itu ikuti bagian "Form Customer Order Blanket Releases — Patch 38" di bawah. Form yang primary collection-nya langsung `co_bln_mst` memakai property UET `co_bln_mst` di atas.
 
 Setelah Impact Schema, property `Uf_*` biasanya sudah muncul di IDO. Bila belum, refresh metadata IDO. Keputusan bisnis (14 Okt 2026): kedua field **read-only dan disabled** (`Enabled = False`), karena nilainya berasal dari POS. User hanya melihat, tidak mengubah.
 
@@ -281,6 +284,81 @@ ORDER BY row_no;
 
 Bila tahap 1 benar tetapi inbound salah: JSON belum membawa nilai (cek `SMK069RunCsvTestBatchSp`). Bila tahap 1 sudah salah: parser (`SMK069ImportCsvFileSp`) atau nama header CSV.
 
+## Form Customer Order Blanket Releases — Patch 38
+
+Form ini memakai primary collection `SL.SLCoitems` (tabel `coitem_mst`). Nilai urgent dari Patch 36 hanya ada di `co_bln_mst`, jadi form tidak bisa menampilkannya. Patch 38 membuat `SMK069ProcessCustomerOrderSp` mengisi dua field yang sama juga di `coitem_mst`, sehingga form cukup mengikat dua property pada primary collection tanpa secondary collection.
+
+```text
+staging temp (is_urgent / urgent_remark)
+ → co_bln_mst.Uf_SMK069_is_urgent / Uf_SMK069_urgent_remark    (Patch 36)
+ → coitem_mst.Uf_SMK069_is_urgent / Uf_SMK069_urgent_remark    (Patch 38)
+```
+
+Konsekuensinya data urgent tersimpan di dua tabel. `co_bln_mst` tetap sumber untuk form Blanket Lines. Nilai tidak diubah dari form (read-only), jadi dua salinan itu tidak akan berselisih kecuali ada yang mengubah tabel langsung.
+
+### Langkah 1 — UET pada `coitem_mst` (Mongoose)
+
+```text
+User Field      : pakai ulang Uf_SMK069_is_urgent (int) dan Uf_SMK069_urgent_remark (nvarchar 255)
+Class Name      : SMK069_CL_coitem
+Fields          : Uf_SMK069_is_urgent, Uf_SMK069_urgent_remark
+
+Table Name         : coitem_mst
+Class Name         : SMK069_CL_coitem
+Active             : 1
+Extend All Records : 1
+```
+
+Lalu jalankan Impact Schema. Jangan `ALTER TABLE` langsung. Bila Mongoose menolak memakai field yang sama pada class kedua, buat dua field baru dengan nama lain dan kabari agar nama kolom di patch disesuaikan. `coitem_mst` tabel besar, jadi pada PRD jalankan Impact Schema di luar jam sibuk.
+
+Verifikasi:
+
+```sql
+SELECT c.name, t.name AS type_name, c.max_length
+FROM sys.columns AS c
+JOIN sys.types   AS t ON t.user_type_id = c.user_type_id
+WHERE c.object_id = OBJECT_ID(N'dbo.coitem_mst')
+  AND c.name IN (N'Uf_SMK069_is_urgent', N'Uf_SMK069_urgent_remark');
+-- harapan: int (4) dan nvarchar (510 byte = 255 karakter)
+```
+
+### Langkah 2 — Patch 38
+
+`database/patches/csv-to-co/2026-10-14-smk069-38-urgent-flag-coitem.sql` lewat Apply Database (satu batch, tanpa GO). Syarat: Patch 36 sudah terpasang dan UET `coitem_mst` sudah ada; bila tidak, patch berhenti di precheck (510403 / 510404 / 510406). Cara kerja sama dengan Patch 36/37: `SMK069ProcessCustomerOrderSp` diedit in-place pada dua anchor (daftar kolom dan nilai `INSERT INTO dbo.coitem_mst`), semuanya atau tidak sama sekali. Error 510407 berarti anchor tidak cocok; kirim pesannya.
+
+Patch juga menyalin nilai urgent dari `co_bln_mst` ke `coitem_mst` untuk CO yang sudah ada (misalnya hasil UAT Patch 36), hanya untuk baris yang urgent atau punya remark. Jumlah baris yang disalin dicetak sebagai pesan `[PATCH-38] Backfill ...`.
+
+### Langkah 3 — Form (Form Editor)
+
+Pada primary collection `SL.SLCoitems` form Customer Order Blanket Releases:
+
+```text
+Is Urgent?      CheckBox   Data Source: Uf_SMK069_is_urgent       Enabled = False (disabled), Read Only
+Urgent Remark   Edit       Data Source: Uf_SMK069_urgent_remark   Enabled = False (disabled), Read Only
+```
+
+Bila property `Uf_SMK069_*` belum muncul di daftar Data Source, refresh metadata IDO `SLCoitems` (tutup-buka form, Ctrl+F5). Keputusan bisnis 14 Okt 2026 berlaku sama: read-only dan disabled.
+
+### UAT form Releases
+
+| # | Skenario | Harapan |
+|---|---|---|
+| R1 | Kirim payload/CSV U2 (line 1 urgent + "Kirim pagi", line 2 normal) setelah Patch 38 | `coitem_mst` line 1 = 1 + "Kirim pagi", line 2 = 0 + NULL |
+| R2 | Buka form Releases pada CO hasil R1 | Line 1: checkbox tercentang + remark; line 2: tidak tercentang; kedua field disabled |
+| R3 | Buka form Releases pada CO urgent hasil UAT Patch 36 (dibuat sebelum Patch 38) | Tampil sesuai nilai urgent berkat backfill |
+| R4 | Order tanpa field urgent (payload lama) | 0 dan NULL, tidak ada error |
+
+```sql
+SELECT ci.co_num, ci.co_line, ci.co_release, ci.item, ci.Uf_SMK069_is_urgent, ci.Uf_SMK069_urgent_remark
+FROM dbo.coitem_mst AS ci
+WHERE ci.co_num IN (SELECT created_co_num FROM dbo.ue_SMK069_temp_sales_mst WHERE cust_po = N'<CustPo>')
+ORDER BY ci.co_line, ci.co_release;
+```
+
+Nilai per `co_line` harus sama dengan query `co_bln_mst` pada bagian UAT di atas.
+
+Release baru yang dibuat manual oleh user (co_release berikutnya) tidak mendapat nilai urgent dari SP, jadi tampil 0 / kosong. Bila bisnis ingin release baru mewarisi nilai dari blanket line, itu perlu trigger/event handler tersendiri dan belum dikerjakan.
+
 ## Keputusan desain
 
 - **Selain 1 → 0, tanpa penolakan** (keputusan bisnis 14 Okt 2026). Hanya `1` / `"1"` yang menjadi urgent; `"Y"`, `2`, `true` tersimpan 0 tanpa pesan error, dan tidak ada kode `POS-xxx` baru. Konsekuensinya POS yang salah kirim format tidak mendapat peringatan.
@@ -294,7 +372,7 @@ Bila tahap 1 benar tetapi inbound salah: JSON belum membawa nilai (cek `SMK069Ru
 - **Form Error Processing**: tidak menampilkan urgent. Bisa ditambah seperti checkbox Peak Season bila diminta.
 - **Tabel history inbound** (`ue_SMK069_pos_sales_inbound_hist`): tidak ditambah kolom urgent. Source archive retry TRN belum ada di repo, jadi tidak aman menambah kolom `NOT NULL` ke history tanpa melihat statement archive-nya.
 - **Paket PROD** (`deployment/csv-to-co/prod/`): `02-deploy-canonical-runtime.sql` sengaja tidak dibangkitkan ulang karena Core/Receive canonical belum disinkronkan dari TRN. Item yang harus ikut saat regenerasi dicatat di `07-trn-to-prd-delta-2026-10-12.md` bagian 10.
-- **Status eksekusi.** Patch 36 sudah dijalankan di DEV lewat Apply Database (14 Okt 2026, selesai tanpa error). Patch 37 (jalur CSV) belum dijalankan. Hasil UAT belum tercatat; UAT wajib dijalankan di DEV/TRN dulu.
+- **Status eksekusi.** Patch 36 sudah dijalankan di DEV lewat Apply Database (14 Okt 2026, selesai tanpa error). Patch 37 (jalur CSV) dan Patch 38 (`coitem_mst`) belum dijalankan. Hasil UAT belum tercatat; UAT wajib dijalankan di DEV/TRN dulu.
 
 ## Keputusan bisnis — 14 Oktober 2026
 

@@ -538,3 +538,23 @@ Mongoose             : resync IDO ue_SMK069PosCsvUpload; CSV console grid column
 ~~~
 
 The CSV upload path was listed as "not included" in section 10; it is now covered by Patch 37. Status: patch + canonical edits + docs added; **not yet executed on any tenant**.
+
+
+## 12. Patch 38 — Urgent flag on coitem_mst (14 Oct 2026)
+
+Also to fold into the regenerated PRD package. Reference: `docs/csv-to-co/50-urgent-flag.md`, section "Form Customer Order Blanket Releases — Patch 38".
+
+~~~
+Patch                : database/patches/csv-to-co/2026-10-14-smk069-38-urgent-flag-coitem.sql   (requires Patch 36 + coitem_mst UET)
+Canonical (repo)     : SMK069ProcessCustomerOrderSp.sql   (PATCH-38: INSERT INTO dbo.coitem_mst carries the two UET fields)
+Mongoose             : UET on coitem_mst (class SMK069_CL_coitem) + Impact Schema; form Customer Order Blanket Releases fields
+~~~
+
+~~~
+01-preflight.sql                    : require coitem_mst.Uf_SMK069_is_urgent / Uf_SMK069_urgent_remark
+02-deploy-canonical-runtime.sql     : regenerate with ProcessCustomerOrderSp containing PATCH-36 and PATCH-38
+03-post-deploy-verify.sql           : marker "PATCH-38" and >= 3 occurrences of "Uf_SMK069_is_urgent" in ProcessCustomerOrderSp
+05-prod-uat-checklist.md            : UAT R1-R4 from docs/csv-to-co/50-urgent-flag.md
+~~~
+
+Status: patch + canonical edit + docs added; **not yet executed on any tenant**.

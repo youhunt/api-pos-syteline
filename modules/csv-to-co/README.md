@@ -403,7 +403,17 @@ database/patches/csv-to-co/2026-09-23-smk069-35-peak-season-before-mapping-view.
 
 Fixes a proven ordering defect: `is_peak_season` used to be copied into inbound only after Core had already materialized the mapping view. Core now persists the payload Peak flag before `#MapView`, so Peak/Normal customer-item/U/M mapping is selected correctly.
 
-### Patch 37 — active latest
+### Patch 38 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-10-14-smk069-38-urgent-flag-coitem.sql
+```
+
+Stores the Urgent flag also on the Customer Order line (`coitem_mst` UET `Uf_SMK069_is_urgent` / `Uf_SMK069_urgent_remark`) because the form "Customer Order Blanket Releases" is bound to `SL.SLCoitems`, not `co_bln_mst`. Edits `SMK069ProcessCustomerOrderSp` in place and back-fills existing urgent blanket lines. Requires Patch 36 and the `coitem_mst` UET. See "Form Customer Order Blanket Releases — Patch 38" in `docs/csv-to-co/50-urgent-flag.md`.
+
+### Patch 37
 
 File:
 
@@ -470,6 +480,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 35  2026-09-23-smk069-35-peak-season-before-mapping-view.sql
 36  2026-10-14-smk069-36-urgent-flag.sql   (setelah UET co_bln_mst + Impact Schema)
 37  2026-10-14-smk069-37-urgent-flag-csv.sql   (setelah Patch 36; lalu resync IDO ue_SMK069PosCsvUpload + form CSV)
+38  2026-10-14-smk069-38-urgent-flag-coitem.sql   (setelah Patch 36 + UET coitem_mst + Impact Schema; lalu form Customer Order Blanket Releases)
 ```
 
 Patch 23 tidak ada di active deployment sequence.

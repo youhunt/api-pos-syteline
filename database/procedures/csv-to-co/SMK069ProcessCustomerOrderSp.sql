@@ -16,6 +16,8 @@
    - co_mst.type = B and consolidate = 1.
    - coitem_mst.stat = O, consolidate = 1, co_release = 1, release_date = order_date.
    - co_bln_mst is created for every line, stat = O, allow_on_pick_list = 0.
+   - Urgent flag (Patch 36/38): is_urgent / urgent_remark from staging are written to
+     co_bln_mst and coitem_mst (UET Uf_SMK069_is_urgent / Uf_SMK069_urgent_remark).
    - Idempotency is customer + business cust_po.
    ============================================================================= */
 
@@ -691,7 +693,9 @@ BEGIN
             cost_conv,
             matl_cost_conv,
             stat,
-            consolidate
+            consolidate,
+            Uf_SMK069_is_urgent,       /* PATCH-38 */
+            Uf_SMK069_urgent_remark    /* PATCH-38 */
         )
         SELECT
             @CreatedCoNum,
@@ -718,7 +722,9 @@ BEGIN
             ISNULL(i.unit_cost, 0),
             ISNULL(i.matl_cost, 0),
             N'O',
-            1
+            1,
+            ISNULL(s.is_urgent, 0),
+            s.urgent_remark
         FROM dbo.ue_SMK069_temp_sales_mst AS s
         INNER JOIN dbo.item_mst AS i
           ON i.site_ref = s.SiteRef
