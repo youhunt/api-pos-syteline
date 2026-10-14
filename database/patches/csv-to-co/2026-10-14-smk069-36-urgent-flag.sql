@@ -362,6 +362,9 @@ DECLARE
     @Expected INT,
     @Found    BIGINT,
     @Needs    BIT,
+    @HeaderOk BIT,
+    @From     INT,
+    @Probe    NVARCHAR(200),
     @Pos      INT,
     @Msg      NVARCHAR(2000);
 
@@ -494,18 +497,68 @@ BEGIN
 
     IF @Needs = 1
     BEGIN
-        /* Pastikan header bisa dieksekusi ulang: CREATE PROCEDURE -> ALTER PROCEDURE. */
-        IF CHARINDEX(N'ALTER PROCEDURE', @Def COLLATE Latin1_General_100_CI_AS) = 0
-        BEGIN
-            SET @Pos = CHARINDEX(N'CREATE PROCEDURE', @Def COLLATE Latin1_General_100_CI_AS);
+        /* Pastikan header bisa dieksekusi ulang. Diterima: CREATE OR ALTER PROC[EDURE],
+           ALTER PROC[EDURE], atau CREATE PROC[EDURE] (diubah menjadi ALTER).
+           Spasi / tab / baris baru di antara kata diabaikan; posisi dicari di teks asli. */
+        SET @HeaderOk = 0;
+        SET @From = 1;
 
-            IF @Pos = 0
+        WHILE @HeaderOk = 0 AND @From < 30000
+        BEGIN
+            SET @Pos = CHARINDEX(N'CREATE', @Def COLLATE Latin1_General_100_CI_AS, @From);
+
+            IF @Pos = 0 OR @Pos >= 30000
+                BREAK;
+
+            SET @Probe = REPLACE(REPLACE(REPLACE(SUBSTRING(@Def, @Pos + 6, 80), NCHAR(9), N' '), NCHAR(10), N' '), NCHAR(13), N' ');
+
+            IF LEFT(@Probe, 1) = N' '
             BEGIN
-                SET @Msg = N'[PATCH-36] Header CREATE/ALTER PROCEDURE tidak ditemukan pada definisi ' + @ObjName + N'.';
-                THROW 510369, @Msg, 1;
+                SET @Probe = UPPER(LTRIM(@Probe));
+
+                IF LEFT(@Probe, 3) = N'OR '
+                BEGIN
+                    SET @HeaderOk = 1;   /* CREATE OR ALTER: sudah bisa dieksekusi apa adanya */
+                END
+                ELSE IF LEFT(@Probe, 5) = N'PROC ' OR LEFT(@Probe, 10) = N'PROCEDURE '
+                BEGIN
+                    SET @Def = STUFF(@Def, @Pos, 6, N'ALTER');
+                    SET @HeaderOk = 1;
+                END;
             END;
 
-            SET @Def = STUFF(@Def, @Pos, LEN(N'CREATE PROCEDURE'), N'ALTER PROCEDURE');
+            SET @From = @Pos + 6;
+        END;
+
+        SET @From = 1;
+
+        WHILE @HeaderOk = 0 AND @From < 30000
+        BEGIN
+            SET @Pos = CHARINDEX(N'ALTER', @Def COLLATE Latin1_General_100_CI_AS, @From);
+
+            IF @Pos = 0 OR @Pos >= 30000
+                BREAK;
+
+            SET @Probe = REPLACE(REPLACE(REPLACE(SUBSTRING(@Def, @Pos + 5, 80), NCHAR(9), N' '), NCHAR(10), N' '), NCHAR(13), N' ');
+
+            IF LEFT(@Probe, 1) = N' '
+            BEGIN
+                SET @Probe = UPPER(LTRIM(@Probe));
+
+                IF LEFT(@Probe, 5) = N'PROC ' OR LEFT(@Probe, 10) = N'PROCEDURE '
+                    SET @HeaderOk = 1;
+            END;
+
+            SET @From = @Pos + 5;
+        END;
+
+        IF @HeaderOk = 0
+        BEGIN
+            SET @Msg =
+                N'[PATCH-36] Header CREATE/ALTER PROC[EDURE] tidak dikenali pada ' + @ObjName
+                + N'. Awal definisi: '
+                + LEFT(REPLACE(REPLACE(REPLACE(@Def, NCHAR(13), N' '), NCHAR(10), N' '), NCHAR(9), N' '), 160);
+            THROW 510369, @Msg, 1;
         END;
 
         INSERT INTO @Plan (obj_name, new_def, skip_it)
