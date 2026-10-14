@@ -558,3 +558,18 @@ Mongoose             : UET on coitem_mst (class SMK069_CL_coitem) + Impact Schem
 ~~~
 
 Status: patch + canonical edit + docs added; **not yet executed on any tenant**.
+
+
+## 13. Patch 39 — CHECK constraint batch_status allows 'P' (14 Oct 2026)
+
+Found in TRN during Urgent UAT: a CSV batch that mixes a duplicate `cust_po` (POS-204) with a new one is a legitimate PARTIAL, so `SMK069RunCsvTestBatchSp` closes it with `batch_status = 'P'`. The TRN constraint `CK_SMK069CsvBatch_Status` only allowed `D, R, C, E`, so the closing UPDATE failed with 547, the CATCH block overwrote the status with `E` and the message with `[POS-999] ... gagal 547`, although the valid order had already become a Customer Order.
+
+The constraint definition is not in the repo (`00c-create-core-physical-tables.sql` creates the table without it), so PRD may or may not have it.
+
+~~~
+Patch      : database/patches/csv-to-co/2026-10-14-smk069-39-csv-batch-status-partial.sql   (independent of 36-38)
+Behaviour  : constraint missing -> no-op; already contains 'P' -> no-op; otherwise DROP + ADD with D, R, C, P, E in one transaction
+PRD check  : SELECT definition FROM sys.check_constraints WHERE name = N'CK_SMK069CsvBatch_Status'
+~~~
+
+Status: patch added; **not yet executed on any tenant** (TRN needs it; run it before further CSV UAT).

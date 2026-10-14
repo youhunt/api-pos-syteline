@@ -481,6 +481,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 36  2026-10-14-smk069-36-urgent-flag.sql   (setelah UET co_bln_mst + Impact Schema)
 37  2026-10-14-smk069-37-urgent-flag-csv.sql   (setelah Patch 36; lalu resync IDO ue_SMK069PosCsvUpload + form CSV)
 38  2026-10-14-smk069-38-urgent-flag-coitem.sql   (setelah Patch 36 + UET coitem_mst + Impact Schema; lalu form Customer Order Blanket Releases)
+39  2026-10-14-smk069-39-csv-batch-status-partial.sql   (independen; CHECK batch_status mengizinkan 'P' agar batch CSV partial tidak berakhir POS-999 / 547)
 ```
 
 Patch 23 tidak ada di active deployment sequence.
