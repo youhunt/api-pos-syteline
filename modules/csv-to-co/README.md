@@ -403,7 +403,17 @@ database/patches/csv-to-co/2026-09-23-smk069-35-peak-season-before-mapping-view.
 
 Fixes a proven ordering defect: `is_peak_season` used to be copied into inbound only after Core had already materialized the mapping view. Core now persists the payload Peak flag before `#MapView`, so Peak/Normal customer-item/U/M mapping is selected correctly.
 
-### Patch 36 — active latest
+### Patch 37 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-10-14-smk069-37-urgent-flag-csv.sql
+```
+
+Carries the Urgent flag through the CSV path (the "SMK POS CSV TO BLANKET CO" console used besides Postman): `is_urgent` / `urgent_remark` on `ue_SMK069_pos_csv_upload_mst`, the CSV parser `SMK069ImportCsvFileSp`, and the JSON built by `SMK069RunCsvTestBatchSp`. Requires Patch 36. Same in-place, anchor-checked technique as Patch 36. See "Jalur CSV — Patch 37" in `docs/csv-to-co/50-urgent-flag.md` and `forms/csv-to-co/04-SMK069PosCsvBatchConsole-Urgent.md`.
+
+### Patch 36
 
 File:
 
@@ -459,6 +469,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 34  2026-09-23-smk069-34-preserve-pos204-on-reused-batch.sql
 35  2026-09-23-smk069-35-peak-season-before-mapping-view.sql
 36  2026-10-14-smk069-36-urgent-flag.sql   (setelah UET co_bln_mst + Impact Schema)
+37  2026-10-14-smk069-37-urgent-flag-csv.sql   (setelah Patch 36; lalu resync IDO ue_SMK069PosCsvUpload + form CSV)
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -741,4 +752,13 @@ Patch 36 edits the **live** definitions of `SMK069ReceivePosSalesJsonCoreSp` and
 
 Both fields are read-only and disabled on the Blanket Line form (business decision 14 Oct 2026).
 
-Not included: CSV upload path, Error Processing form display, inbound history table, PROD consolidated runtime (`02-deploy-canonical-runtime.sql`).
+CSV path: added by Patch 37 (see below). Not included: Error Processing form display, inbound history table, PROD consolidated runtime (`02-deploy-canonical-runtime.sql`).
+
+### Urgent flag on the CSV console — Patch 37 (14 Oct 2026)
+
+```text
+CSV header is_urgent / Is_Urgent / "Is Urgent"            -> ue_SMK069_pos_csv_upload_mst.is_urgent      -> JSON "is_urgent"
+CSV header urgent_remark / "Urgent Remark"                -> ue_SMK069_pos_csv_upload_mst.urgent_remark  -> JSON "urgent_remark"
+```
+
+Same rules as the API payload: 1 = urgent, anything else = 0 without error; remark optional, max 255; CSV files without these columns still load and give Normal. The CSV console grid shows both as read-only columns right after Is Peak Season. Sample files: `tests/payloads/csv-urgent/`. Patch 37 needs IDO `ue_SMK069PosCsvUpload` to be resynchronized (properties `IsUrgent`, `UrgentRemark`) before the form columns work.

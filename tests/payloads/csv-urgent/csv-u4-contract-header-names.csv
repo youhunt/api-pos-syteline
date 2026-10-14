@@ -1,0 +1,3 @@
+custnum,order_date,cust_po,whse,coline,item,qty_ordered,u_m,is_peak_season,Is_Urgent,Urgent Remark
+P079,2026-10-01,P079-URG-104,P963,1,AC20002B,315,PCS,0,1,"Kirim pagi, sebelum jam 8"
+P079,2026-10-01,P079-URG-104,P963,2,AC20003B,48,PCS,0,0,

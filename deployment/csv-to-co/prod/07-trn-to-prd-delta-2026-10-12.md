@@ -517,3 +517,24 @@ MANIFEST.md                         : refresh blob hashes
 ~~~
 
 Repository status on 14 Oct 2026: patch + canonical edits + docs added; **not yet executed on any tenant**.
+
+
+## 11. Patch 37 — Urgent flag on the CSV path (14 Oct 2026)
+
+Also to fold into the regenerated PRD package, together with section 10. Reference: `docs/csv-to-co/50-urgent-flag.md`, section "Jalur CSV — Patch 37".
+
+~~~
+Patch                : database/patches/csv-to-co/2026-10-14-smk069-37-urgent-flag-csv.sql   (requires Patch 36)
+Canonical (repo)     : database/stored-procedures/csv-to-co/SMK069ImportCsvFileSp.sql    (7 PATCH-37 edits)
+                       database/procedures/csv-to-co/SMK069RunCsvTestBatchSp.sql          (1 PATCH-37 edit)
+Mongoose             : resync IDO ue_SMK069PosCsvUpload; CSV console grid columns Is Urgent / Urgent Remark
+~~~
+
+~~~
+00c-create-core-physical-tables.sql : ue_SMK069_pos_csv_upload_mst gets is_urgent INT NOT NULL DEFAULT 0 and urgent_remark NVARCHAR(255) NULL
+02-deploy-canonical-runtime.sql     : regenerate with the PATCH-37 versions of ImportCsvFileSp and RunCsvTestBatchSp
+03-post-deploy-verify.sql           : markers "@ParsedUrgent" (ImportCsvFileSp) and "AS urgent_remark" (RunCsvTestBatchSp)
+05-prod-uat-checklist.md            : UAT C1-C6 from docs/csv-to-co/50-urgent-flag.md
+~~~
+
+The CSV upload path was listed as "not included" in section 10; it is now covered by Patch 37. Status: patch + canonical edits + docs added; **not yet executed on any tenant**.

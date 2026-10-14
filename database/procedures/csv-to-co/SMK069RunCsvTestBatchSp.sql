@@ -6,6 +6,9 @@
    Object  : dbo.SMK069RunCsvTestBatchSp
    Depends : dbo.SMK069ReceivePosSalesJsonSp canonical entry point
 
+   Revision 2026-10-14 - Urgent flag (Patch 37): the JSON built from the CSV detail
+   also carries is_urgent and urgent_remark (read by SMK069ReceivePosSalesJsonCoreSp).
+
    CSV owns only preflight, SiteRef normalization, CSV-to-JSON conversion and
    persistence of CSV batch/detail outcome. Receive/Validate/Process-to-CO is
    owned by dbo.SMK069ReceivePosSalesJsonSp.
@@ -163,6 +166,8 @@ BEGIN
             d.qty_ordered AS qty_ordered,
             LTRIM(RTRIM(d.u_m)) AS u_m,
             ISNULL(d.is_peak_season, 0) AS is_peak_season, /* PATCH-27: peak season CSV payload */
+            ISNULL(d.is_urgent, 0) AS is_urgent,                          /* PATCH-37: urgent CSV payload */
+            NULLIF(LTRIM(RTRIM(d.urgent_remark)), N'') AS urgent_remark,  /* PATCH-37 */
             CONVERT(NVARCHAR(8), @Site) AS siteref,
             CASE WHEN d.due_date IS NULL THEN NULL ELSE CONVERT(NVARCHAR(10), d.due_date, 23) END AS due_date,
             NULLIF(LTRIM(RTRIM(d.terms_code)), N'') AS terms_code,

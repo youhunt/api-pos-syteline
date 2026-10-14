@@ -80,6 +80,7 @@ Payload JSON  [{ ..., "Is_Urgent": 1, "Urgent Remark": "..." }]
 | `SMK069ProcessCustomerOrderSp` | kedua `INSERT INTO co_bln_mst` (insert utama dan cabang repair) membawa 2 kolom UET |
 | `co_bln_mst` (UET) | + `Uf_SMK069_is_urgent`, + `Uf_SMK069_urgent_remark` — **dibuat lewat Mongoose, bukan SQL** |
 | Form Customer Order Blanket Lines | + checkbox dan field teks — **metadata Mongoose** |
+| `ue_SMK069_pos_csv_upload_mst`, `SMK069ImportCsvFileSp`, `SMK069RunCsvTestBatchSp`, form CSV | Jalur CSV — **Patch 37**, lihat bagian "Jalur CSV" di bawah |
 
 Signature procedure tidak berubah, jadi metadata IDO method tidak perlu disentuh.
 
@@ -223,6 +224,63 @@ ORDER BY b.co_line;
 
 Ketiga query harus menunjukkan nilai yang sama per `co_line`.
 
+## Jalur CSV — Patch 37
+
+Selain Postman, pengujian memakai form **SMK POS CSV TO BLANKET CO** (`ue_SMK069PosCsvBatchConsole`). Form itu tidak lewat payload JSON dari POS, jadi Patch 36 saja belum cukup: JSON hasil CSV belum membawa urgent. Patch 37 menutup celah itu.
+
+```text
+file CSV
+ → SMK069ImportCsvFileSp          parse header + baris, tulis ke detail CSV
+     PATCH-37: is_urgent / urgent_remark → @ParsedUrgent → UPDATE detail sebelum COMMIT
+ → ue_SMK069_pos_csv_upload_mst   + is_urgent INT NOT NULL DEFAULT 0, + urgent_remark NVARCHAR(255) NULL
+ → SMK069RunCsvTestBatchSp        bentuk JSON
+     PATCH-37: JSON ikut membawa "is_urgent" dan "urgent_remark"
+ → SMK069ReceivePosSalesJsonSp → Core (Patch 36) → co_bln_mst
+```
+
+Kolom CSV bersifat opsional dan aturannya sama dengan payload API:
+
+| Header CSV (huruf besar/kecil bebas) | Arti |
+|---|---|
+| `is_urgent`, `isurgent`, `Is_Urgent`, `Is Urgent` | 1 = urgent; selain 1 (kosong, 0, `Y`, 2, teks) = 0, tanpa error |
+| `urgent_remark`, `urgentremark`, `Urgent Remark` | Teks bebas, tidak wajib, kosong = NULL, dipotong 255 karakter |
+
+Nama header dinormalisasi parser (huruf kecil, spasi dan `-` menjadi `_`), jadi header `Urgent Remark` dengan spasi otomatis cocok. CSV lama tanpa kedua kolom tetap diterima dan hasilnya Normal (0 / NULL). Tidak ada kode `POS-xxx` baru.
+
+### Urutan pemasangan
+
+1. **Patch 36 harus sudah terpasang.** Patch 37 berhenti di precheck (error 510384) bila Core belum memuat blok Patch 36.
+2. Jalankan `database/patches/csv-to-co/2026-10-14-smk069-37-urgent-flag-csv.sql` lewat Apply Database (satu batch, tanpa GO). Cara kerjanya sama dengan Patch 36: definisi aktif `SMK069ImportCsvFileSp` dan `SMK069RunCsvTestBatchSp` diedit in-place pada anchor yang harus ada tepat sekali, semuanya atau tidak sama sekali. Bila anchor tidak cocok, patch berhenti dengan error 510386 dan menyebut anchor yang gagal; kirim pesannya agar anchor bisa disesuaikan. Sebelum menjalankan, script-out kedua procedure sebagai cadangan.
+3. **Resynchronize IDO `ue_SMK069PosCsvUpload`** agar property `IsUrgent` dan `UrgentRemark` muncul.
+4. Pasang kolom grid pada form (lihat `forms/csv-to-co/04-SMK069PosCsvBatchConsole-Urgent.md`): import XML siap pakai, atau tambah dua kolom manual.
+
+### UAT jalur CSV
+
+File contoh ada di `tests/payloads/csv-urgent/`. Upload lewat tombol **Upload & Process CSV to CO**, atau **Upload Only** lalu **Retry / Process CO**. Setiap file memakai `cust_po` berbeda, jadi tidak bentrok satu sama lain; bila ingin mengulang file yang sama, ubah `cust_po` di dalam file.
+
+| # | File | Harapan |
+|---|---|---|
+| C1 | `csv-u2-urgent-and-normal.csv` | Grid CSV: baris 1 Is Urgent tercentang + "Kirim pagi", baris 2 tidak tercentang. CO dibuat; `co_bln_mst` line 1 = 1 + "Kirim pagi", line 2 = 0 + NULL |
+| C2 | `csv-u3-old-format-no-urgent-columns.csv` | Sukses seperti sebelumnya; kedua line 0 + NULL |
+| C3 | `csv-u6-non-one-becomes-zero.csv` | Sukses; `Y` dan `2` tersimpan 0; remark "salah format" tetap tersimpan |
+| C4 | `csv-u4-contract-header-names.csv` (header `Is_Urgent`, `Urgent Remark`; remark berisi koma dalam tanda kutip) | Line 1 = 1 + "Kirim pagi, sebelum jam 8"; line 2 = 0 + NULL |
+| C5 | Upload ulang CSV yang sama lewat **Re-Parse CSV** sebelum diproses | Detail CSV dibangun ulang dengan nilai urgent yang sama |
+| C6 | Buka form Customer Order Blanket Lines pada CO hasil C1 | Checkbox dan remark tampil per line, keduanya disabled |
+
+Cek per tahap (ganti `<BatchId>` dengan Batch Id yang tampil di form dan `<CustPo>` dengan `cust_po` file):
+
+```sql
+-- 1. detail CSV (yang tampil di grid form)
+SELECT row_no, cust_po, coline, is_peak_season, is_urgent, urgent_remark, upload_status, result_message
+FROM dbo.ue_SMK069_pos_csv_upload_mst
+WHERE batch_id = N'<BatchId>'
+ORDER BY row_no;
+
+-- 2. inbound, 3. temp, 4. co_bln_mst: pakai query pada bagian UAT di atas
+```
+
+Bila tahap 1 benar tetapi inbound salah: JSON belum membawa nilai (cek `SMK069RunCsvTestBatchSp`). Bila tahap 1 sudah salah: parser (`SMK069ImportCsvFileSp`) atau nama header CSV.
+
 ## Keputusan desain
 
 - **Selain 1 → 0, tanpa penolakan** (keputusan bisnis 14 Okt 2026). Hanya `1` / `"1"` yang menjadi urgent; `"Y"`, `2`, `true` tersimpan 0 tanpa pesan error, dan tidak ada kode `POS-xxx` baru. Konsekuensinya POS yang salah kirim format tidak mendapat peringatan.
@@ -233,11 +291,10 @@ Ketiga query harus menunjukkan nilai yang sama per `co_line`.
 
 ## Belum dikerjakan
 
-- **CSV upload** (`ue_SMK069_pos_csv_upload_mst`, parser, runner, form CSV): kebutuhan bisnis menyebut payload API Sales saja. JSON hasil CSV tidak membawa field urgent, jadi hasilnya normal.
 - **Form Error Processing**: tidak menampilkan urgent. Bisa ditambah seperti checkbox Peak Season bila diminta.
 - **Tabel history inbound** (`ue_SMK069_pos_sales_inbound_hist`): tidak ditambah kolom urgent. Source archive retry TRN belum ada di repo, jadi tidak aman menambah kolom `NOT NULL` ke history tanpa melihat statement archive-nya.
 - **Paket PROD** (`deployment/csv-to-co/prod/`): `02-deploy-canonical-runtime.sql` sengaja tidak dibangkitkan ulang karena Core/Receive canonical belum disinkronkan dari TRN. Item yang harus ikut saat regenerasi dicatat di `07-trn-to-prd-delta-2026-10-12.md` bagian 10.
-- **Belum dijalankan di SQL Server.** Patch dan blok SQL baru belum dieksekusi di tenant; yang sudah dicek hanya logika anchor/penggantian terhadap source repo. UAT di atas wajib dijalankan di DEV/TRN dulu.
+- **Status eksekusi.** Patch 36 sudah dijalankan di DEV lewat Apply Database (14 Okt 2026, selesai tanpa error). Patch 37 (jalur CSV) belum dijalankan. Hasil UAT belum tercatat; UAT wajib dijalankan di DEV/TRN dulu.
 
 ## Keputusan bisnis — 14 Oktober 2026
 

@@ -751,3 +751,13 @@ Do not add these columns with a direct `ALTER TABLE` and run Impact Schema after
 [ ] Impact Schema completed
 [ ] Customer Order Blanket Lines shows Is Urgent? and Urgent Remark, both disabled
 ~~~
+
+## SMK POS CSV TO BLANKET CO — Urgent columns (Patch 37, 14 Oct 2026)
+
+IDO `ue_SMK069PosCsvUpload` (table `ue_SMK069_pos_csv_upload_mst`) gains `is_urgent` and `urgent_remark` through Patch 37 (plain SQL columns, not UET). Resynchronize the IDO, then add two read-only grid columns after Is Peak Season on the CSV detail grid. Prepared form XML: `forms/csv-to-co/exports/ue_SMK069PosCsvBatchConsole-DEV-urgent-2026-10-14.xml`. Details: `forms/csv-to-co/04-SMK069PosCsvBatchConsole-Urgent.md`.
+
+~~~
+[ ] ue_SMK069_pos_csv_upload_mst has is_urgent (int) and urgent_remark (nvarchar 255)
+[ ] IDO ue_SMK069PosCsvUpload exposes IsUrgent and UrgentRemark
+[ ] CSV console grid shows Is Urgent (checkbox) and Urgent Remark, both read-only
+~~~

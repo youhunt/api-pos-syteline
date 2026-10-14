@@ -19,6 +19,15 @@
       tax_code1     : tax_code1, tax_code
       exch_rate     : exch_rate, exchange_rate
       is_peak_season: is_peak_season, is_peak_seson, peak_season
+      is_urgent     : is_urgent, isurgent
+      urgent_remark : urgent_remark, urgentremark  (header "Urgent Remark" also matches)
+
+    Revision 2026-10-14 - Urgent flag (Patch 37):
+      - Optional CSV fields is_urgent and urgent_remark.
+      - is_urgent: 1 -> 1, anything else (blank, 0, Y, 2, text) -> 0 without error.
+      - urgent_remark is optional, blank -> NULL, truncated to 255 characters.
+      - Persisted in ue_SMK069_pos_csv_upload_mst and forwarded to Receive by
+        SMK069RunCsvTestBatchSp. Old CSV files without these columns stay valid (0 / NULL).
 
     Revision 2026-09-21 - Peak Season:
       - Optional CSV field is_peak_season (aliases: is_peak_seson, peak_season).
@@ -267,6 +276,14 @@ BEGIN
         raw_csv_row    NVARCHAR(MAX) NULL
     );
 
+    /* PATCH-37 Urgent flag: nilai urgent per baris data, ditulis ke detail CSV sebelum COMMIT. */
+    DECLARE @ParsedUrgent TABLE
+    (
+        row_no        INT NOT NULL PRIMARY KEY,
+        is_urgent     INT NOT NULL,
+        urgent_remark NVARCHAR(255) NULL
+    );
+
     DECLARE @Fields TABLE
     (
         field_no    INT NOT NULL PRIMARY KEY,
@@ -299,6 +316,9 @@ BEGIN
         @RawDueDate     NVARCHAR(MAX),
         @RawUM          NVARCHAR(MAX),
         @RawIsPeakSeason NVARCHAR(MAX),
+        @RawIsUrgent    NVARCHAR(MAX),   /* PATCH-37 */
+        @RawUrgentRemark NVARCHAR(MAX),  /* PATCH-37 */
+        @IsUrgent       INT,             /* PATCH-37 */
         @RawTerms       NVARCHAR(MAX),
         @RawTax         NVARCHAR(MAX),
         @RawExchRate    NVARCHAR(MAX),
@@ -364,6 +384,10 @@ BEGIN
                         THEN N'u_m'
                     WHEN n.normalized IN (N'is_peak_season', N'is_peak_seson', N'peak_season')
                         THEN N'is_peak_season'
+                    WHEN n.normalized IN (N'is_urgent', N'isurgent')
+                        THEN N'is_urgent'            /* PATCH-37 */
+                    WHEN n.normalized IN (N'urgent_remark', N'urgentremark')
+                        THEN N'urgent_remark'        /* PATCH-37 */
                     WHEN n.normalized IN (N'terms_code', N'terms')
                         THEN N'terms_code'
                     WHEN n.normalized IN (N'tax_code1', N'tax_code')
@@ -452,6 +476,9 @@ BEGIN
         SET @RawDueDate = NULL;
         SET @RawUM = NULL;
         SET @RawIsPeakSeason = NULL;
+        SET @RawIsUrgent = NULL;         /* PATCH-37 */
+        SET @RawUrgentRemark = NULL;     /* PATCH-37 */
+        SET @IsUrgent = 0;               /* PATCH-37 */
         SET @RawTerms = NULL;
         SET @RawTax = NULL;
         SET @RawExchRate = NULL;
@@ -482,6 +509,8 @@ BEGIN
             @RawDueDate   = MAX(CASE WHEN h.canonical_name = N'due_date'     THEN f.field_value END),
             @RawUM        = MAX(CASE WHEN h.canonical_name = N'u_m'          THEN f.field_value END),
             @RawIsPeakSeason = MAX(CASE WHEN h.canonical_name = N'is_peak_season' THEN f.field_value END),
+            @RawIsUrgent     = MAX(CASE WHEN h.canonical_name = N'is_urgent'     THEN f.field_value END),  /* PATCH-37 */
+            @RawUrgentRemark = MAX(CASE WHEN h.canonical_name = N'urgent_remark' THEN f.field_value END),  /* PATCH-37 */
             @RawTerms     = MAX(CASE WHEN h.canonical_name = N'terms_code'   THEN f.field_value END),
             @RawTax       = MAX(CASE WHEN h.canonical_name = N'tax_code1'    THEN f.field_value END),
             @RawExchRate  = MAX(CASE WHEN h.canonical_name = N'exch_rate'    THEN f.field_value END)
@@ -515,6 +544,13 @@ BEGIN
                 WHEN TRY_CONVERT(INT, @RawIsPeakSeason) = 0 THEN 0
                 ELSE 0
             END;
+
+        /* PATCH-37 Urgent flag: 1 / "1" -> 1, selain itu (kosong, 0, Y, 2, teks) -> 0 tanpa error.
+           Remark opsional, dipotong maksimal 255 karakter. */
+        SET @IsUrgent = CASE WHEN TRY_CONVERT(DECIMAL(18,4), @RawIsUrgent) = 1 THEN 1 ELSE 0 END;
+
+        INSERT INTO @ParsedUrgent (row_no, is_urgent, urgent_remark)
+        VALUES (@DataRow, @IsUrgent, LEFT(NULLIF(@RawUrgentRemark, N''), 255));
 
         IF @RawCustNum IS NULL
             SET @Message += N'[POS-002] custnum kosong; ';
@@ -791,6 +827,16 @@ BEGIN
             UpdatedBy = @RequestedBy,
             RecordDate = GETDATE()
         WHERE batch_id = @BatchId;
+
+        /* PATCH-37 Urgent flag: simpan ke detail CSV (dibaca SMK069RunCsvTestBatchSp). */
+        UPDATE d
+        SET
+            d.is_urgent = u.is_urgent,
+            d.urgent_remark = u.urgent_remark
+        FROM dbo.ue_SMK069_pos_csv_upload_mst AS d
+        INNER JOIN @ParsedUrgent AS u
+          ON u.row_no = d.row_no
+        WHERE d.batch_id = @BatchId;
 
         COMMIT TRANSACTION;
 
