@@ -362,6 +362,47 @@ BEGIN
           ON n.inbound_id = i.inbound_id;
 
         /* =============================================================
+           PATCH-36 Urgent flag - baca Is_Urgent / Urgent Remark dari raw_json.
+           Nama key dibaca tanpa membedakan huruf besar/kecil dan spasi pinggir
+           diabaikan. Alias yang diterima:
+             Is_Urgent      : is_urgent, isurgent
+             Urgent Remark  : urgent_remark, urgent remark, urgentremark
+           Is_Urgent 1 / "1" -> 1, selain itu (termasuk true, "Y", 2) -> 0 (default Normal).
+           Disimpan ke inbound SEBELUM mapping view (konsisten dengan Peak Season).
+           Mapping view milik Eva/SMK TIDAK diubah.
+           ============================================================= */
+        SELECT
+            i.inbound_id,
+            MAX(CASE WHEN nk.norm_key IN (N'is_urgent', N'isurgent')
+                     THEN LTRIM(RTRIM(CONVERT(NVARCHAR(4000), p.[value]))) END) AS IsUrgentRaw,
+            MAX(CASE WHEN nk.norm_key IN (N'urgent_remark', N'urgent remark', N'urgentremark')
+                     THEN LTRIM(RTRIM(CONVERT(NVARCHAR(4000), p.[value]))) END) AS UrgentRemarkRaw
+        INTO #SMK069Urgent
+        FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+        CROSS APPLY OPENJSON(i.raw_json) AS p
+        CROSS APPLY
+        (
+            SELECT LOWER(LTRIM(RTRIM(p.[key] COLLATE DATABASE_DEFAULT))) AS norm_key
+        ) AS nk
+        WHERE i.SiteRef = @Site
+          AND i.source_system = @SourceSystem
+          AND i.batch_id = @BatchId
+        GROUP BY i.inbound_id;
+
+        UPDATE i
+        SET
+            is_urgent =
+                CASE
+                    WHEN TRY_CONVERT(DECIMAL(18,4), u.IsUrgentRaw) = 1 THEN 1
+                    ELSE 0
+                END,
+            urgent_remark = LEFT(NULLIF(u.UrgentRemarkRaw, N''), 255),
+            updated_by = @ReceivedBy
+        FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+        INNER JOIN #SMK069Urgent AS u
+          ON u.inbound_id = i.inbound_id;
+
+        /* =============================================================
            3. Snapshot BUSINESS SOURCE from mapping view
            ============================================================= */
         SELECT
@@ -1031,6 +1072,38 @@ BEGIN
           AND i.inbound_status = N'V';
 
         SET @TransferredRows = @@ROWCOUNT;
+
+        /* =============================================================
+           PATCH-36 Urgent flag - bawa is_urgent / urgent_remark dari
+           inbound ke staging temp. Key join sama dengan verifikasi
+           persistensi temp (SiteRef + co_num + co_line + cust_po).
+           ============================================================= */
+        UPDATE t
+        SET
+            is_urgent = i.is_urgent,
+            urgent_remark = i.urgent_remark
+        FROM dbo.ue_SMK069_temp_sales_mst AS t
+        INNER JOIN #MapView AS v
+          ON v.view_rn = 1
+         AND v.view_row_count = 1
+         AND UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(16), t.SiteRef))))
+                 COLLATE DATABASE_DEFAULT
+             = UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(16), v.SiteRef))))
+                 COLLATE DATABASE_DEFAULT
+         AND UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(60), t.co_num))))
+                 COLLATE DATABASE_DEFAULT
+             = UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(60), v.co_num))))
+                 COLLATE DATABASE_DEFAULT
+         AND t.co_line = v.co_line
+         AND UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(100), t.cust_po))))
+                 COLLATE DATABASE_DEFAULT
+             = UPPER(LTRIM(RTRIM(CONVERT(NVARCHAR(100), v.cust_po))))
+                 COLLATE DATABASE_DEFAULT
+        INNER JOIN dbo.ue_SMK069_pos_sales_inbound_mst AS i
+          ON i.inbound_id = v.inbound_id
+        WHERE i.source_system = @SourceSystem
+          AND i.batch_id = @BatchId
+          AND i.inbound_status IN (N'V', N'T');
 
         /* =============================================================
           12. Verify temp persistence from mapping-view keys

@@ -393,7 +393,7 @@ database/patches/csv-to-co/2026-09-23-smk069-34-preserve-pos204-on-reused-batch.
 
 Fixes contradictory `[POS-000] Request ditolak / Success=false` when an already-used BatchId is invoked with a different payload.
 
-### Patch 35 — active latest
+### Patch 35
 
 File:
 
@@ -402,6 +402,16 @@ database/patches/csv-to-co/2026-09-23-smk069-35-peak-season-before-mapping-view.
 ```
 
 Fixes a proven ordering defect: `is_peak_season` used to be copied into inbound only after Core had already materialized the mapping view. Core now persists the payload Peak flag before `#MapView`, so Peak/Normal customer-item/U/M mapping is selected correctly.
+
+### Patch 36 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-10-14-smk069-36-urgent-flag.sql
+```
+
+Adds the Urgent flag (`Is_Urgent` + `Urgent Remark`) from the API Sales payload down to the Customer Order Blanket Line. Requires the `co_bln_mst` UET fields to exist first. See "Urgent flag — Patch 36" below and `docs/csv-to-co/50-urgent-flag.md`.
 
 ### Patch 32 — WITHDRAWN / DO NOT APPLY
 
@@ -448,6 +458,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 33  2026-09-23-smk069-33-reject-cross-batch-duplicate-custpo-by-lineage.sql
 34  2026-09-23-smk069-34-preserve-pos204-on-reused-batch.sql
 35  2026-09-23-smk069-35-peak-season-before-mapping-view.sql
+36  2026-10-14-smk069-36-urgent-flag.sql   (setelah UET co_bln_mst + Impact Schema)
 ```
 
 Patch 23 tidak ada di active deployment sequence.
@@ -545,6 +556,7 @@ docs/csv-to-co/39-final-co-number-custpo-release-date.md
 docs/csv-to-co/42-peak-season-flag.md
 docs/csv-to-co/43-validation-status-custpo-rejection.md
 docs/csv-to-co/44-uet-itemcust-peak-season-pos-um.md
+docs/csv-to-co/50-urgent-flag.md
 ```
 
 ## Current UAT gate
@@ -702,3 +714,31 @@ deployment/csv-to-co/prod/07-trn-to-prd-delta-2026-10-12.md
 ~~~
 
 That document records which canonical SQL, Mongoose IDO/form metadata, PROD package files, and UAT cases still need synchronization before PRD cutover.
+
+
+## Urgent flag — Patch 36 (14 Oct 2026)
+
+Business requirement: users must be able to see whether an order is urgent. Two fields are added to the Customer Order Blanket Line and to the API Sales payload:
+
+```text
+payload "Is_Urgent"      0/1   -> inbound/temp is_urgent      -> co_bln_mst.Uf_SMK069_is_urgent
+payload "Urgent Remark"  text  -> inbound/temp urgent_remark  -> co_bln_mst.Uf_SMK069_urgent_remark
+```
+
+Contract:
+
+```text
+Is_Urgent      1 / "1" = urgent; anything else (true, "Y", 2, absent) = 0, no error
+Urgent Remark  not mandatory; empty -> NULL; truncated to 255 characters
+Both optional; value is per line (coline)
+Key "Urgent Remark" contains a SPACE (per business sample); key matching is
+case-insensitive and also accepts is_urgent, isurgent, urgent_remark, urgentremark
+```
+
+Prerequisite (Mongoose, not SQL): UET on `co_bln_mst` — `Uf_SMK069_is_urgent` (int), `Uf_SMK069_urgent_remark` (nvarchar 255), class `SMK069_CL_co_bln`, then Impact Schema. Patch 36 stops at precheck if these columns are missing.
+
+Patch 36 edits the **live** definitions of `SMK069ReceivePosSalesJsonCoreSp` and `SMK069ProcessCustomerOrderSp` in place (anchor-checked, all-or-nothing) instead of overwriting them with repo copies, because the repo Core/Receive still lag TRN (see the TRN → PRD delta section). The canonical files in the repo carry the same `PATCH-36` blocks.
+
+Both fields are read-only and disabled on the Blanket Line form (business decision 14 Oct 2026).
+
+Not included: CSV upload path, Error Processing form display, inbound history table, PROD consolidated runtime (`02-deploy-canonical-runtime.sql`).

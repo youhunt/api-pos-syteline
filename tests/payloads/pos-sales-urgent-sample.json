@@ -1,0 +1,28 @@
+[
+  {
+    "custnum": "B005",
+    "order_date": "2026-09-24",
+    "cust_po": "POS09240001",
+    "whse": "P963",
+    "coline": 1,
+    "item": "POSITEM001",
+    "qty_ordered": 10,
+    "u_m": "PCS",
+    "is_peak_season": 1,
+    "Is_Urgent": 0,
+    "Urgent Remark": ""
+  },
+  {
+    "custnum": "B005",
+    "order_date": "2026-09-24",
+    "cust_po": "POS09240001",
+    "whse": "P963",
+    "coline": 2,
+    "item": "POSITEM002",
+    "qty_ordered": 20,
+    "u_m": "PCS",
+    "is_peak_season": 1,
+    "Is_Urgent": 0,
+    "Urgent Remark": ""
+  }
+]

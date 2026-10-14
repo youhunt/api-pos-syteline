@@ -483,3 +483,37 @@ Still pending before final PRD package is regenerated:
 4. regenerate 02-deploy-canonical-runtime.sql
 5. refresh MANIFEST hashes
 ~~~
+
+
+## 10. Patch 36 — Urgent flag (14 Oct 2026)
+
+New TRN/DEV change that must be folded into the PRD package when it is regenerated. Reference: `docs/csv-to-co/50-urgent-flag.md`.
+
+~~~
+Patch                : database/patches/csv-to-co/2026-10-14-smk069-36-urgent-flag.sql
+Canonical (repo)     : SMK069ReceivePosSalesJsonCoreSp.sql    (2 PATCH-36 blocks, on top of the 24 Sep source)
+                       SMK069ProcessCustomerOrderSp.sql        (both co_bln_mst INSERTs)
+Mongoose             : UET on co_bln_mst (see 04-mongoose-metadata-checklist.md) + Blanket Line form fields
+~~~
+
+Because the repo Core is still behind TRN (section 6), Patch 36 was written to edit the **live** definition in place. When the verified TRN Core is synchronized into canonical source, keep the two `PATCH-36` blocks (search for the marker) and re-check they are still anchored at:
+
+~~~
+block 1: before section "3. Snapshot BUSINESS SOURCE from mapping view" (before #MapView)
+block 2: right after the INSERT into ue_SMK069_temp_sales_mst / SET @TransferredRows = @@ROWCOUNT;
+~~~
+
+Still to fold into the regenerated PRD package:
+
+~~~
+00c-create-core-physical-tables.sql : add is_urgent INT NOT NULL DEFAULT 0 and urgent_remark NVARCHAR(255) NULL
+                                      to ue_SMK069_pos_sales_inbound_mst and ue_SMK069_temp_sales_mst
+02-deploy-canonical-runtime.sql     : regenerate with Core + ProcessCustomerOrder containing PATCH-36
+01-preflight.sql                    : require co_bln_mst.Uf_SMK069_is_urgent / Uf_SMK069_urgent_remark
+03-post-deploy-verify.sql           : markers "INTO #SMK069Urgent", "PATCH-36 Urgent flag - bawa is_urgent",
+                                      "Uf_SMK069_is_urgent" in ProcessCustomerOrder; physical columns inbound/temp/co_bln_mst
+05-prod-uat-checklist.md            : UAT U1-U9 from docs/csv-to-co/50-urgent-flag.md
+MANIFEST.md                         : refresh blob hashes
+~~~
+
+Repository status on 14 Oct 2026: patch + canonical edits + docs added; **not yet executed on any tenant**.

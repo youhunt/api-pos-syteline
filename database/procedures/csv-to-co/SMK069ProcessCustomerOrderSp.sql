@@ -403,6 +403,8 @@ BEGIN
                     ship_site,
                     description,
                     cost_conv,
+                    Uf_SMK069_is_urgent,       /* PATCH-36 */
+                    Uf_SMK069_urgent_remark,   /* PATCH-36 */
                     allow_on_pick_list,
                     whse
                 )
@@ -420,6 +422,8 @@ BEGIN
                     @SiteRef,
                     i.description,
                     ISNULL(i.unit_cost, 0),
+                    ISNULL(s.is_urgent, 0),
+                    s.urgent_remark,
                     0,
                     @Whse
                 FROM dbo.ue_SMK069_temp_sales_mst AS s
@@ -743,6 +747,8 @@ BEGIN
             ship_site,
             description,
             cost_conv,
+            Uf_SMK069_is_urgent,       /* PATCH-36 */
+            Uf_SMK069_urgent_remark,   /* PATCH-36 */
             allow_on_pick_list,
             whse
         )
@@ -760,6 +766,8 @@ BEGIN
             @SiteRef,
             i.description,
             ISNULL(i.unit_cost, 0),
+            ISNULL(s.is_urgent, 0),
+            s.urgent_remark,
             0,
             @Whse
         FROM dbo.ue_SMK069_temp_sales_mst AS s

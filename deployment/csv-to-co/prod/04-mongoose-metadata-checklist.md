@@ -716,3 +716,38 @@ The latest detailed migration gate is:
 ~~~
 deployment/csv-to-co/prod/07-trn-to-prd-delta-2026-10-12.md
 ~~~
+
+
+## October 2026 Urgent flag (Patch 36) — co_bln_mst UET + Blanket Line form
+
+New Mongoose metadata required before Patch 36 can run (details: `docs/csv-to-co/50-urgent-flag.md`):
+
+~~~
+UET user fields:
+  Uf_SMK069_is_urgent       int, Decimals 0, Initial Value 0
+  Uf_SMK069_urgent_remark   nvarchar(255)
+
+UET class:
+  SMK069_CL_co_bln
+  Fields: Uf_SMK069_is_urgent, Uf_SMK069_urgent_remark
+
+Table extension:
+  Table Name         : co_bln_mst
+  Class Name         : SMK069_CL_co_bln
+  Active             : 1
+  Extend All Records : 1
+
+Then run Impact Schema (same flow as itemcust_mst).
+~~~
+
+Form: Customer Order Blanket Lines — add `Is Urgent?` (checkbox, `Uf_SMK069_is_urgent`) and `Urgent Remark` (text, `Uf_SMK069_urgent_remark`). Business decision 14 Oct 2026: both fields read-only and disabled (`Enabled = False`).
+
+Do not add these columns with a direct `ALTER TABLE` and run Impact Schema afterwards; Impact Schema will try to add columns that already exist.
+
+~~~
+[ ] Uf_SMK069_is_urgent exists on co_bln_mst (int)
+[ ] Uf_SMK069_urgent_remark exists on co_bln_mst (nvarchar 255 or larger)
+[ ] Class SMK069_CL_co_bln active on co_bln_mst, Extend All Records = 1
+[ ] Impact Schema completed
+[ ] Customer Order Blanket Lines shows Is Urgent? and Urgent Remark, both disabled
+~~~
