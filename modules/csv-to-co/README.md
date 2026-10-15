@@ -431,7 +431,7 @@ File:
 database/patches/csv-to-co/2026-10-14-smk069-36-urgent-flag.sql
 ```
 
-Adds the Urgent flag (`Is_Urgent` + `Urgent Remark`) from the API Sales payload down to the Customer Order Blanket Line. Requires the `co_bln_mst` UET fields to exist first. See "Urgent flag — Patch 36" below and `docs/csv-to-co/50-urgent-flag.md`.
+Adds the Urgent flag (`is_urgent` + `urgent_remark`; legacy names `Is_Urgent` / `Urgent Remark` still accepted) from the API Sales payload down to the Customer Order Blanket Line. Requires the `co_bln_mst` UET fields to exist first. See "Urgent flag — Patch 36" below and `docs/csv-to-co/50-urgent-flag.md`.
 
 ### Patch 32 — WITHDRAWN / DO NOT APPLY
 
@@ -744,18 +744,19 @@ That document records which canonical SQL, Mongoose IDO/form metadata, PROD pack
 Business requirement: users must be able to see whether an order is urgent. Two fields are added to the Customer Order Blanket Line and to the API Sales payload:
 
 ```text
-payload "Is_Urgent"      0/1   -> inbound/temp is_urgent      -> co_bln_mst.Uf_SMK069_is_urgent
-payload "Urgent Remark"  text  -> inbound/temp urgent_remark  -> co_bln_mst.Uf_SMK069_urgent_remark
+payload "is_urgent"      0/1   -> inbound/temp is_urgent      -> co_bln_mst.Uf_SMK069_is_urgent
+payload "urgent_remark"  text  -> inbound/temp urgent_remark  -> co_bln_mst.Uf_SMK069_urgent_remark
 ```
 
 Contract:
 
 ```text
-Is_Urgent      1 / "1" = urgent; anything else (true, "Y", 2, absent) = 0, no error
-Urgent Remark  not mandatory; empty -> NULL; truncated to 255 characters
+is_urgent      1 / "1" = urgent; anything else (true, "Y", 2, absent) = 0, no error
+urgent_remark  not mandatory; empty -> NULL; truncated to 255 characters
 Both optional; value is per line (coline)
-Key "Urgent Remark" contains a SPACE (per business sample); key matching is
-case-insensitive and also accepts is_urgent, isurgent, urgent_remark, urgentremark
+Official key names (15 Oct 2026): is_urgent, urgent_remark. Key matching is
+case-insensitive and the original business names are still accepted as aliases:
+Is_Urgent, isurgent, "Urgent Remark" (with a space), urgent remark, urgentremark
 ```
 
 Prerequisite (Mongoose, not SQL): UET on `co_bln_mst` — `Uf_SMK069_is_urgent` (int), `Uf_SMK069_urgent_remark` (nvarchar 255), class `SMK069_CL_co_bln`, then Impact Schema. Patch 36 stops at precheck if these columns are missing.

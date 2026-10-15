@@ -1,4 +1,4 @@
-# Urgent flag — Is_Urgent + Urgent Remark
+# Urgent flag — is_urgent + urgent_remark
 
 **Tanggal:** 14 Oktober 2026
 **Scope:** CSV / POS inbound → Blanket Customer Order
@@ -19,7 +19,9 @@ Artinya ada dua perubahan yang harus berjalan bersama:
 
 ## Kontrak payload
 
-Contoh payload dari bisnis (disimpan juga di `tests/payloads/pos-sales-urgent-sample.json`):
+Nama key resmi (keputusan 15 Okt 2026): **`is_urgent`** dan **`urgent_remark`**, snake_case seperti key lain (`cust_po`, `is_peak_season`). Nama pada contoh awal bisnis (`Is_Urgent`, `Urgent Remark` dengan spasi) tetap diterima sebagai alias, jadi POS boleh mengganti kapan saja tanpa perubahan di sisi SyteLine.
+
+Contoh payload (disimpan juga di `tests/payloads/pos-sales-urgent-sample.json`; versi dengan nama key lama ada di `tests/payloads/pos-sales-urgent-sample-legacy-keys.json`):
 
 ```json
 [
@@ -33,30 +35,30 @@ Contoh payload dari bisnis (disimpan juga di `tests/payloads/pos-sales-urgent-sa
     "qty_ordered": 10,
     "u_m": "PCS",
     "is_peak_season": 1,
-    "Is_Urgent": 0,
-    "Urgent Remark": ""
+    "is_urgent": 0,
+    "urgent_remark": ""
   }
 ]
 ```
 
 | Key payload | Tipe | Default | Arti |
 |---|---|---|---|
-| `Is_Urgent` | integer 0/1 | 0 | 1 = urgent, 0 = normal |
-| `Urgent Remark` | teks | kosong | alasan / keterangan urgent, maksimal 255 karakter |
+| `is_urgent` | integer 0/1 | 0 | 1 = urgent, 0 = normal |
+| `urgent_remark` | teks | kosong | alasan / keterangan urgent, maksimal 255 karakter |
 
 Aturan baca:
 
-- **Key `Urgent Remark` memakai spasi**, persis seperti contoh bisnis. Key dibaca tanpa membedakan huruf besar/kecil, dan alias berikut juga diterima: `is_urgent`, `isurgent`, `urgent_remark`, `urgent remark`, `urgentremark`.
-- `Is_Urgent` bernilai `1` atau `"1"` → disimpan 1. **Selain 1 → 0**: `0`, kosong, key tidak ada, `true`, `"Y"`, `2`, teks apa pun. Tanpa error dan tanpa kode `POS-xxx` baru.
+- **Key resmi `is_urgent` dan `urgent_remark`.** Key dibaca tanpa membedakan huruf besar/kecil, dan alias berikut juga diterima: `Is_Urgent`, `isurgent`, `Urgent Remark` (dengan spasi), `urgent remark`, `urgentremark`. Parser membaca key, bukan posisi, jadi tidak ada perubahan SQL untuk pergantian nama ini.
+- `is_urgent` bernilai `1` atau `"1"` → disimpan 1. **Selain 1 → 0**: `0`, kosong, key tidak ada, `true`, `"Y"`, `2`, teks apa pun. Tanpa error dan tanpa kode `POS-xxx` baru.
 - Kedua field **opsional**. Payload lama tanpa field ini tetap diterima dan dianggap tidak urgent.
-- `Urgent Remark` **tidak wajib** walau `Is_Urgent` = 1 (remark berasal dari POS). Kosong disimpan `NULL`; teks lebih dari 255 karakter dipotong tanpa error.
+- `urgent_remark` **tidak wajib** walau `is_urgent` = 1 (remark berasal dari POS). Kosong disimpan `NULL`; teks lebih dari 255 karakter dipotong tanpa error.
 - Nilai berlaku **per line** (`coline`), mengikuti Customer Order Blanket Line.
 - Field ini tidak ikut aturan validasi apa pun: tidak ada kode `POS-xxx` baru, dan tidak ada penolakan order karena nilainya.
 
 ## Alur data
 
 ```text
-Payload JSON  [{ ..., "Is_Urgent": 1, "Urgent Remark": "..." }]
+Payload JSON  [{ ..., "is_urgent": 1, "urgent_remark": "..." }]
  → SMK069ReceivePosSalesJsonSp
  → SMK069ReceivePosSalesJsonCoreSp
      inbound.raw_json                       (payload apa adanya)
@@ -192,16 +194,16 @@ Siapkan item, customer, dan harga yang valid di tenant. Nilai `B005` / `POSITEM0
 
 | # | Skenario | Harapan |
 |---|---|---|
-| U1 | Payload contoh bisnis (kedua line `Is_Urgent` 0, remark kosong) | CO dibuat; `co_bln_mst.Uf_SMK069_is_urgent` 0 dan `Uf_SMK069_urgent_remark` NULL di kedua line |
-| U2 | Line 1 `Is_Urgent` 1, `Urgent Remark` "Kirim pagi"; line 2 `Is_Urgent` 0 | Line 1: 1 + "Kirim pagi"; line 2: 0 + NULL. Satu `cust_po`, dua nilai berbeda |
+| U1 | Payload contoh (kedua line `is_urgent` 0, remark kosong) | CO dibuat; `co_bln_mst.Uf_SMK069_is_urgent` 0 dan `Uf_SMK069_urgent_remark` NULL di kedua line |
+| U2 | Line 1 `is_urgent` 1, `urgent_remark` "Kirim pagi"; line 2 `is_urgent` 0 | Line 1: 1 + "Kirim pagi"; line 2: 0 + NULL. Satu `cust_po`, dua nilai berbeda |
 | U3 | Payload lama tanpa kedua key | Sukses seperti sebelumnya; kedua line 0 + NULL |
-| U4 | Alias: `"is_urgent": 1`, `"urgent_remark": "x"` | Sama dengan `Is_Urgent` 1 dan remark "x" |
-| U5 | `Urgent Remark` 300 karakter | Sukses; tersimpan 255 karakter pertama |
-| U6 | `"Is_Urgent"` = `"Y"`, `2`, `true`, atau `"abc"` | Sukses; disimpan 0 (selain 1 → 0) |
+| U4 | Nama key lama (`tests/payloads/pos-sales-urgent-sample-legacy-keys.json`): `"Is_Urgent": 1`, `"Urgent Remark": "x"` | Sama dengan `is_urgent` 1 dan remark "x" (alias tetap diterima) |
+| U5 | `urgent_remark` 300 karakter | Sukses; tersimpan 255 karakter pertama |
+| U6 | `"is_urgent"` = `"Y"`, `2`, `true`, atau `"abc"` | Sukses; disimpan 0 (selain 1 → 0) |
 | U7 | Order urgent dengan quantity salah (POS-108) | Ditolak seperti biasa, tidak ada CO; inbound berisi `is_urgent` 1 |
 | U8 | Kirim ulang BatchId sukses yang sama | Tidak ada CO kedua; nilai tidak berubah |
 | U9 | Buka form Customer Order Blanket Lines pada CO hasil U2 | Checkbox dan remark tampil sesuai nilai per line, dan keduanya disabled |
-| U10 | `Is_Urgent` 1 dengan `Urgent Remark` kosong | Sukses; urgent 1, remark NULL (remark tidak wajib) |
+| U10 | `is_urgent` 1 dengan `urgent_remark` kosong | Sukses; urgent 1, remark NULL (remark tidak wajib) |
 
 Query verifikasi (ganti `<BatchId>` dan `<CustPo>`):
 
@@ -384,12 +386,22 @@ Release baru yang dibuat manual oleh user (co_release berikutnya) tidak mendapat
 ## Keputusan bisnis — 14 Oktober 2026
 
 ```text
-Urgent Remark wajib bila Is_Urgent = 1 : TIDAK (remark datang dari POS)
-Is_Urgent selain 1                      : jadi 0, tanpa error, tanpa kode POS baru
+urgent_remark wajib bila is_urgent = 1 : TIDAK (remark datang dari POS)
+is_urgent selain 1                      : jadi 0, tanpa error, tanpa kode POS baru
 Field di form Blanket Line              : read-only dan disabled
-Panjang Urgent Remark                   : 255 karakter (permintaan tim POS)
+Panjang urgent_remark                   : 255 karakter (permintaan tim POS)
 ```
+
+## Keputusan — 15 Oktober 2026
+
+```text
+Nama key payload : is_urgent dan urgent_remark (snake_case, tanpa spasi)
+Nama lama        : Is_Urgent dan "Urgent Remark" tetap diterima sebagai alias
+Perubahan SQL    : tidak ada (parser sudah menerima kedua penulisan)
+```
+
+Alasan: seluruh key payload lain memakai snake_case, dan key dengan spasi merepotkan serializer serta JSON path di sisi POS. Pada 15 Okt 2026 Wiwid (Megadata) memberi tahu bahwa flag sudah ditambahkan di TRN dan meminta test PO; nama key yang baru perlu disampaikan ke mereka. Nama lama tidak perlu dihentikan.
 
 ## Pertanyaan terbuka
 
-1. Key `Urgent Remark` memakai spasi — sudah disepakati dengan tim POS, atau bisa distandarkan ke `urgent_remark`? Keduanya diterima sekarang.
+1. ~~Key `Urgent Remark` memakai spasi — bisa distandarkan ke `urgent_remark`?~~ Selesai 15 Okt 2026: `urgent_remark` (dan `is_urgent`) menjadi nama resmi; nama lama tetap diterima sebagai alias.

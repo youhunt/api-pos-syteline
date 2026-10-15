@@ -9,8 +9,8 @@
     "qty_ordered": 10,
     "u_m": "PCS",
     "is_peak_season": 1,
-    "Is_Urgent": 0,
-    "Urgent Remark": ""
+    "is_urgent": 0,
+    "urgent_remark": ""
   },
   {
     "custnum": "B005",
@@ -22,7 +22,7 @@
     "qty_ordered": 20,
     "u_m": "PCS",
     "is_peak_season": 1,
-    "Is_Urgent": 0,
-    "Urgent Remark": ""
+    "is_urgent": 1,
+    "urgent_remark": "kirim hari ini"
   }
 ]
