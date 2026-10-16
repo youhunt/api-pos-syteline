@@ -8,6 +8,9 @@
    - current failed attempt appears as CURRENT_ERROR
    - current successful/transferred attempt appears as SUCCESS
    - attempt number is per SiteRef + source_system + batch_id
+   - Site isolation: both archived and current rows are restricted to the
+     active Mongoose site from CONTEXT_INFO(); required because TRN/TBB may
+     share the same physical application database.
    ============================================================================= */
 
 CREATE OR ALTER VIEW dbo.ue_SMK069_pos_sales_inbound_history_v
@@ -44,6 +47,8 @@ SELECT
     h.archive_reason,
     CAST(0 AS BIT) AS is_current
 FROM dbo.ue_SMK069_pos_sales_inbound_hist AS h
+WHERE RTRIM(CONVERT(NVARCHAR(8), h.SiteRef)) =
+      RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
 
 UNION ALL
 
@@ -107,4 +112,6 @@ SELECT
 
     CAST(1 AS BIT) AS is_current
 FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
-WHERE i.inbound_status IN (N'E', N'T');
+WHERE RTRIM(CONVERT(NVARCHAR(8), i.SiteRef)) =
+      RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))
+  AND i.inbound_status IN (N'E', N'T');
