@@ -219,3 +219,46 @@ Revised next sequence:
 6. Run 02-post-copy-verify.sql again
 7. Execute controlled API UAT
 ~~~
+
+
+## TBB post-copy baseline result — 16 October 2026
+
+User executed `02-post-copy-verify.sql` in TBB before any additional SQL copy.
+
+Result:
+
+~~~text
+History Object / history table             PASS
+History Object / history view              PASS
+Runtime Marker / same-Batch failed retry   PASS
+Runtime Marker / friendly POS-108          PASS
+History View / history_key                 PASS
+History View / attempt_no                  PASS
+History View / archive_reason              PASS
+History View / is_current                  PASS
+Data Safety / history rows before UAT      INFO
+~~~
+
+Interpretation:
+
+> The October SQL delta is already present in TBB at the behavioral-marker and
+> history-view-contract level.
+
+Therefore do **not** overwrite/redeploy the October SQL objects merely for parity:
+
+~~~text
+dbo.ue_SMK069_pos_sales_inbound_hist
+dbo.ue_SMK069_pos_sales_inbound_history_v
+dbo.SMK069ReceivePosSalesJsonCoreSp
+dbo.SMK069ReceivePosSalesJsonSp
+~~~
+
+The next migration gate is Mongoose metadata/UI parity:
+
+~~~text
+ue_SMK069PosSalesInboundHistory
+ue_SMK069TempSales.SMK069ReceivePosSalesJsonSp -> Transactional=False
+ue_SMK069APISalesErrorProcessing -> History tab/object2/RefreshHistory
+~~~
+
+After metadata parity, execute controlled TBB API UAT.
