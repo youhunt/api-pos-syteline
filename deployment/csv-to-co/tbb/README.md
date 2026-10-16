@@ -351,3 +351,29 @@ After applying the fix in TBB:
 2. confirm "active SiteRef filter" = PASS;
 3. refresh the History form;
 4. verify known TRN-only rows no longer appear under TRN_TBB.
+
+
+### DEV4-387 site evidence
+
+TBB Query Select confirmed the leaking row is:
+
+~~~text
+inbound_id      = 1031
+SiteRef         = Default
+batch_id        = DEV4-387
+cust_po         = DEV4-387
+inbound_status  = T
+received_date   = 15 Oct 2026 02:57
+~~~
+
+The active TBB session site is:
+
+~~~text
+TRN_TBB
+~~~
+
+Therefore this row is not a TBB-site row. It appeared only because the History
+view did not constrain its current-inbound branch to the active SiteRef.
+
+Do not update the transaction row from SiteRef=Default to TRN_TBB. The correct
+fix is read-model site isolation in ue_SMK069_pos_sales_inbound_history_v.
