@@ -377,3 +377,51 @@ view did not constrain its current-inbound branch to the active SiteRef.
 
 Do not update the transaction row from SiteRef=Default to TRN_TBB. The correct
 fix is read-model site isolation in ue_SMK069_pos_sales_inbound_history_v.
+
+
+## TBB site-isolation verification result — 16 October 2026
+
+After applying:
+
+~~~text
+deployment/csv-to-co/tbb/03-fix-history-site-isolation.sql
+~~~
+
+the user reran:
+
+~~~text
+deployment/csv-to-co/tbb/02-post-copy-verify.sql
+~~~
+
+Result:
+
+~~~text
+History Object / history table             PASS
+History Object / history view              PASS
+Runtime Marker / same-Batch failed retry   PASS
+Runtime Marker / friendly POS-108          PASS
+History View / history_key                 PASS
+History View / attempt_no                  PASS
+History View / archive_reason              PASS
+History View / is_current                  PASS
+History View / active SiteRef filter       PASS
+Data Safety / history rows before UAT      INFO
+~~~
+
+Conclusion:
+
+> The History read model is now correctly isolated by the active Mongoose SiteRef.
+> TRN/Default rows should no longer appear in the TRN_TBB History form merely
+> because both sites share the same physical application database.
+
+Next gate:
+
+~~~text
+1. Refresh/open SMK API SALES ERROR PROCESSING in TBB
+2. Confirm known Default-site rows (for example DEV4-387) are absent
+3. Execute controlled TBB Postman UAT:
+   - invalid quantity -> POS-108 / CURRENT_ERROR
+   - corrected SAME BatchId -> RETRY_SAME_BATCH
+   - valid retry -> SUCCESS / exactly one CO
+   - replay after success -> no duplicate CO
+~~~
