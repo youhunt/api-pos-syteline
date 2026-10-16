@@ -300,3 +300,54 @@ Final gate is controlled Postman UAT in TBB:
 3. valid result -> exactly one CO
 4. replay after success -> no duplicate CO
 5. form refresh reflects the new history without reopen
+
+
+## SiteRef isolation defect found — 16 October 2026
+
+TBB session evidence:
+
+~~~text
+SQL Server   = sl53-j
+DatabaseName = BRONZECLEVEROX_TRN_CSI_AIO_0
+ActiveSite   = TRN_TBB
+~~~
+
+A known TRN transaction `DEV4-387` was visible in the TBB History form even
+though no matching archived history row existed. The current inbound row existed
+with status `T`.
+
+Root cause:
+
+> TRN and TBB share the same physical application database, while the History
+> view previously read all SiteRef values. The current-success branch therefore
+> surfaced another site's inbound row in TBB.
+
+This is not a history-table copy problem. The SUCCESS row comes from
+`ue_SMK069_pos_sales_inbound_mst`, while archived retry rows come from
+`ue_SMK069_pos_sales_inbound_hist`.
+
+Fix:
+
+~~~text
+deployment/csv-to-co/tbb/03-fix-history-site-isolation.sql
+~~~
+
+The canonical view source is also corrected:
+
+~~~text
+database/views/csv-to-co/ue_SMK069_pos_sales_inbound_history_v.sql
+~~~
+
+Both current and archived branches now require:
+
+~~~text
+row.SiteRef = active SiteRef from CONTEXT_INFO()
+~~~
+
+No transaction data is deleted.
+
+After applying the fix in TBB:
+1. run 02-post-copy-verify.sql again;
+2. confirm "active SiteRef filter" = PASS;
+3. refresh the History form;
+4. verify known TRN-only rows no longer appear under TRN_TBB.
