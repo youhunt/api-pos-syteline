@@ -262,3 +262,41 @@ ue_SMK069APISalesErrorProcessing -> History tab/object2/RefreshHistory
 ~~~
 
 After metadata parity, execute controlled TBB API UAT.
+
+
+## TBB UI/metadata parity result — 16 October 2026
+
+User opened `SMK API SALES ERROR PROCESSING` in TBB.
+
+Observed directly in the form:
+
+~~~text
+History tab                         PRESENT
+History grid                       LOADS
+AttemptNo                          POPULATED
+InboundStatus T/E                  POPULATED
+ArchiveReason SUCCESS              PRESENT
+ArchiveReason CURRENT_ERROR        PRESENT
+ArchiveReason RETRY_SAME_BATCH     PRESENT
+ValidationMsg                      POPULATED for error rows
+~~~
+
+Interpretation:
+
+> TBB already contains the History form/secondary collection/History IDO path
+> and has prior TBB history activity. Do not re-import the TRN form or History
+> IDO merely for parity unless a metadata defect is proven.
+
+Still verify manually:
+
+~~~text
+ue_SMK069TempSales.SMK069ReceivePosSalesJsonSp
+Transactional = False
+~~~
+
+Final gate is controlled Postman UAT in TBB:
+1. new invalid quantity -> POS-108 + CURRENT_ERROR
+2. same BatchId corrected -> RETRY_SAME_BATCH + new current attempt
+3. valid result -> exactly one CO
+4. replay after success -> no duplicate CO
+5. form refresh reflects the new history without reopen
