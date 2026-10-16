@@ -176,3 +176,46 @@ export, but the exact working TRN Core/Receive SP bodies still need canonical
 source synchronization before a new consolidated runtime package is generated.
 
 For TBB migration today, use exact TRN SP exports.
+
+
+## TBB preflight result — 16 October 2026
+
+User executed `01-preflight.sql` in TBB.
+
+Result:
+
+~~~text
+Dependency inbound table             PASS
+Dependency temp table                PASS
+Dependency mapping view              PASS
+Dependency field map table           PASS
+Dependency SMK030_UomConvQty2        PASS
+Dependency Getumcf                   PASS
+UET itemcust Peak field              PASS
+UET itemcust POS U/M field           PASS
+October Delta history table          PASS / already present
+October Delta history view           PASS / already present
+Existing Runtime Core Receive SP     PASS / object exists
+Existing Runtime Public Receive SP   PASS / object exists
+~~~
+
+Interpretation:
+
+- TBB already has all physical/runtime prerequisites.
+- Do not recreate or copy transactional data.
+- The history table/view do not need to be recreated merely because this migration
+  is being repeated; verify their contract instead.
+- Existence of Core/Public Receive SP does **not** prove October TRN parity.
+  The next gate is marker/definition verification.
+
+Revised next sequence:
+
+~~~text
+1. Run 02-post-copy-verify.sql now as a baseline
+2. If History Object/View checks PASS, leave them in place
+3. If same-Batch retry / friendly POS-108 markers FAIL, deploy exact working TRN SP definitions
+4. Import/resync ue_SMK069PosSalesInboundHistory only if TBB metadata is missing/stale
+5. Import verified TRN Error Processing form only if TBB form is missing/stale
+6. Run 02-post-copy-verify.sql again
+7. Execute controlled API UAT
+~~~
