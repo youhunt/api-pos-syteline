@@ -76,6 +76,19 @@ FROM
            N'current vs archived row flag'
 
     UNION ALL
+    SELECT 30,5,N'History View',N'active SiteRef filter',
+           CASE WHEN CHARINDEX(
+                    N'CONTEXT_INFO',
+                    COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_history_v')),N'')
+                ) > 0
+                 AND CHARINDEX(
+                    N'SiteRef',
+                    COALESCE(OBJECT_DEFINITION(OBJECT_ID(N'dbo.ue_SMK069_pos_sales_inbound_history_v')),N'')
+                ) > 0
+                THEN N'PASS' ELSE N'FAIL' END,
+           N'History view active SiteRef filter'
+
+    UNION ALL
     SELECT 40,1,N'Data Safety',N'history rows before UAT',
            N'INFO',
            N'History table may be empty before first TBB retry; do not copy TRN history data'
