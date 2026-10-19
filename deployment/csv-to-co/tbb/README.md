@@ -482,3 +482,22 @@ deployment/csv-to-co/tbb/04-check-error-processing-site-isolation.sql
 
 Do not delete or relabel DEFAULT/TDN data. The defect is visibility/isolation,
 not the transaction rows themselves.
+
+
+## Simplified Error Processing fix direction — 19 October 2026
+
+Do not add another temp-sales view/IDO for the Error Processing grid.
+
+Keep the existing:
+
+~~~text
+ue_SMK069TempSales
+ue_SMK069APISalesErrorProcessing
+~~~
+
+The only remaining issue is row visibility in the primary collection.
+
+Use a permanent SiteRef filter on the existing primary collection once the exact
+runtime active-site variable name is confirmed from Mongoose Trace/Diagnostics.
+
+Do not hardcode TRN_TBB because the same form is shared by DEFAULT/TDN and TBB.
