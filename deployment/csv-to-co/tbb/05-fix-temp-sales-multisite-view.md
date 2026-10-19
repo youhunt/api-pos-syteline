@@ -170,3 +170,25 @@ ue_SMK069APISalesErrorProcessing form
 
 If generated-view/IDO resync causes an issue, restore the metadata/IDO export.
 Transactional table rows do not need to be changed for this fix.
+
+### Observed generated view columns — TBB
+
+The generated view `dbo.ue_SMK069_temp_sales` exists and exposes 31 columns.
+
+Important observations:
+
+~~~text
+SiteRef       -> intentionally NOT exposed by the generated view
+validation_msg -> nvarchar(2000)
+error_msg      -> nvarchar(8000)
+is_peak_season -> int
+is_urgent      -> int
+urgent_remark  -> nvarchar(510 bytes)
+~~~
+
+The absence of SiteRef in the generated view is consistent with using the view
+as a site-aware abstraction rather than exposing the physical partition column
+to the form/IDO.
+
+Do not add SiteRef manually to the generated view. Verify isolation by comparing
+the generated-view row count with the physical _mst rows for the active site.
