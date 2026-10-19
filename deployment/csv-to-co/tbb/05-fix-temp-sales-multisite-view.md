@@ -70,26 +70,38 @@ dbo.ue_SMK069_temp_sales
 
 ### 4. Verify generated view before touching the IDO
 
-From a TBB session:
+Important: a generated Mongoose multi-site view may not expose the physical
+SiteRef column. If SELECT SiteRef returns "Invalid column name", that does not
+mean the view failed.
+
+First inspect the generated view columns:
 
 ~~~sql
-SELECT TOP (20)
-    SiteRef,
-    co_num,
-    cust_po,
-    co_line,
-    item,
-    process_status
-FROM dbo.ue_SMK069_temp_sales
-ORDER BY order_date DESC, co_num, co_line
+SELECT
+    c.column_id,
+    c.name,
+    TYPE_NAME(c.user_type_id) AS data_type,
+    c.max_length
+FROM sys.columns AS c
+WHERE c.object_id = OBJECT_ID(N'dbo.ue_SMK069_temp_sales')
+ORDER BY c.column_id
 ~~~
 
-Expected in TRN_TBB:
+Then verify site isolation by row count:
 
 ~~~text
-no SiteRef=DEFAULT rows
-only TRN_TBB rows when TBB activity exists
-possibly 0 rows before first TBB transaction
+deployment/csv-to-co/tbb/06-verify-generated-temp-sales-view.sql
+~~~
+
+In TRN_TBB, ViewRows must equal ExpectedActiveSiteRows. OtherSiteRows may be
+non-zero because DEFAULT/TDN shares the physical database.
+
+If TBB has no staging rows yet, the expected result is commonly:
+
+~~~text
+ViewRows = 0
+ExpectedActiveSiteRows = 0
+OtherSiteRows = 718 (or current DEFAULT/TDN count)
 ~~~
 
 ### 5. IDO source
