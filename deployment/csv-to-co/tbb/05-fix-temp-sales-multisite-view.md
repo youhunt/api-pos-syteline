@@ -192,3 +192,58 @@ to the form/IDO.
 
 Do not add SiteRef manually to the generated view. Verify isolation by comparing
 the generated-view row count with the physical _mst rows for the active site.
+
+
+## Correction: keep SiteRef for the existing form contract
+
+The generated Mongoose view `dbo.ue_SMK069_temp_sales` is site-aware but does
+not expose SiteRef. The existing Error Processing form still uses:
+
+~~~text
+P(SiteRef)
+~~~
+
+for Validate and Process/Reprocess method calls.
+
+Therefore the safer final design is:
+
+~~~text
+physical table
+  dbo.ue_SMK069_temp_sales_mst
+          |
+          v
+read-only form view
+  dbo.ue_SMK069_temp_sales_current_site_v
+  - filters by active CONTEXT_INFO()
+  - still exposes SiteRef
+          |
+          v
+read-only form IDO
+  ue_SMK069TempSalesCurrentSite
+          |
+          v
+ue_SMK069APISalesErrorProcessing
+~~~
+
+Keep the existing service/API IDO unchanged:
+
+~~~text
+ue_SMK069TempSales
+~~~
+
+and keep its stored-procedure methods/transaction settings intact.
+
+Create the read view with:
+
+~~~text
+deployment/csv-to-co/tbb/07-create-error-processing-site-view.sql
+~~~
+
+Then create/resync:
+
+~~~text
+ue_SMK069TempSalesCurrentSite
+~~~
+
+and change only the form's primary collection from
+`ue_SMK069TempSales` to `ue_SMK069TempSalesCurrentSite`.
