@@ -227,3 +227,42 @@ into TRN_TBB. Do not guess or hardcode TRN_TBB into a shared form.
 
 The generated view dbo.ue_SMK069_temp_sales can remain in place; it is not needed
 for this minimal form fix.
+
+
+## Impact analysis if ue_SMK069TempSales is repointed to dbo.ue_SMK069_temp_sales
+
+SQL stored-procedure bodies are not automatically changed by repointing the IDO
+entity source. The current SMK069 procedures read/write the physical staging
+table directly and receive their method parameters independently.
+
+However, the generated multi-site view dbo.ue_SMK069_temp_sales does not expose
+SiteRef, while the existing Error Processing form uses P(SiteRef) when invoking:
+
+~~~text
+SMK069ValidateFilteredStagingSp
+SMK069ProcessCustomerOrderSp
+~~~
+
+Therefore repointing + resynchronizing ue_SMK069TempSales can remove/break the
+SiteRef property required by the existing form event contract.
+
+Potentially affected areas:
+
+~~~text
+- Error Processing form property binding
+- Validate / Process-Reprocess parameter binding
+- entity CRUD/additem behavior through ue_SMK069TempSales
+- any external caller that loads SiteRef from the IDO collection
+~~~
+
+Not directly affected:
+
+~~~text
+- SQL body of SMK069ReceivePosSalesJsonCoreSp
+- SQL body of SMK069ReceivePosSalesJsonSp
+- SQL body of SMK069ValidateFilteredStagingSp
+- SQL body of SMK069ProcessCustomerOrderSp
+~~~
+
+Decision: do not repoint ue_SMK069TempSales to the generated view until the
+SiteRef property/method/form contract is redesigned and regression-tested.
