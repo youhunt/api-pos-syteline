@@ -563,3 +563,47 @@ After IDO resynchronization:
 3. verify TRN_TBB shows only TRN_TBB rows.
 
 This is an IDO metadata/property exposure issue, not a stored procedure defect.
+
+
+## Verified CONTEXT_INFO form pattern — 19 October 2026
+
+The CSV Console was verified working in both shared-database sites:
+
+~~~text
+Default -> shows Default CSV batches
+TRN_TBB -> hides Default batches; TBB remains empty until TBB activity exists
+~~~
+
+Verified form export:
+
+~~~text
+forms/csv-to-co/exports/ue_SMK069PosCsvBatchConsole-ActiveSite-CONTEXT_INFO-2026-10-19.xml
+~~~
+
+Verified pattern:
+
+~~~text
+StdFormPredisplay:
+  SP!.ue_SMK069GetCurrentSiteSp -> CurrentSite
+  ActiveSite = CurrentSite
+
+Primary site-owned collection:
+  SiteRef = ActiveSite
+
+Secondary site-owned collection:
+  existing parent filter + SiteRef = ActiveSite
+~~~
+
+This form pattern does not modify the existing CSV business stored procedures.
+
+Next site-isolation review targets:
+
+~~~text
+1. ue_SMK069APISalesErrorProcessing primary ue_SMK069TempSales collection
+2. ue_SMK069ShipmentScheduler site-owned collections
+~~~
+
+History already uses an internally site-filtered SQL view.
+
+Do not add this filter mechanically to standard SL IDOs or global runtime
+collections such as ActiveBGTasks without confirming their site contract first.
