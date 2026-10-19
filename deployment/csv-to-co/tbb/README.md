@@ -501,3 +501,38 @@ Use a permanent SiteRef filter on the existing primary collection once the exact
 runtime active-site variable name is confirmed from Mongoose Trace/Diagnostics.
 
 Do not hardcode TRN_TBB because the same form is shared by DEFAULT/TDN and TBB.
+
+
+## ActiveSite form timing correction — 19 October 2026
+
+The first ActiveSite form patch assigned:
+
+~~~text
+ActiveSite = E(MG_CurrentSite)
+~~~
+
+in StdFormInitCompleted.
+
+This is too late for the initial collection query. Optional Filters are skipped
+when their supplied variable value is blank, so the initial query could still
+load cross-site rows.
+
+Correct timing:
+
+~~~text
+StdFormPredisplay Sequence 0
+  ActiveSite = E(MG_CurrentSite)
+~~~
+
+StdFormPredisplay runs before form collections are initialized and before the
+Initial Command is executed.
+
+Affected forms patched with this timing rule:
+
+~~~text
+ue_SMK069APISalesErrorProcessing
+ue_SMK069PosCsvBatchConsole
+~~~
+
+The SiteRef Optional Filters themselves remain valid; only ActiveSite assignment
+timing changed.
