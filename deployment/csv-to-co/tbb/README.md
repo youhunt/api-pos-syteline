@@ -425,3 +425,60 @@ Next gate:
    - valid retry -> SUCCESS / exactly one CO
    - replay after success -> no duplicate CO
 ~~~
+
+
+## Error Processing primary-grid SiteRef defect — 19 October 2026
+
+Observed in TBB:
+
+~~~text
+Active site = TRN_TBB
+SMK API SALES ERROR PROCESSING / Error Processing tab
+shows rows whose Site column = DEFAULT
+~~~
+
+This is a different issue from the History tab.
+
+The working TRN form definition currently loads the primary collection as:
+
+~~~text
+ue_SMK069TempSales(
+  LOCKMODE(Row)
+  FILTEROPTS(
+    order_date >= AppliedOrderDate,
+    order_date <= AppliedOrderDateTo,
+    co_num = AppliedCoNum
+  )
+)
+~~~
+
+There is no SiteRef filter in the primary collection definition.
+
+The Validate and Process/Reprocess handlers also pass the selected row SiteRef
+to the backend methods. Therefore, do not operate on rows from another site.
+
+Preferred architectural correction:
+
+~~~text
+ue_SMK069_temp_sales_mst
+  -> mark/manage as Mongoose Multi-Site table
+  -> generate the site-filtered Mongoose view through View Management
+  -> base ue_SMK069TempSales on the generated multi-site view
+~~~
+
+This follows the standard Mongoose multi-site pattern and avoids hardcoding a
+site literal in a shared form.
+
+Temporary stopgap only:
+- a site-specific form version may use a permanent collection filter for
+  SiteRef=TRN_TBB;
+- do not hardcode TRN_TBB into a form shared by TDN/DEFAULT and TBB.
+
+Diagnostic query:
+
+~~~text
+deployment/csv-to-co/tbb/04-check-error-processing-site-isolation.sql
+~~~
+
+Do not delete or relabel DEFAULT/TDN data. The defect is visibility/isolation,
+not the transaction rows themselves.
