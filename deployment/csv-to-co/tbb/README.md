@@ -536,3 +536,30 @@ ue_SMK069PosCsvBatchConsole
 
 The SiteRef Optional Filters themselves remain valid; only ActiveSite assignment
 timing changed.
+
+
+## CSV Console IDO SiteRef property prerequisite — 19 October 2026
+
+Design Mode showed that the primary collection ue_SMK069PosCsvBatch does not
+currently expose a SiteRef property. Therefore a form Optional Filter on
+PROP(SiteRef) cannot be relied on until the IDO property exists.
+
+Required metadata correction:
+
+~~~text
+IDO      : ue_SMK069PosCsvBatch
+Property : SiteRef
+Column   : SiteRef (physical dbo.ue_SMK069_pos_csv_batch_mst)
+Type     : SiteType
+Usage    : read/filter; no SP change required
+~~~
+
+Also verify ue_SMK069PosCsvUpload exposes SiteRef. If it does not, add the same
+property mapped to the physical SiteRef/siteref column.
+
+After IDO resynchronization:
+1. reopen Design Mode and confirm SiteRef appears in the collection property list;
+2. reapply/import the ActiveSite form patch;
+3. verify TRN_TBB shows only TRN_TBB rows.
+
+This is an IDO metadata/property exposure issue, not a stored procedure defect.
