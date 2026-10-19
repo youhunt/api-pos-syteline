@@ -194,56 +194,36 @@ Do not add SiteRef manually to the generated view. Verify isolation by comparing
 the generated-view row count with the physical _mst rows for the active site.
 
 
-## Correction: keep SiteRef for the existing form contract
+## Simplified final direction — do not add a second form IDO
 
-The generated Mongoose view `dbo.ue_SMK069_temp_sales` is site-aware but does
-not expose SiteRef. The existing Error Processing form still uses:
+The dedicated current-site view / second IDO idea was intentionally abandoned to
+avoid duplicating the existing ue_SMK069TempSales contract.
 
-~~~text
-P(SiteRef)
-~~~
-
-for Validate and Process/Reprocess method calls.
-
-Therefore the safer final design is:
-
-~~~text
-physical table
-  dbo.ue_SMK069_temp_sales_mst
-          |
-          v
-read-only form view
-  dbo.ue_SMK069_temp_sales_current_site_v
-  - filters by active CONTEXT_INFO()
-  - still exposes SiteRef
-          |
-          v
-read-only form IDO
-  ue_SMK069TempSalesCurrentSite
-          |
-          v
-ue_SMK069APISalesErrorProcessing
-~~~
-
-Keep the existing service/API IDO unchanged:
+Keep these objects unchanged:
 
 ~~~text
 ue_SMK069TempSales
+ue_SMK069APISalesErrorProcessing
+dbo.ue_SMK069_temp_sales_mst
 ~~~
 
-and keep its stored-procedure methods/transaction settings intact.
+The remaining defect is only the primary form collection loading rows from other
+sites.
 
-Create the read view with:
+Preferred minimal fix:
 
 ~~~text
-deployment/csv-to-co/tbb/07-create-error-processing-site-view.sql
+existing primary collection
++ Permanent Filter Expression on SiteRef
++ value resolved from the active Mongoose site/session
 ~~~
 
-Then create/resync:
+Mongoose permanent filters are combined with the existing date / CO optional
+filters, so the current Preview logic can stay intact.
 
-~~~text
-ue_SMK069TempSalesCurrentSite
-~~~
+Before editing the form, identify the exact active-site session/global variable
+name in this tenant using Mongoose Trace/Diagnostics -> Variables while logged
+into TRN_TBB. Do not guess or hardcode TRN_TBB into a shared form.
 
-and change only the form's primary collection from
-`ue_SMK069TempSales` to `ue_SMK069TempSalesCurrentSite`.
+The generated view dbo.ue_SMK069_temp_sales can remain in place; it is not needed
+for this minimal form fix.
