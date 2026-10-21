@@ -573,3 +573,44 @@ PRD check  : SELECT definition FROM sys.check_constraints WHERE name = N'CK_SMK0
 ~~~
 
 Status: patch added; **not yet executed on any tenant** (TRN needs it; run it before further CSV UAT).
+
+
+## 14. Patch 40 — Friendly POS-108 for PRD (21 Oct 2026)
+
+Observed on 20 Oct 2026: the same quantity-multiple failure is shown as `[POS-108] Quantity tidak sesuai kelipatan U/M ... Material Code` in TRN and as `[POS-109] ... Item/CustPO tidak valid berdasarkan ValidationStatus mapping` (both lines) in PRD.
+
+Evidence collected on 20-21 Oct 2026:
+
+~~~
+Definition length (chars)      PRD      TRN
+SMK069ReceivePosSalesJsonSp    37,747   47,779   TRN only contains "qty_hasil_konversi"
+SMK069ReceivePosSalesJsonCoreSp 47,773  57,088
+SMK069ProcessBatchCustomerOrdersSp 6,650 7,019
+SMK069ProcessCustomerOrderSp   29,714   30,265
+mapping view                    2,736    1,857   same logic, formatting only (compared ignoring whitespace/case)
+~~~
+
+- The PRD and TRN mapping views are logically identical. The PRD view is the reformatted repo file, so its SHA-256 differs from the original SMK text even though `ValidationStatus` is computed identically. `ValidationStatus = N` therefore means only "converted quantity is not a whole number" in both tenants, and the PRD POS-109 in the screenshot is a quantity-multiple failure.
+- The TRN `SMK069ReceivePosSalesJsonSp` (script-out supplied 21 Oct 2026) equals the repo canonical file plus ONE additive block, "PATCH: Friendly POS-109 API message" (about 250 lines), placed inside `IF @BusinessError = 1` before the `PATCH-34` comment. Nothing else differs after whitespace normalization. The TRN Receive contains no Urgent code (Patches 36-38 live in Core and ProcessCustomerOrder).
+- The block reads only the inbound table and the mapping view, and writes only `validation_msg`. It does not depend on Core, ProcessBatch, History objects or Mongoose metadata.
+
+~~~
+Patch      : database/patches/csv-to-co/2026-10-21-smk069-40-friendly-pos108.sql
+Behaviour  : edits the LIVE Receive definition in place (anchor "PATCH-34: synthesize POS-204 ..." must occur exactly once);
+             already contains "Friendly POS-109 API message" -> SKIP (so it is a no-op in TRN);
+             anchor missing/duplicated -> THROW 510446 and nothing changes; one transaction; post-check 510448-510450
+Canonical  : database/procedures/csv-to-co/SMK069ReceivePosSalesJsonSp.sql now equals the TRN definition (normalized)
+Verified   : simulated against the old canonical text (LF and CRLF, CREATE and CREATE OR ALTER headers) -> result equals TRN;
+             simulated against the TRN text -> SKIP.  Not executed on SQL Server.
+~~~
+
+Scope warning: this closes only the message difference of the API response. The rest of the TRN-to-PRD delta (Core +9,315 chars, ProcessBatch +369, ProcessCustomerOrder +551, History objects, IDO/form, same-BatchId retry) is NOT covered; sections 1-9 still apply. Do not regenerate `02-deploy-canonical-runtime.sql` from the repo until Core and ProcessBatch are synchronized from TRN.
+
+PRD steps:
+
+1. Script out the PRD `SMK069ReceivePosSalesJsonSp` as a rollback copy.
+2. Run Patch 40 (Apply Database, one batch). Expect `[PATCH-40] OK diperbarui` and `SUCCESS`.
+3. Re-run `08-urgent-flag-precheck-verify.sql`: the row `SMK069ReceivePosSalesJsonSp Friendly POS-109 API message` must be OK.
+4. Test A of section 5 with a NEW `cust_po` and a NEW BatchId (a `cust_po` already registered gives POS-204): AC20002B with a quantity that is not a multiple. Expect `[POS-108] Request ditolak. 1 baris bermasalah: [cust_po=...] Quantity tidak sesuai kelipatan U/M [coline=..., item=AC20002B, qty_ordered=..., u_m=..., qty_hasil_konversi=..., u_m_hasil=...]`, no Customer Order created, History root POS-108 / sibling POS-203.
+
+Status: patch + canonical sync + docs added; **not yet executed on any tenant**.

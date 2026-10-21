@@ -403,7 +403,17 @@ database/patches/csv-to-co/2026-09-23-smk069-35-peak-season-before-mapping-view.
 
 Fixes a proven ordering defect: `is_peak_season` used to be copied into inbound only after Core had already materialized the mapping view. Core now persists the payload Peak flag before `#MapView`, so Peak/Normal customer-item/U/M mapping is selected correctly.
 
-### Patch 38 — active latest
+### Patch 40 — active latest
+
+File:
+
+```text
+database/patches/csv-to-co/2026-10-21-smk069-40-friendly-pos108.sql
+```
+
+Aligns the API response for a quantity that is not a multiple of the U/M between TRN and PRD: `ValidationStatus = N` rows caused only by a fractional converted quantity are reported as `[POS-108] Quantity tidak sesuai kelipatan U/M` (root line) and `[POS-203]` (sibling lines) instead of `[POS-109] ... ValidationStatus mapping`. Inserts one block into `SMK069ReceivePosSalesJsonSp` in place before the `PATCH-34` comment; validation, mapping view, Core and ProcessBatch are untouched. Already present in TRN, so the patch SKIPs there. See section 14 of `deployment/csv-to-co/prod/07-trn-to-prd-delta-2026-10-12.md`.
+
+### Patch 38
 
 File:
 
@@ -482,6 +492,7 @@ Apply Database, satu executable batch / tanpa `GO`:
 37  2026-10-14-smk069-37-urgent-flag-csv.sql   (setelah Patch 36; lalu resync IDO ue_SMK069PosCsvUpload + form CSV)
 38  2026-10-14-smk069-38-urgent-flag-coitem.sql   (setelah Patch 36 + UET coitem_mst + Impact Schema; lalu form Customer Order Blanket Releases)
 39  2026-10-14-smk069-39-csv-batch-status-partial.sql   (independen; CHECK batch_status mengizinkan 'P' agar batch CSV partial tidak berakhir POS-999 / 547)
+40  2026-10-21-smk069-40-friendly-pos108.sql   (independen; pesan POS-108 ramah di Receive, sama dengan TRN; SKIP bila sudah ada)
 ```
 
 Patch 23 tidak ada di active deployment sequence.

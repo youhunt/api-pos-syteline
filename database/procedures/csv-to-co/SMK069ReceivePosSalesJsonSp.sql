@@ -22,6 +22,10 @@
    - Cross-batch duplicate existing CustPO is rejected as POS-204.
    - ValidationStatus = N rejects the whole cust_po (POS-109).
    - Root quantity error code: POS-108.
+   - API response (Patch 40): when every ValidationStatus=N row is caused by a
+     fractional converted quantity, the caller sees POS-108 on the root line and
+     POS-203 on sibling lines with the friendly quantity message, never the
+     internal term "ValidationStatus mapping". Validation itself is unchanged.
    - Sibling lines of the same cust_po: POS-203 atomic-order rejection.
    - Existing POS/API behavior is preserved by default:
          @ThrowOnBusinessError = 1
@@ -786,6 +790,261 @@ BEGIN
                     3,
                     N''
                 );
+        END;
+
+        /* =========================================================================
+        PATCH: Friendly POS-109 API message
+
+        Validation logic TIDAK diubah.
+        Hanya memperbaiki response API:
+        - Ambil hanya line yang benar-benar ValidationStatus = N
+        - Jika penyebabnya qty hasil mapping pecahan, tampilkan sebagai POS-108
+        - Jangan tampilkan istilah teknis "ValidationStatus mapping" ke caller
+        ========================================================================= */
+        IF @ErrorCode = N'POS-109'
+        BEGIN
+            DECLARE @Pos109Invalid TABLE
+            (
+                inbound_id      BIGINT         NOT NULL PRIMARY KEY,
+                row_no          INT            NULL,
+                cust_po         NVARCHAR(100)  NULL,
+                co_line         INT            NULL,
+                raw_item        NVARCHAR(100)  NULL,
+                raw_qty         DECIMAL(23,8)  NULL,
+                raw_um          NVARCHAR(80)   NULL,
+                mapped_qty      DECIMAL(23,5)  NULL,
+                mapped_um       NVARCHAR(80)   NULL,
+                is_qty_multiple BIT            NOT NULL
+            );
+
+            INSERT INTO @Pos109Invalid
+            (
+                inbound_id,
+                row_no,
+                cust_po,
+                co_line,
+                raw_item,
+                raw_qty,
+                raw_um,
+                mapped_qty,
+                mapped_um,
+                is_qty_multiple
+            )
+            SELECT
+                e.inbound_id,
+                e.row_no,
+                LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.cust_po))),
+                e.co_line,
+                LTRIM(RTRIM(CONVERT(NVARCHAR(100), e.item))),
+                CONVERT(DECIMAL(23,8), e.qty_ordered),
+                LTRIM(RTRIM(CONVERT(NVARCHAR(80), e.u_m))),
+                mv.mapped_qty,
+                mv.mapped_um,
+
+                CASE
+                    WHEN mv.mapped_qty IS NOT NULL
+                    AND mv.mapped_qty <> FLOOR(mv.mapped_qty)
+                    THEN 1
+                    ELSE 0
+                END
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS e
+            CROSS APPLY
+            (
+                SELECT TOP (1)
+                    CONVERT(DECIMAL(23,5), v.qty_ordered) AS mapped_qty,
+                    LTRIM(RTRIM(CONVERT(NVARCHAR(80), v.u_m))) AS mapped_um
+                FROM dbo.ue_SMK069_pos_sales_inbound_mapping_view AS v
+                WHERE v.inbound_id      = e.inbound_id
+                AND v.SiteRef         = @Site
+                AND v.source_system   = @SourceSystem
+                AND v.batch_id        = @BatchId
+                AND UPPER
+                    (
+                        LTRIM
+                        (
+                            RTRIM
+                            (
+                                CONVERT(NVARCHAR(20), v.ValidationStatus)
+                            )
+                        )
+                    ) = N'N'
+            ) AS mv
+            WHERE e.SiteRef        = @Site
+            AND e.source_system  = @SourceSystem
+            AND e.batch_id       = @BatchId
+            AND e.inbound_status = N'E';
+
+
+            IF EXISTS (SELECT 1 FROM @Pos109Invalid)
+            BEGIN
+                /* Count hanya root line yang memang ValidationStatus=N.
+                Sibling valid yang ikut E karena atomic CustPO tidak dihitung. */
+                SELECT @ErrorRowCount = COUNT(*)
+                FROM @Pos109Invalid;
+
+
+                /* Jika SEMUA N ternyata karena qty kelipatan,
+                expose sebagai POS-108 ke API.
+
+                Kalau ada penyebab N lainnya, tetap POS-109. */
+                IF NOT EXISTS
+                (
+                    SELECT 1
+                    FROM @Pos109Invalid
+                    WHERE is_qty_multiple = 0
+                )
+                BEGIN
+                    SET @ErrorCode = N'POS-108';
+                END
+                ELSE
+                BEGIN
+                    SET @ErrorCode = N'POS-109';
+                END;
+
+
+                SELECT @ErrorList =
+                    STUFF
+                    (
+                        (
+                            SELECT
+                                N' | '
+                                + CASE
+                                    WHEN NULLIF(p.cust_po, N'') IS NULL
+                                    THEN N''
+                                    ELSE N'[cust_po=' + p.cust_po + N'] '
+                                END
+                                +
+                                CASE
+                                    WHEN p.is_qty_multiple = 1
+                                    THEN
+                                        N'Quantity tidak sesuai kelipatan U/M'
+                                        + N' [coline='
+                                        + COALESCE
+                                        (
+                                            CONVERT(NVARCHAR(20), p.co_line),
+                                            N'<kosong>'
+                                        )
+                                        + N', item='
+                                        + COALESCE(NULLIF(p.raw_item, N''), N'<kosong>')
+                                        + N', qty_ordered='
+                                        + COALESCE
+                                        (
+                                            CONVERT(NVARCHAR(60), p.raw_qty),
+                                            N'<kosong>'
+                                        )
+                                        + N', u_m='
+                                        + COALESCE(NULLIF(p.raw_um, N''), N'<kosong>')
+                                        + N', qty_hasil_konversi='
+                                        + COALESCE
+                                        (
+                                            CONVERT(NVARCHAR(60), p.mapped_qty),
+                                            N'<kosong>'
+                                        )
+                                        + N', u_m_hasil='
+                                        + COALESCE(NULLIF(p.mapped_um, N''), N'<kosong>')
+                                        + N']'
+
+                                    ELSE
+                                        N'Item tidak valid atau tidak sesuai mapping Infor'
+                                        + N' [coline='
+                                        + COALESCE
+                                        (
+                                            CONVERT(NVARCHAR(20), p.co_line),
+                                  N'<kosong>'
+                                        )
+                                        + N', item='
+                                        + COALESCE(NULLIF(p.raw_item, N''), N'<kosong>')
+                                        + N']'
+                                END
+
+                            FROM @Pos109Invalid AS p
+                            ORDER BY p.row_no
+
+                            FOR XML PATH(N''), TYPE
+                        ).value(N'.', N'NVARCHAR(MAX)'),
+                        1,
+                        3,
+                        N''
+                    );
+            END;
+        END;
+
+        /* =============================================================
+        Keep persisted validation_msg consistent with friendly API error.
+
+        IMPORTANT:
+        - Tidak mengubah status
+        - Tidak mengubah validasi
+        - Tidak mengubah mapping
+        - Hanya memperbaiki pesan yang disimpan untuk History
+        ============================================================= */
+        IF EXISTS (SELECT 1 FROM @Pos109Invalid)
+        AND NOT EXISTS
+        (
+            SELECT 1
+            FROM @Pos109Invalid
+            WHERE is_qty_multiple = 0
+        )
+        BEGIN
+            /* Root line:
+            benar-benar gagal karena quantity tidak sesuai kelipatan */
+            UPDATE i
+            SET i.validation_msg =
+                LEFT
+                (
+                    N'[POS-108] Quantity tidak sesuai kelipatan U/M.'
+                    + N' qty_ordered='
+                    + COALESCE(CONVERT(NVARCHAR(60), p.raw_qty), N'<kosong>')
+                    + N'; u_m='
+                    + COALESCE(NULLIF(p.raw_um, N''), N'<kosong>')
+                    + N'; qty_hasil_konversi='
+                    + COALESCE(CONVERT(NVARCHAR(60), p.mapped_qty), N'<kosong>')
+                    + N'; u_m_hasil='
+                    + COALESCE(NULLIF(p.mapped_um, N''), N'<kosong>'),
+                    2000
+                )
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            INNER JOIN @Pos109Invalid AS p
+                ON p.inbound_id = i.inbound_id
+            WHERE i.SiteRef       = @Site
+            AND i.source_system = @SourceSystem
+            AND i.batch_id      = @BatchId
+            AND i.inbound_status = N'E'
+            AND p.is_qty_multiple = 1;
+
+
+            /* Sibling line:
+            line sebenarnya valid, tetapi CustPO ikut ditolak karena
+            ada line lain yang invalid */
+            UPDATE i
+            SET i.validation_msg =
+                N'[POS-203] Order ditolak karena terdapat line lain yang tidak valid.'
+            FROM dbo.ue_SMK069_pos_sales_inbound_mst AS i
+            WHERE i.SiteRef        = @Site
+            AND i.source_system  = @SourceSystem
+            AND i.batch_id       = @BatchId
+            AND i.inbound_status = N'E'
+
+            /* hanya row yang sebelumnya terkena POS-109 */
+            AND i.validation_msg LIKE N'%ValidationStatus=N%'
+
+            /* CustPO memang punya root error quantity */
+            AND EXISTS
+            (
+                SELECT 1
+                FROM @Pos109Invalid AS p
+                WHERE p.cust_po =
+                        LTRIM(RTRIM(CONVERT(NVARCHAR(100), i.cust_po)))
+                    AND p.is_qty_multiple = 1
+            )
+
+            /* tetapi row ini sendiri bukan root error */
+            AND NOT EXISTS
+            (
+                SELECT 1
+                FROM @Pos109Invalid AS p
+                WHERE p.inbound_id = i.inbound_id
+            );
         END;
 
         /* PATCH-34: synthesize POS-204 from payload CustPO when the current

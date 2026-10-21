@@ -80,13 +80,14 @@ SELECT k.grp,
 FROM @Col AS k;
 
 /* ---- D. marker patch pada procedure -------------------------------------- */
-DECLARE @Mk TABLE (p SYSNAME, marker NVARCHAR(20), need NVARCHAR(40));
+DECLARE @Mk TABLE (p SYSNAME, marker NVARCHAR(60), need NVARCHAR(40));
 INSERT @Mk (p, marker, need) VALUES
     (N'SMK069ReceivePosSalesJsonCoreSp', N'PATCH-36', N'Patch 36'),
     (N'SMK069ProcessCustomerOrderSp',    N'PATCH-36', N'Patch 36'),
     (N'SMK069ImportCsvFileSp',           N'PATCH-37', N'Patch 37'),
     (N'SMK069RunCsvTestBatchSp',         N'PATCH-37', N'Patch 37'),
-    (N'SMK069ProcessCustomerOrderSp',    N'PATCH-38', N'Patch 38');
+    (N'SMK069ProcessCustomerOrderSp',    N'PATCH-38', N'Patch 38'),
+    (N'SMK069ReceivePosSalesJsonSp',     N'Friendly POS-109 API message', N'Patch 40 (POS-108 ramah, sama dgn TRN)');
 
 INSERT @R (grp, item, status, detail)
 SELECT N'D. Hasil patch',
