@@ -359,7 +359,7 @@ BEGIN
             DEFAULT (RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0))),
 
         CONSTRAINT PK_SMK069FieldMap
-            PRIMARY KEY CLUSTERED (source_system, source_field)
+            PRIMARY KEY CLUSTERED (SiteRef, source_system, source_field)
     );
 
     CREATE UNIQUE NONCLUSTERED INDEX UX_SMK069FieldMap_RowPointer
@@ -448,6 +448,41 @@ ELSE
    - PROD must use its own active site context.
    - RowPointer values are generated fresh in the target environment.
    ========================================================================== */
+/* Tabel field-map lama memakai PK (source_system, source_field) tanpa SiteRef,
+   sehingga hanya satu site yang bisa punya map. Upgrade ke PK yang memuat SiteRef
+   (idempotent; lihat juga 09-fieldmap-add-site.sql untuk menyalin map ke site lain). */
+DECLARE @FmPk  SYSNAME;
+DECLARE @FmSql NVARCHAR(MAX);
+
+SELECT @FmPk = kc.name
+FROM sys.key_constraints AS kc
+WHERE kc.parent_object_id = OBJECT_ID(N'dbo.ue_SMK069_pos_field_map_mst')
+  AND kc.type = N'PK';
+
+IF @FmPk IS NOT NULL
+   AND NOT EXISTS
+   (
+       SELECT 1
+       FROM sys.index_columns AS ic
+       INNER JOIN sys.indexes AS i
+          ON i.object_id = ic.object_id
+         AND i.index_id = ic.index_id
+       INNER JOIN sys.columns AS c
+          ON c.object_id = ic.object_id
+         AND c.column_id = ic.column_id
+       WHERE i.object_id = OBJECT_ID(N'dbo.ue_SMK069_pos_field_map_mst')
+         AND i.is_primary_key = 1
+         AND c.name = N'SiteRef'
+   )
+BEGIN
+    SET @FmSql =
+        N'ALTER TABLE dbo.ue_SMK069_pos_field_map_mst DROP CONSTRAINT ' + QUOTENAME(@FmPk) + N'; '
+        + N'ALTER TABLE dbo.ue_SMK069_pos_field_map_mst ADD CONSTRAINT ' + QUOTENAME(@FmPk)
+        + N' PRIMARY KEY CLUSTERED (SiteRef, source_system, source_field);';
+    EXEC sys.sp_executesql @FmSql;
+    PRINT N'[SMK069 TABLES] UPGRADED PK field-map: SiteRef ikut menjadi kunci.';
+END
+
 DECLARE @SeedSite dbo.SiteType =
     NULLIF(RTRIM(CONVERT(NVARCHAR(8), CONTEXT_INFO(), 0)), N'');
 
@@ -506,7 +541,8 @@ USING
     RowPointer,
     SiteRef
 )
-ON tgt.source_system = src.source_system
+ON tgt.SiteRef = src.SiteRef
+AND tgt.source_system = src.source_system
 AND tgt.source_field = src.source_field
 WHEN MATCHED THEN
     UPDATE SET
@@ -514,8 +550,7 @@ WHEN MATCHED THEN
         tgt.is_required  = src.is_required,
         tgt.priority_no  = src.priority_no,
         tgt.is_active    = src.is_active,
-        tgt.description  = src.description,
-        tgt.SiteRef      = src.SiteRef
+        tgt.description  = src.description
 WHEN NOT MATCHED BY TARGET THEN
     INSERT
     (
